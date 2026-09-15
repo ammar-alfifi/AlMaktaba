@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Generic actions -->
+    <string name="ui_retry">Retry</string>
+    <string name="ui_cancel">Cancel</string>
+    <string name="ui_ok">OK</string>
+    <string name="ui_delete">Delete</string>
+    <string name="ui_close">Close</string>
+    <string name="ui_more">More</string>
+
+    <!-- Content descriptions -->
+    <string name="ui_cd_book_cover">Book cover</string>
+    <string name="ui_cd_navigation">Main navigation</string>
+
+    <!-- States -->
+    <string name="ui_loading">Loading…</string>
+    <string name="ui_error_title">Something went wrong</string>
+    <string name="ui_error_file_access">Could not reach the file. It may have been moved or deleted.</string>
+    <string name="ui_error_corrupt">The file is damaged or incomplete.</string>
+    <string name="ui_error_unsupported">This format is not supported.</string>
+    <string name="ui_error_password">This file is password protected.</string>
+    <string name="ui_error_protected">This file is DRM protected and cannot be opened.</string>
+    <string name="ui_error_out_of_memory">There is not enough memory to open this file.</string>
+    <string name="ui_error_empty_document">There is no content to show in this file.</string>
+    <string name="ui_error_unexpected">Something unexpected went wrong.</string>
+
+    <!-- Reading progress -->
+    <string name="ui_page_of">%1$d of %2$d</string>
+    <string name="ui_percent_read">%1$d%%</string>
+    <string name="ui_unread">Not started</string>
+    <string name="ui_finished">Finished</string>
+    <string name="ui_continue_reading">Continue reading</string>
+</resources>

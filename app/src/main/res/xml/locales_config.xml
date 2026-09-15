@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Declares the locales MyLibrary ships translations for, so Android 13+ surfaces the app in
+  Settings > Apps > MyLibrary > Language. Arabic is listed first because it is the default.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="ar" />
+    <locale android:name="en" />
+</locale-config>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Brand mark: an open book with an amber ribbon. Drawn as a vector so the launcher icon needs no
+  raster assets, and kept inside the 72dp adaptive-icon safe zone so no launcher shape crops it.
+  The page spread also reads correctly when mirrored for RTL locales.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Left page -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M52,38 C46,34 38,32 28,34 L28,72 C38,70 46,72 52,76 Z" />
+
+    <!-- Right page -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M56,38 C62,34 70,32 80,34 L80,72 C70,70 62,72 56,76 Z" />
+
+    <!-- Ribbon bookmark -->
+    <path
+        android:fillColor="#FFC46B"
+        android:pathData="M66,42 L75,44 L75,62 L70.5,58 L66,61.5 Z" />
+</vector>

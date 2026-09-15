@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Shared UI strings. Arabic is the default (unqualified `values/`); the complete English
+  translation lives in `values-en/`. Each module owns the strings for the UI it renders, so
+  `:core:core-ui` carries the generic actions, states and labels its components need.
+-->
+<resources>
+    <!-- Generic actions -->
+    <string name="ui_retry">إعادة المحاولة</string>
+    <string name="ui_cancel">إلغاء</string>
+    <string name="ui_ok">موافق</string>
+    <string name="ui_delete">حذف</string>
+    <string name="ui_close">إغلاق</string>
+    <string name="ui_more">المزيد</string>
+
+    <!-- Content descriptions -->
+    <string name="ui_cd_book_cover">غلاف الكتاب</string>
+    <string name="ui_cd_navigation">التنقل الرئيسي</string>
+
+    <!-- States -->
+    <string name="ui_loading">جارٍ التحميل…</string>
+    <string name="ui_error_title">حدث خطأ ما</string>
+    <string name="ui_error_file_access">تعذّر الوصول إلى الملف. قد يكون قد نُقل أو حُذف.</string>
+    <string name="ui_error_corrupt">الملف تالف أو غير مكتمل.</string>
+    <string name="ui_error_unsupported">هذه الصيغة غير مدعومة.</string>
+    <string name="ui_error_password">هذا الملف محمي بكلمة مرور.</string>
+    <string name="ui_error_protected">هذا الملف محمي بحقوق رقمية ولا يمكن فتحه.</string>
+    <string name="ui_error_out_of_memory">لا توجد ذاكرة كافية لفتح هذا الملف.</string>
+    <string name="ui_error_empty_document">لا يوجد محتوى لعرضه في هذا الملف.</string>
+    <string name="ui_error_unexpected">حدث خطأ غير متوقع.</string>
+
+    <!-- Reading progress -->
+    <string name="ui_page_of">%1$d من %2$d</string>
+    <string name="ui_percent_read">%1$d%%</string>
+    <string name="ui_unread">لم يُقرأ بعد</string>
+    <string name="ui_finished">مكتمل</string>
+    <string name="ui_continue_reading">متابعة القراءة</string>
+</resources>

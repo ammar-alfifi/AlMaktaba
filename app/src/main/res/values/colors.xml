@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Mirrors `MyLibraryColors` in `:core:core-ui` so there is no colour flash between the window
+      background and the first Compose frame.
+    -->
+    <color name="window_background">#FBFDFA</color>
+
+    <color name="ic_launcher_background">#0E6E62</color>
+</resources>

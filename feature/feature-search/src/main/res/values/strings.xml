@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Search screen strings. Arabic is the default (unqualified `values/`); the complete English
+  translation lives in `values-en/`.
+
+  The three "nothing to show" states are worded so they cannot be confused with each other: the
+  hint says what can be searched, the title/author miss admits what was *not* searched and offers
+  to search it, and the true "no results" is only shown once both searches have run.
+-->
+<resources>
+    <!-- The query field -->
+    <string name="search_field_placeholder">ابحث في العناوين والمؤلفين</string>
+    <string name="search_cd_clear_query">مسح البحث</string>
+
+    <!-- Searching inside books -->
+    <string name="search_filter_inside_books">البحث داخل الكتب</string>
+    <string name="search_filter_inside_books_note">قد يستغرق وقتًا: يُفتح كل كتاب على حدة ويُفحص نصه.</string>
+    <string name="search_scanning">جارٍ البحث داخل الكتب…</string>
+    <string name="search_message_scan_capped">تم فحص أحدث %1$d كتابًا فقط، تجنّبًا لفحص المكتبة كاملة.</string>
+
+    <!-- Sections and matches -->
+    <string name="search_section_library">من مكتبتك</string>
+    <string name="search_match_in_title">تطابق في العنوان</string>
+    <string name="search_match_in_author">تطابق في اسم المؤلف</string>
+
+    <!-- Empty states -->
+    <string name="search_empty_hint_title">ابحث في مكتبتك</string>
+    <string name="search_empty_hint_message">اكتب عنوانًا أو اسم مؤلف للبحث في مكتبتك، أو شغّل «البحث داخل الكتب» للبحث في النصوص.</string>
+    <string name="search_empty_no_results_title">لا توجد نتائج</string>
+    <string name="search_empty_no_results_message">لم نعثر على أي تطابق لـ «%1$s».</string>
+    <string name="search_empty_inside_off_title">لا نتائج في العناوين والمؤلفين</string>
+    <string name="search_empty_inside_off_message">لم يشمل البحث نصوص الكتب. شغّل «البحث داخل الكتب» للبحث في نص كل كتاب في مكتبتك.</string>
+    <string name="search_empty_inside_off_action">البحث داخل الكتب</string>
+
+    <!-- Recent queries -->
+    <string name="search_recent_title">عمليات بحث سابقة</string>
+    <string name="search_recent_clear">مسح الكل</string>
+    <string name="search_cd_remove_recent">إزالة من عمليات البحث السابقة</string>
+
+    <!-- Transient messages -->
+    <string name="search_message_empty_query">اكتب كلمة للبحث عنها</string>
+
+    <!-- Result counts. Arabic needs all six categories; English uses one and other. -->
+    <plurals name="search_result_count">
+        <item quantity="zero">لا نتائج</item>
+        <item quantity="one">نتيجة واحدة</item>
+        <item quantity="two">نتيجتان</item>
+        <item quantity="few">%1$d نتائج</item>
+        <item quantity="many">%1$d نتيجة</item>
+        <item quantity="other">%1$d نتيجة</item>
+    </plurals>
+</resources>

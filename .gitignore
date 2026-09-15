@@ -1,0 +1,34 @@
+# --- Gradle ---
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+.kotlin/
+
+# --- Android ---
+*.apk
+*.aab
+*.ap_
+*.dex
+captures/
+.externalNativeBuild/
+.cxx/
+release/
+
+# --- Local configuration (machine-specific SDK path; never commit) ---
+local.properties
+
+# --- IDEs ---
+*.iml
+.idea/
+.DS_Store
+*.hprof
+
+# --- Signing material ---
+# A keystore must never be committed. Real projects keep it in CI secrets or a password manager;
+# `keystore.properties` holds the paths and passwords and is deliberately ignored too.
+*.jks
+*.keystore
+keystore.properties
+
+# --- Room schema exports are NOT ignored: they are deliberately committed, so that future
+#     migrations can be verified against the real previous schema. See core/core-data/schemas/.

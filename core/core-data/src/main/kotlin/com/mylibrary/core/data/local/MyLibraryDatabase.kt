@@ -1,0 +1,44 @@
+package com.mylibrary.core.data.local
+
+import androidx.room.Database
+import androidx.room.RoomDatabase
+import com.mylibrary.core.data.local.dao.BookDao
+import com.mylibrary.core.data.local.dao.BookmarkDao
+import com.mylibrary.core.data.local.dao.ReadingPositionDao
+import com.mylibrary.core.data.local.entity.BookEntity
+import com.mylibrary.core.data.local.entity.BookmarkEntity
+import com.mylibrary.core.data.local.entity.ReadingPositionEntity
+
+/**
+ * MyLibrary's local store.
+ *
+ * Version 1 is the initial schema. From here on, any change to an entity requires a bumped version
+ * and a [androidx.room.migration.Migration]: the library is the user's own data and silently
+ * dropping it on upgrade is not an acceptable failure mode. Schemas are exported to the module's
+ * `schemas/` directory so migrations can be tested against a real previous version.
+ *
+ * There are no `@TypeConverters`: every column is a primitive or a `String`. Enums are stored by
+ * name and the reading locator is flattened into columns — both are deliberate, and both mean a
+ * schema change shows up as a migration instead of as data that no longer parses.
+ */
+@Database(
+    entities = [
+        BookEntity::class,
+        ReadingPositionEntity::class,
+        BookmarkEntity::class,
+    ],
+    version = 1,
+    exportSchema = true,
+)
+abstract class MyLibraryDatabase : RoomDatabase() {
+
+    abstract fun bookDao(): BookDao
+
+    abstract fun readingPositionDao(): ReadingPositionDao
+
+    abstract fun bookmarkDao(): BookmarkDao
+
+    companion object {
+        const val NAME = "mylibrary.db"
+    }
+}

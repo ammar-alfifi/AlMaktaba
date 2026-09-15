@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Toolbar -->
+    <string name="lib_title">My Library</string>
+    <string name="lib_cd_sort">Sort library</string>
+    <string name="lib_cd_view_mode">Switch view mode</string>
+    <string name="lib_sort_title">Sort by</string>
+
+    <!-- Sort options -->
+    <string name="lib_sort_recently_read">Recently read</string>
+    <string name="lib_sort_recently_added">Recently added</string>
+    <string name="lib_sort_title_asc">Title (A - Z)</string>
+    <string name="lib_sort_title_desc">Title (Z - A)</string>
+    <string name="lib_sort_author">Author</string>
+
+    <!-- View mode -->
+    <string name="lib_view_grid">Grid</string>
+    <string name="lib_view_list">List</string>
+
+    <!-- Filters -->
+    <string name="lib_filter_favorites">Favourites</string>
+
+    <!-- Empty / filtered states -->
+    <string name="lib_empty_title">No books yet</string>
+    <string name="lib_empty_message">Add your first book in PDF, EPUB, TXT, CBZ or CBR format to get started.</string>
+    <string name="lib_no_matches_title">No matches</string>
+    <string name="lib_no_matches_message">No book matches the current filters. Try turning some off.</string>
+    <string name="lib_clear_filters">Clear filters</string>
+
+    <!-- Import -->
+    <string name="lib_import">Add books</string>
+    <string name="lib_importing">Importing…</string>
+    <string name="lib_import_result">Added %1$d book(s)</string>
+    <string name="lib_import_result_with_skipped">Added %1$d, %2$d already in the library, %3$d unsupported</string>
+    <string name="lib_import_nothing">Nothing was added</string>
+
+    <!-- Context menu -->
+    <string name="lib_menu_details">Details</string>
+    <string name="lib_menu_add_favorite">Add to favourites</string>
+    <string name="lib_menu_remove_favorite">Remove from favourites</string>
+    <string name="lib_menu_delete">Remove from library</string>
+
+    <!-- Deletion -->
+    <string name="lib_delete_title">Delete this book?</string>
+    <string name="lib_delete_message">“%1$s” will be removed from your library along with its reading position and bookmarks. The original file is not touched.</string>
+    <string name="lib_delete_confirm">Delete</string>
+    <string name="lib_book_deleted">Book deleted</string>
+
+    <!-- Details screen -->
+    <string name="lib_details_title">Book details</string>
+    <string name="lib_details_read">Read</string>
+    <string name="lib_details_continue">Continue reading</string>
+    <string name="lib_details_progress">Progress</string>
+    <string name="lib_details_bookmarks">Bookmarks</string>
+    <string name="lib_details_no_bookmarks">No bookmarks in this book yet.</string>
+    <string name="lib_details_added_on">Added %1$s</string>
+    <string name="lib_details_last_read">Last read %1$s</string>
+    <string name="lib_details_unknown_author">Unknown author</string>
+    <string name="lib_details_cd_favorite">Add to favourites</string>
+    <string name="lib_page_number">Page %1$d</string>
+    <string name="lib_chapter_number">Chapter %1$d</string>
+</resources>

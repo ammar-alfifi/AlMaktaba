@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Settings screen strings. Arabic is the default locale: this is the unqualified `values/` folder,
+  so every user gets these unless their device asks for another language. The complete English
+  translation lives in `values-en/`.
+
+  Keys are prefixed `settings_` so a grep for the screen's strings never turns up another module's.
+  Labels here are deliberately short: the segmented rows give every option an equal share of one
+  line and clip rather than wrap, so a label that reads well on its own may still be too long to
+  select.
+-->
+<resources>
+    <!-- Section headers -->
+    <string name="settings_section_appearance">المظهر</string>
+    <string name="settings_section_language">اللغة</string>
+    <string name="settings_section_library">المكتبة</string>
+    <string name="settings_section_reading">القراءة</string>
+    <string name="settings_section_about">عن التطبيق</string>
+
+    <!-- Appearance -->
+    <string name="settings_theme_mode">السمة</string>
+    <string name="settings_theme_system">النظام</string>
+    <string name="settings_theme_light">فاتح</string>
+    <string name="settings_theme_dark">داكن</string>
+    <string name="settings_dynamic_color">الألوان الديناميكية</string>
+    <string name="settings_dynamic_color_summary">مطابقة ألوان التطبيق لخلفية الجهاز (أندرويد 12 وأحدث).</string>
+
+    <!-- Language -->
+    <string name="settings_language">لغة التطبيق</string>
+    <string name="settings_language_arabic">العربية</string>
+    <string name="settings_language_english">الإنجليزية</string>
+    <string name="settings_language_system">لغة النظام</string>
+
+    <!-- Library -->
+    <string name="settings_view_mode">طريقة العرض</string>
+    <string name="settings_view_grid">شبكة</string>
+    <string name="settings_view_list">قائمة</string>
+    <string name="settings_sort">الترتيب</string>
+    <string name="settings_sort_recently_read">الأحدث قراءةً</string>
+    <string name="settings_sort_recently_added">الأحدث إضافة</string>
+    <string name="settings_sort_title_asc">العنوان (أ - ي)</string>
+    <string name="settings_sort_title_desc">العنوان (ي - أ)</string>
+    <string name="settings_sort_author">المؤلف</string>
+
+    <!-- Reading -->
+    <string name="settings_reader_font">خط القراءة</string>
+    <string name="settings_font_system">خط النظام</string>
+    <string name="settings_font_serif">مذيّل</string>
+    <string name="settings_font_sans_serif">بسيط</string>
+    <string name="settings_font_monospace">أحادي المسافة</string>
+    <string name="settings_font_scale">حجم الخط</string>
+    <string name="settings_line_height">تباعد الأسطر</string>
+    <!-- Multiplier readout next to the sliders, e.g. "1.5×". -->
+    <string name="settings_scale_value">%1$s×</string>
+    <string name="settings_page_fit">ملاءمة الصفحة</string>
+    <string name="settings_fit_width">العرض</string>
+    <string name="settings_fit_page">الصفحة</string>
+    <string name="settings_fit_actual">حجم فعلي</string>
+    <string name="settings_reading_direction">اتجاه القراءة</string>
+    <string name="settings_direction_system">تلقائي</string>
+    <string name="settings_direction_ltr">من اليسار</string>
+    <string name="settings_direction_rtl">من اليمين</string>
+    <string name="settings_keep_screen_on">إبقاء الشاشة مضاءة</string>
+    <string name="settings_keep_screen_on_summary">منع إطفاء الشاشة تلقائيًا أثناء القراءة.</string>
+    <string name="settings_show_progress">إظهار مؤشر التقدم</string>
+    <string name="settings_show_progress_summary">عرض رقم الصفحة أو نسبة التقدم أثناء القراءة.</string>
+    <string name="settings_page_snapping">محاذاة الصفحة</string>
+    <string name="settings_page_snapping_summary">الانتقال صفحة واحدة في كل مرة بدل التمرير المتصل.</string>
+
+    <!-- About -->
+    <string name="settings_about_version_title">الإصدار</string>
+    <string name="settings_about_version_unknown">غير معروف</string>
+    <string name="settings_about_formats_title">الصيغ المدعومة</string>
+    <string name="settings_about_storage_title">التخزين</string>
+    <string name="settings_about_storage_body">يفتح التطبيق كتبك مباشرةً عبر إطار عمل الوصول إلى التخزين (SAF) في أندرويد، فلا تُنسخ ملفاتك إلى داخله ولا يُطلب أي إذن على ملفاتك.</string>
+
+    <!-- Content descriptions -->
+    <string name="settings_show_options">عرض الخيارات</string>
+
+    <!-- Reset -->
+    <string name="settings_reset">إعادة التعيين إلى الإعدادات الافتراضية</string>
+    <string name="settings_reset_summary">تُستعاد إعدادات المظهر واللغة والمكتبة والقراءة جميعها إلى قيمها الافتراضية.</string>
+    <string name="settings_reset_dialog_title">إعادة التعيين إلى الإعدادات الافتراضية؟</string>
+    <string name="settings_reset_dialog_message">ستفقد تفضيلاتك الحالية: السمة واللغة وطريقة عرض المكتبة وإعدادات القراءة.</string>
+    <string name="settings_reset_confirm">إعادة التعيين</string>
+    <string name="settings_reset_done">تمت إعادة التعيين إلى الإعدادات الافتراضية.</string>
+</resources>

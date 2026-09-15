@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  English translation of the search screen. Complete: every key in `values/strings.xml` has an
+  entry here, so the screen never falls back to Arabic mid-sentence in an English UI.
+-->
+<resources>
+    <!-- The query field -->
+    <string name="search_field_placeholder">Search titles and authors</string>
+    <string name="search_cd_clear_query">Clear search</string>
+
+    <!-- Searching inside books -->
+    <string name="search_filter_inside_books">Search inside books</string>
+    <string name="search_filter_inside_books_note">Can take a while: every book is opened and scanned in turn.</string>
+    <string name="search_scanning">Searching inside books…</string>
+    <string name="search_message_scan_capped">Only the %1$d most recent books were scanned, rather than the whole library.</string>
+
+    <!-- Sections and matches -->
+    <string name="search_section_library">From your library</string>
+    <string name="search_match_in_title">Match in title</string>
+    <string name="search_match_in_author">Match in author</string>
+
+    <!-- Empty states -->
+    <string name="search_empty_hint_title">Search your library</string>
+    <string name="search_empty_hint_message">Type a title or an author, or turn on “Search inside books” to look through the text.</string>
+    <string name="search_empty_no_results_title">No results</string>
+    <string name="search_empty_no_results_message">Nothing matched “%1$s”.</string>
+    <string name="search_empty_inside_off_title">Nothing in titles or authors</string>
+    <string name="search_empty_inside_off_message">The text of your books was not searched. Turn on “Search inside books” to look through every book in your library.</string>
+    <string name="search_empty_inside_off_action">Search inside books</string>
+
+    <!-- Recent queries -->
+    <string name="search_recent_title">Recent searches</string>
+    <string name="search_recent_clear">Clear all</string>
+    <string name="search_cd_remove_recent">Remove from recent searches</string>
+
+    <!-- Transient messages -->
+    <string name="search_message_empty_query">Type something to search for</string>
+
+    <!-- Result counts -->
+    <plurals name="search_result_count">
+        <item quantity="one">%1$d result</item>
+        <item quantity="other">%1$d results</item>
+    </plurals>
+</resources>

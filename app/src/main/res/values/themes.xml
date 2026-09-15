@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Window chrome only. Every pixel the user sees is drawn by Compose with the Material 3 theme
+      in `:core:core-ui`; this XML theme exists so the window has the right background colour and
+      no action bar during the brief moment before the first Compose frame.
+    -->
+    <style name="Theme.MyLibrary" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+</resources>

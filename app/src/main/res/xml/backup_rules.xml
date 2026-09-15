@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Backup excludes the decoded-page cache and the Room WAL; the library itself is restorable. -->
+<full-backup-content>
+    <exclude domain="cache" path="." />
+    <exclude domain="file" path="reader_cache" />
+    <exclude domain="database" path="mylibrary.db-wal" />
+    <exclude domain="database" path="mylibrary.db-shm" />
+</full-backup-content>

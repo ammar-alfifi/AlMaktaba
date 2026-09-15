@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Arabic is the default locale: this file is the unqualified `values/` resource folder, so an
+  Arabic UI is what every user gets unless their device (or an in-app choice) asks for something
+  else. `values-en/` holds the complete English translation.
+-->
+<resources>
+    <string name="app_name">مكتبتي</string>
+
+    <!-- Bottom navigation / navigation rail destinations -->
+    <string name="nav_library">المكتبة</string>
+    <string name="nav_search">البحث</string>
+    <string name="nav_settings">الإعدادات</string>
+
+    <!-- Library screen -->
+    <string name="library_title">مكتبتي</string>
+    <string name="library_empty_title">لا توجد كتب بعد</string>
+    <string name="library_empty_message">أضف كتابك الأول بصيغة PDF أو EPUB أو TXT أو CBZ أو CBR للبدء.</string>
+    <string name="library_import">إضافة كتب</string>
+    <string name="library_sort">ترتيب</string>
+    <string name="library_view_mode">طريقة العرض</string>
+    <string name="library_search_placeholder">ابحث في مكتبتك…</string>
+
+    <!-- Sort options -->
+    <string name="sort_recently_read">الأحدث قراءةً</string>
+    <string name="sort_recently_added">الأحدث إضافة</string>
+    <string name="sort_title_asc">العنوان (أ - ي)</string>
+    <string name="sort_title_desc">العنوان (ي - أ)</string>
+    <string name="sort_author">المؤلف</string>
+
+    <!-- Generic actions -->
+    <string name="action_ok">موافق</string>
+    <string name="action_cancel">إلغاء</string>
+    <string name="action_delete">حذف</string>
+    <string name="action_rename">إعادة تسمية</string>
+    <string name="action_share">مشاركة</string>
+    <string name="action_retry">إعادة المحاولة</string>
+    <string name="action_close">إغلاق</string>
+    <string name="action_save">حفظ</string>
+    <string name="action_more">المزيد</string>
+    <string name="action_back">رجوع</string>
+
+    <!-- Content descriptions -->
+    <string name="cd_book_cover">غلاف الكتاب</string>
+    <string name="cd_more_options">خيارات إضافية</string>
+    <string name="cd_previous_page">الصفحة السابقة</string>
+    <string name="cd_next_page">الصفحة التالية</string>
+</resources>

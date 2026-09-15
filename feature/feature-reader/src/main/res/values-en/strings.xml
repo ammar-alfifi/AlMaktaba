@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Toolbar -->
+    <string name="reader_toc">Table of contents</string>
+    <string name="reader_bookmarks">Bookmarks</string>
+    <string name="reader_bookmark">Bookmark</string>
+    <string name="reader_settings">Reading settings</string>
+    <string name="reader_bookmark_added">Bookmark added</string>
+    <string name="reader_bookmark_removed">Bookmark removed</string>
+
+    <!-- Table of contents -->
+    <string name="reader_no_toc_title">No table of contents</string>
+    <string name="reader_no_toc_message">This file does not include an outline. Use the progress bar or bookmarks to navigate instead.</string>
+
+    <!-- Bookmarks -->
+    <string name="reader_no_bookmarks_title">No bookmarks</string>
+    <string name="reader_no_bookmarks_message">Tap the bookmark icon in the toolbar to save your current position.</string>
+
+    <!-- Settings -->
+    <string name="reader_settings_theme">Theme</string>
+    <string name="reader_theme_system">System</string>
+    <string name="reader_theme_light">Light</string>
+    <string name="reader_theme_dark">Dark</string>
+    <string name="reader_settings_font">Font</string>
+    <string name="reader_font_system">Default</string>
+    <string name="reader_font_serif">Serif</string>
+    <string name="reader_font_sans">Sans serif</string>
+    <string name="reader_font_mono">Monospace</string>
+    <string name="reader_settings_font_size">Font size</string>
+    <string name="reader_settings_line_height">Line spacing</string>
+    <string name="reader_settings_page_fit">Page fit</string>
+    <string name="reader_fit_width">Width</string>
+    <string name="reader_fit_page">Whole page</string>
+    <string name="reader_fit_actual">Actual size</string>
+    <string name="reader_settings_keep_awake">Keep screen awake</string>
+
+    <!-- Search -->
+    <string name="reader_search_action">Search</string>
+    <string name="reader_search_title">Search inside this book</string>
+    <string name="reader_search_hint">Search the book text…</string>
+    <string name="reader_search_hint_body">Type a word and press search to find it in this book.</string>
+    <string name="reader_searching">Searching…</string>
+    <string name="reader_no_results">No results</string>
+    <string name="reader_search_unavailable">This file cannot be searched because it has no text layer.</string>
+
+    <!-- Password -->
+    <string name="reader_password_title">Protected file</string>
+    <string name="reader_password_message">This file is password protected. Enter the password to open it.</string>
+    <string name="reader_password_wrong">That password was not correct. Try again.</string>
+    <string name="reader_password_label">Password</string>
+    <string name="reader_password_show">Show password</string>
+    <string name="reader_password_open">Open</string>
+</resources>

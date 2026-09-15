@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Reader feature strings. Arabic is the default locale; see values-en/ for English. -->
+<resources>
+    <!-- Toolbar -->
+    <string name="reader_toc">جدول المحتويات</string>
+    <string name="reader_bookmarks">الإشارات المرجعية</string>
+    <string name="reader_bookmark">إشارة مرجعية</string>
+    <string name="reader_settings">إعدادات القراءة</string>
+    <string name="reader_bookmark_added">أُضيفت إشارة مرجعية</string>
+    <string name="reader_bookmark_removed">أُزيلت الإشارة المرجعية</string>
+
+    <!-- Table of contents -->
+    <string name="reader_no_toc_title">لا يوجد جدول محتويات</string>
+    <string name="reader_no_toc_message">هذا الملف لا يتضمن فهرساً. يمكنك التنقل باستخدام شريط التقدم أو الإشارات المرجعية.</string>
+
+    <!-- Bookmarks -->
+    <string name="reader_no_bookmarks_title">لا إشارات مرجعية</string>
+    <string name="reader_no_bookmarks_message">اضغط على أيقونة الإشارة في الشريط العلوي لحفظ موضعك الحالي.</string>
+
+    <!-- Settings -->
+    <string name="reader_settings_theme">المظهر</string>
+    <string name="reader_theme_system">النظام</string>
+    <string name="reader_theme_light">فاتح</string>
+    <string name="reader_theme_dark">داكن</string>
+    <string name="reader_settings_font">الخط</string>
+    <string name="reader_font_system">الافتراضي</string>
+    <string name="reader_font_serif">مذيّل</string>
+    <string name="reader_font_sans">بسيط</string>
+    <string name="reader_font_mono">ثابت العرض</string>
+    <string name="reader_settings_font_size">حجم الخط</string>
+    <string name="reader_settings_line_height">تباعد الأسطر</string>
+    <string name="reader_settings_page_fit">ملاءمة الصفحة</string>
+    <string name="reader_fit_width">العرض</string>
+    <string name="reader_fit_page">الصفحة كاملة</string>
+    <string name="reader_fit_actual">الحجم الأصلي</string>
+    <string name="reader_settings_keep_awake">إبقاء الشاشة مضاءة</string>
+
+    <!-- Search -->
+    <string name="reader_search_action">بحث</string>
+    <string name="reader_search_title">البحث داخل الكتاب</string>
+    <string name="reader_search_hint">ابحث في نص الكتاب…</string>
+    <string name="reader_search_hint_body">اكتب كلمة ثم اضغط زر البحث للعثور عليها في هذا الكتاب.</string>
+    <string name="reader_searching">جارٍ البحث…</string>
+    <string name="reader_no_results">لا نتائج</string>
+    <string name="reader_search_unavailable">لا يمكن البحث في هذا الملف لأنه لا يحتوي على طبقة نصية.</string>
+
+    <!-- Password -->
+    <string name="reader_password_title">ملف محمي</string>
+    <string name="reader_password_message">هذا الملف محمي بكلمة مرور. أدخل كلمة المرور لفتحه.</string>
+    <string name="reader_password_wrong">كلمة المرور غير صحيحة. حاول مرة أخرى.</string>
+    <string name="reader_password_label">كلمة المرور</string>
+    <string name="reader_password_show">إظهار كلمة المرور</string>
+    <string name="reader_password_open">فتح</string>
+</resources>

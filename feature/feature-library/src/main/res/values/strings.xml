@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Library feature strings. Arabic is the default locale; see values-en/ for English. -->
+<resources>
+    <!-- Toolbar -->
+    <string name="lib_title">مكتبتي</string>
+    <string name="lib_cd_sort">ترتيب المكتبة</string>
+    <string name="lib_cd_view_mode">تبديل طريقة العرض</string>
+    <string name="lib_sort_title">ترتيب حسب</string>
+
+    <!-- Sort options -->
+    <string name="lib_sort_recently_read">الأحدث قراءةً</string>
+    <string name="lib_sort_recently_added">الأحدث إضافة</string>
+    <string name="lib_sort_title_asc">العنوان (أ - ي)</string>
+    <string name="lib_sort_title_desc">العنوان (ي - أ)</string>
+    <string name="lib_sort_author">المؤلف</string>
+
+    <!-- View mode -->
+    <string name="lib_view_grid">شبكة</string>
+    <string name="lib_view_list">قائمة</string>
+
+    <!-- Filters -->
+    <string name="lib_filter_favorites">المفضلة</string>
+
+    <!-- Empty / filtered states -->
+    <string name="lib_empty_title">لا توجد كتب بعد</string>
+    <string name="lib_empty_message">أضف أول كتاب لك بصيغة PDF أو EPUB أو TXT أو CBZ أو CBR للبدء.</string>
+    <string name="lib_no_matches_title">لا نتائج مطابقة</string>
+    <string name="lib_no_matches_message">لا يوجد كتاب يطابق عوامل التصفية الحالية. جرّب إلغاء بعضها.</string>
+    <string name="lib_clear_filters">إلغاء التصفية</string>
+
+    <!-- Import -->
+    <string name="lib_import">إضافة كتب</string>
+    <string name="lib_importing">جارٍ الاستيراد…</string>
+    <string name="lib_import_result">تمت إضافة %1$d كتاب</string>
+    <string name="lib_import_result_with_skipped">تمت إضافة %1$d، و%2$d موجودة مسبقاً، و%3$d غير مدعومة</string>
+    <string name="lib_import_nothing">لم تتم إضافة أي كتاب</string>
+
+    <!-- Context menu -->
+    <string name="lib_menu_details">التفاصيل</string>
+    <string name="lib_menu_add_favorite">إضافة إلى المفضلة</string>
+    <string name="lib_menu_remove_favorite">إزالة من المفضلة</string>
+    <string name="lib_menu_delete">حذف من المكتبة</string>
+
+    <!-- Deletion -->
+    <string name="lib_delete_title">حذف الكتاب؟</string>
+    <string name="lib_delete_message">سيُحذف «%1$s» من مكتبتك مع موضع القراءة والإشارات المرجعية. الملف الأصلي لن يُمس.</string>
+    <string name="lib_delete_confirm">حذف</string>
+    <string name="lib_book_deleted">تم حذف الكتاب</string>
+
+    <!-- Details screen -->
+    <string name="lib_details_title">تفاصيل الكتاب</string>
+    <string name="lib_details_read">قراءة</string>
+    <string name="lib_details_continue">متابعة القراءة</string>
+    <string name="lib_details_progress">التقدم</string>
+    <string name="lib_details_bookmarks">الإشارات المرجعية</string>
+    <string name="lib_details_no_bookmarks">لا توجد إشارات مرجعية في هذا الكتاب بعد.</string>
+    <string name="lib_details_added_on">أُضيف في %1$s</string>
+    <string name="lib_details_last_read">آخر قراءة %1$s</string>
+    <string name="lib_details_unknown_author">مؤلف غير معروف</string>
+    <string name="lib_details_cd_favorite">إضافة إلى المفضلة</string>
+    <string name="lib_page_number">صفحة %1$d</string>
+    <string name="lib_chapter_number">الفصل %1$d</string>
+</resources>
