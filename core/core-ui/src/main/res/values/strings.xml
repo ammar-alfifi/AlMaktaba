@@ -23,6 +23,7 @@
     <string name="ui_error_file_access">تعذّر الوصول إلى الملف. قد يكون قد نُقل أو حُذف.</string>
     <string name="ui_error_corrupt">الملف تالف أو غير مكتمل.</string>
     <string name="ui_error_unsupported">هذه الصيغة غير مدعومة.</string>
+    <string name="ui_error_decoder_unavailable">تعذّر تحميل محرّك قراءة ملفات %1$s على هذا الجهاز.</string>
     <string name="ui_error_password">هذا الملف محمي بكلمة مرور.</string>
     <string name="ui_error_protected">هذا الملف محمي بحقوق رقمية ولا يمكن فتحه.</string>
     <string name="ui_error_out_of_memory">لا توجد ذاكرة كافية لفتح هذا الملف.</string>

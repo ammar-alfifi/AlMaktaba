@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalResources
@@ -85,9 +86,22 @@ fun MyLibraryApp(viewModel: AppViewModel = hiltViewModel()) {
 /**
  * Provides the chosen language to the whole composition.
  *
- * `LocalResources` is provided alongside `LocalContext` because `stringResource` resolves against
- * the resources object, and a context swap alone would leave strings resolving against the
- * un-scoped context on newer Compose versions.
+ * **`LocalContext` is deliberately not overridden, and must not be.** It is tempting — the localized
+ * context is right there — but `createConfigurationContext` returns a plain `ContextImpl`, not the
+ * hosting Activity, and `hiltViewModel()` reads `LocalContext` to build its
+ * `HiltViewModelFactory`, which requires an Activity context and throws
+ * `IllegalStateException: Expected an activity context…` otherwise. Swapping it crashes the app on
+ * the first screen that creates a ViewModel.
+ *
+ * Localising through the two locals that actually matter avoids that entirely:
+ *
+ *  - `LocalResources` is what `stringResource` resolves against, so this is the localisation lever;
+ *  - `LocalConfiguration` carries the chosen locale for anything that inspects it directly;
+ *  - `LocalLayoutDirection` is what flips the layout for Arabic.
+ *
+ * The Activity context therefore stays in place for everything that genuinely needs it — Hilt's
+ * ViewModel factory, the `ContentResolver` behind the document picker — while every string and
+ * every layout direction still follows the user's choice.
  */
 @Composable
 private fun MyLibraryLocalized(language: AppLanguage, content: @Composable () -> Unit) {
@@ -95,8 +109,8 @@ private fun MyLibraryLocalized(language: AppLanguage, content: @Composable () ->
     val localizedContext = remember(baseContext, language) { baseContext.withAppLanguage(language) }
 
     CompositionLocalProvider(
-        LocalContext provides localizedContext,
         LocalResources provides localizedContext.resources,
+        LocalConfiguration provides localizedContext.resources.configuration,
         LocalLayoutDirection provides localizedContext.resources.configuration.toComposeLayoutDirection(),
         content = content,
     )

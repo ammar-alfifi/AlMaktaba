@@ -28,7 +28,28 @@ import kotlin.coroutines.cancellation.CancellationException
  */
 class PdfEngine(context: Context) : DocumentEngine {
 
-    private val pdfiumCore: PdfiumCore = PdfiumCore(context.applicationContext)
+    private val applicationContext: Context = context.applicationContext
+
+    /**
+     * pdfium's entry point, loaded on first use and **allowed to fail**.
+     *
+     * Constructing `PdfiumCore` calls `System.loadLibrary`, which throws when the shared object
+     * cannot be loaded. Two things make doing that eagerly, in the constructor, a bug rather than a
+     * detail:
+     *
+     *  - `PdfEngine` is built as part of Hilt's `Set<DocumentEngine>`, which is materialised the
+     *    first time any book is imported or opened. An eager constructor therefore loads a
+     *    multi-megabyte native library **on the main thread during the first screen's
+     *    composition**, and a failure there kills the whole app — a user could not even read a
+     *    TXT file because a PDF library would not load.
+     *  - `by lazy` caches the outcome, so a failed load is not retried on every call.
+     *
+     * `null` means "this device cannot decode PDFs", which [open] reports as
+     * [AppError.DecoderUnavailable] — one format lost, not the library.
+     */
+    private val pdfiumCore: PdfiumCore? by lazy {
+        runCatching { PdfiumCore(applicationContext) }.getOrNull()
+    }
 
     override fun supports(format: BookFormat): Boolean = format == BookFormat.PDF
 
@@ -50,6 +71,12 @@ class PdfEngine(context: Context) : DocumentEngine {
             )
         }
 
+        // Forcing the lazy here is what actually performs the native load, and it is the only place
+        // that touches it, so a device without a working pdfium fails one book rather than the app.
+        val core = pdfiumCore ?: return AppResult.Failure(
+            AppError.DecoderUnavailable(format = "PDF", reason = "pdfium native library unavailable"),
+        )
+
         val pdfiumSource: ChannelPdfiumSource = try {
             ChannelPdfiumSource(source.openChannel(), source.sizeBytes)
         } catch (cancellation: CancellationException) {
@@ -61,7 +88,7 @@ class PdfEngine(context: Context) : DocumentEngine {
         // pdfium only takes ownership of the source once the document is constructed. Until then a
         // failure would leak the file descriptor, so every failure path below closes it by hand.
         val native: PdfiumDocument = try {
-            withContext(Dispatchers.IO) { pdfiumCore.newDocument(pdfiumSource, password) }
+            withContext(Dispatchers.IO) { core.newDocument(pdfiumSource, password) }
         } catch (cancellation: CancellationException) {
             pdfiumSource.close()
             throw cancellation

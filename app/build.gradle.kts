@@ -28,8 +28,8 @@ android {
 
     defaultConfig {
         applicationId = "com.mylibrary"
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -59,6 +59,12 @@ android {
     buildFeatures {
         buildConfig = true
     }
+
+    testOptions {
+        // Robolectric needs the merged manifest and resources to construct an Android environment
+        // for the startup test.
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 dependencies {
@@ -83,6 +89,15 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     testImplementation(libs.junit)
+    // The startup smoke test builds the real Hilt graph and launches MainActivity on the JVM. That
+    // is the only way to exercise the whole cold-start path on a machine where no emulator can
+    // boot, and it catches the class of failure that compiles cleanly and crashes on launch.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.test.junit)
+    testImplementation(libs.hilt.android.testing)
+    kspTest(libs.hilt.compiler)
+
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.espresso.core)

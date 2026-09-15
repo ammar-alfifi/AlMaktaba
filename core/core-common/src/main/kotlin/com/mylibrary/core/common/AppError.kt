@@ -17,6 +17,17 @@ sealed interface AppError {
     /** The format is not one MyLibrary can decode. */
     data class UnsupportedFormat(val mimeType: String?, val extension: String? = null) : AppError
 
+    /**
+     * The format is supported, but its decoder could not be initialised on this device.
+     *
+     * Distinct from [UnsupportedFormat] because the two need different words and imply different
+     * things: "MyLibrary does not read this kind of file" versus "this device could not load the
+     * component that reads it". It exists because a decoder backed by a native library can fail to
+     * load — a missing ABI, exhausted memory — and that failure has to be reportable without
+     * taking the rest of the app with it.
+     */
+    data class DecoderUnavailable(val format: String, val reason: String? = null) : AppError
+
     /** The archive or document is encrypted and the password is wrong or missing. */
     data class PasswordRequired(val wrongPassword: Boolean = false) : AppError
 

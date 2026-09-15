@@ -19,6 +19,7 @@ import com.mylibrary.core.domain.model.BookFormat
 import com.mylibrary.core.domain.model.PageRenderRequest
 import com.mylibrary.core.domain.repository.BookMetadataResult
 import com.mylibrary.core.domain.repository.DocumentRepository
+import dagger.Lazy
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -35,14 +36,27 @@ import kotlinx.coroutines.withContext
 @Singleton
 class DocumentRepositoryImpl @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val engines: Set<@JvmSuppressWildcards DocumentEngine>,
+    /**
+     * The registered decoders, held **lazily**.
+     *
+     * This is not a micro-optimisation. Constructing an engine can load a native library —
+     * `PdfEngine` initialises pdfium — and this repository is constructed as soon as the library
+     * screen builds its first ViewModel. Injecting the set directly would therefore load several
+     * megabytes of shared object on the main thread before the first frame, and would do it even
+     * for a user whose library contains only text files.
+     *
+     * `Dagger`'s `Lazy` defers materialising the set until [open], [readMetadata] or [extractCover]
+     * is actually called — that is, until a specific book is being decoded — and caches it after
+     * the first call.
+     */
+    private val engines: Lazy<Set<@JvmSuppressWildcards DocumentEngine>>,
     private val coverWriter: CoverWriter,
     private val dispatchers: DispatcherProvider,
 ) : DocumentRepository {
 
     override suspend fun open(book: Book, password: String?): AppResult<OpenDocument> =
         withContext(dispatchers.io) {
-            val engine = engines.firstOrNull { it.supports(book.format) }
+            val engine = engines.get().firstOrNull { it.supports(book.format) }
                 ?: return@withContext AppResult.Failure(
                     AppError.UnsupportedFormat(mimeType = null, extension = book.format.fileExtension),
                 )
@@ -113,7 +127,7 @@ class DocumentRepositoryImpl @Inject constructor(
         }
     }
 
-    override fun supportsFormat(format: BookFormat): Boolean = engines.any { it.supports(format) }
+    override fun supportsFormat(format: BookFormat): Boolean = engines.get().any { it.supports(format) }
 
     /** Renders page one at cover size, or `null` if the page cannot be rendered. */
     private suspend fun renderFirstPageAsCover(paged: PagedDocument, book: Book): String? {

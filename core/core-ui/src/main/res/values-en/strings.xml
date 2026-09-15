@@ -18,6 +18,7 @@
     <string name="ui_error_file_access">Could not reach the file. It may have been moved or deleted.</string>
     <string name="ui_error_corrupt">The file is damaged or incomplete.</string>
     <string name="ui_error_unsupported">This format is not supported.</string>
+    <string name="ui_error_decoder_unavailable">The %1$s reader component could not be loaded on this device.</string>
     <string name="ui_error_password">This file is password protected.</string>
     <string name="ui_error_protected">This file is DRM protected and cannot be opened.</string>
     <string name="ui_error_out_of_memory">There is not enough memory to open this file.</string>

@@ -73,7 +73,7 @@ Every hard constraint from the specification, and where it is satisfied:
 
 A signed, installable build is attached to the latest release:
 
-**→ [MyLibrary-v1.0.0.apk](https://github.com/ammar-alfifi/MyLibrary/releases/download/v1.0.0/MyLibrary-v1.0.0.apk)** (~33 MB)
+**→ [MyLibrary-v1.0.1.apk](https://github.com/ammar-alfifi/MyLibrary/releases/download/v1.0.1/MyLibrary-v1.0.1.apk)** (~33 MB)
 
 Android 8.0 (API 26) and above. Signed with APK Signature Scheme v2 + v3. The app requests **no
 storage permission** — books are added through the system file picker, which grants access to the
@@ -184,7 +184,7 @@ have.
 
 ## 6. Testing
 
-**241 unit tests, 0 failures, across 9 modules.** `./gradlew test` runs them all.
+**249 unit tests, 0 failures, across 10 modules.** `./gradlew test` runs them all.
 
 | Module | Tests | Covers |
 |---|---:|---|
@@ -196,10 +196,16 @@ have.
 | `feature-search` | 20 | snippet offsets, result grouping, query history |
 | `core-data` | 17 | **real SQLite**: every sort order, `LIKE … ESCAPE`, cascade deletes, upserts |
 | `format-pdf` | 15 | aspect fitting, outline nesting, malformed bookmark trees |
+| `app` | 8 | **cold start**: real Hilt graph + `MainActivity` lifecycle, and the language override |
 | `feature-settings` | 6 | intent → settings mapping |
 
 Three properties of the suite are worth pointing out:
 
+- **The startup tests build the real dependency graph.** `app`'s smoke tests launch `MainActivity`
+  through its actual `onCreate` under Robolectric, constructing every Hilt binding, the Room
+  database, the DataStore and all four decoders. They are what caught the launch crash described in
+  [§7](#7-engineering-findings-worth-knowing) — a failure that compiled cleanly, passed all 241
+  other tests, and killed the app on every device.
 - **The decoder tests build real files.** `format-archive` writes an actual CBZ with `ZipOutputStream`
   (pages stored out of order, plus `__MACOSX/` and `.DS_Store` cruft); `format-epub` builds an
   in-memory EPUB with a container, OPF, NCX, nav document and chapters. Nothing is mocked.
@@ -217,19 +223,72 @@ to build one — the RAR *open* path is exercised through a mislabelled-extensio
 ### On running the app
 
 `app/build/outputs/apk/debug/app-debug.apk` builds, installs and packages correctly — verified
-against the artifact itself (Arabic default label, English override, launchable activity, the
-pdfium native libraries for `arm64-v8a` and `armeabi-v7a`).
+against the artifact itself (Arabic default label, English override, launchable activity, all four
+ABIs with the pdfium native libraries, `Stored`/uncompressed and `extractNativeLibs=false`).
 
-It has **not** been launched on a device or emulator: no AVD will complete its boot in this build
-environment — the emulator connects to `adb` and then dies during startup under both hardware
-acceleration and software emulation. That is an environment limitation rather than a defect, but it
-does mean the on-device runtime behaviour described above is inferred from the code and the test
-suite, not observed.
+**Cold start is covered by automated tests.** `app`'s smoke tests build the real Hilt graph and
+launch `MainActivity` through its true lifecycle under Robolectric, which is what caught the launch
+crash in [§7](#7-engineering-findings-worth-knowing).
+
+What is **not** covered is everything past startup: rendering, gestures, the reader, the file
+picker. No AVD completes its boot in the environment this was built in — the emulator process dies
+at RenderThread initialisation under both hardware acceleration and software emulation, across five
+attempts and two system images — so those paths are inferred from the code and the unit tests, not
+observed. They are the most likely place for the next bug to be.
 
 ## 7. Engineering findings worth knowing
 
-Four things were discovered while building this that are not obvious and would cost the next person
-real time.
+Five things were discovered while building this that are not obvious and would cost the next person
+real time. The first is the one that mattered most.
+
+### The bug that shipped
+
+**Overriding `LocalContext` breaks Hilt, and it crashes on launch.** The in-app language switch
+originally localised the UI by providing a configuration-scoped context to the whole Compose tree:
+
+```kotlin
+CompositionLocalProvider(LocalContext provides localizedContext, …)   // ← wrong
+```
+
+`createConfigurationContext()` returns a plain `ContextImpl`, not the hosting Activity. Every
+`hiltViewModel()` reads `LocalContext` to build its `HiltViewModelFactory`, which requires an
+Activity context and throws otherwise:
+
+```
+java.lang.IllegalStateException: Expected an activity context for creating a HiltViewModelFactory
+    but instead found: android.app.ContextImpl
+    at androidx.hilt.lifecycle.viewmodel.compose.HiltViewModelKt
+    at com.mylibrary.feature.library.LibraryScreenKt.LibraryRoute
+```
+
+The result was an app that compiled cleanly, passed 241 tests, and **died on every launch** the
+moment the library screen created its first ViewModel.
+
+The fix is to localise through the locals that actually carry localisation. `stringResource`
+resolves against `LocalResources` — verified by disassembling `StringResources_androidKt`, which
+references that local and not `LocalContext` — so providing `LocalResources`, `LocalConfiguration`
+and `LocalLayoutDirection` is both sufficient and correct, and leaves the Activity context in place
+for everything that needs it.
+
+The lesson generalises: **a `CompositionLocalProvider` is a global override, and `LocalContext` is
+not a styling detail — it is the bridge to the Android framework.** Replace it and you break every
+library that reaches through it.
+
+### The design flaw it exposed
+
+The same stack trace revealed a second problem worth fixing on its own merits: constructing
+`DocumentRepositoryImpl` eagerly built **all four decoders**, and `PdfEngine`'s constructor loads
+pdfium's native library. Because the repository is built as soon as the library screen creates its
+first ViewModel, several megabytes of shared object were being loaded **on the main thread during
+the first frame** — even for a user whose library contains only text files — and any failure there
+took down the entire app rather than one format.
+
+Two changes: the engine set is now injected as `Dagger`'s `Lazy`, so it is materialised when a book
+is actually decoded rather than at startup; and `PdfEngine` loads its native library lazily and
+tolerates failure, reporting `AppError.DecoderUnavailable` for PDFs while leaving every other
+format usable.
+
+### The rest
 
 **AGP 9 compiles Kotlin itself.** Applying `org.jetbrains.kotlin.android` is now an *error*, not a
 deprecation. Kotlin's `jvmTarget` follows `android.compileOptions.targetCompatibility`, so the

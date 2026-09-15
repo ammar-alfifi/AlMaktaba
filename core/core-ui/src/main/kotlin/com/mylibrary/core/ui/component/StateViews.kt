@@ -138,6 +138,7 @@ fun AppError.messageForUser(): String = when (this) {
     is AppError.FileAccess -> stringResource(R.string.ui_error_file_access)
     is AppError.CorruptDocument -> stringResource(R.string.ui_error_corrupt)
     is AppError.UnsupportedFormat -> stringResource(R.string.ui_error_unsupported)
+    is AppError.DecoderUnavailable -> stringResource(R.string.ui_error_decoder_unavailable, format)
     is AppError.PasswordRequired -> stringResource(R.string.ui_error_password)
     is AppError.Protected -> stringResource(R.string.ui_error_protected)
     is AppError.OutOfMemory -> stringResource(R.string.ui_error_out_of_memory)
