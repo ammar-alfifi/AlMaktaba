@@ -20,6 +20,15 @@
 
     <!-- Settings -->
     <string name="reader_settings_theme">Theme</string>
+    <string name="reader_settings_reflow">Layout</string>
+    <string name="reader_reflow_scroll">Scroll</string>
+    <string name="reader_reflow_paged">Pages</string>
+    <string name="reader_settings_tap_to_turn">Tap the sides to turn pages</string>
+    <string name="reader_settings_reset">Reset reading settings</string>
+    <string name="reader_settings_reset_message">The font, its size and spacing, the layout, the page fit and the reading direction will go back to their defaults. Your app theme, language and library layout are not changed.</string>
+    <string name="reader_settings_reset_done">Reading settings reset</string>
+    <string name="reader_page_of_chapter">Page %1$d of %2$d</string>
+    <string name="reader_next_chapter">Next chapter</string>
     <string name="reader_theme_system">System</string>
     <string name="reader_theme_light">Light</string>
     <string name="reader_theme_dark">Dark</string>

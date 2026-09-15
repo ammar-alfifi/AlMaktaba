@@ -160,7 +160,16 @@ class SaveBookmarkNoteUseCase @Inject constructor(
  */
 class ReadingProgressUseCase @Inject constructor() {
 
-    operator fun invoke(locator: ReadingLocator, document: OpenDocument): Float = when (document) {
+    /**
+     * @param fractionWithinChapter how far into the chapter the reader is, in 0f..1f. Zero for a
+     *   chapter that has not been paginated — a scrolling reader has no such fraction to give, and
+     *   reporting one it had invented would be worse than reporting none.
+     */
+    operator fun invoke(
+        locator: ReadingLocator,
+        document: OpenDocument,
+        fractionWithinChapter: Float = 0f,
+    ): Float = when (document) {
         is PagedDocument -> when (locator) {
             is ReadingLocator.Paged -> fromPage(locator.pageIndex, document.pageCount)
             // A reflowable locator against a paged document means the position was saved against
@@ -169,7 +178,12 @@ class ReadingProgressUseCase @Inject constructor() {
         }
 
         is ReflowableDocument -> when (locator) {
-            is ReadingLocator.Reflowable -> fromChapter(locator.chapterIndex, document.chapterCount)
+            is ReadingLocator.Reflowable -> fromChapter(
+                chapterIndex = locator.chapterIndex,
+                chapterCount = document.chapterCount,
+                fractionWithinChapter = fractionWithinChapter,
+            )
+
             is ReadingLocator.Paged -> 0f
         }
 

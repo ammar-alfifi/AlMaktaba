@@ -34,7 +34,7 @@ Jetpack Compose و Material 3، ومعمارية نظيفة متعددة الو�
 | **Languages** | Arabic by default, English as a complete second locale, switchable in-app without a restart |
 | **Direction** | Full RTL for Arabic, LTR for English — and a document's own direction is honoured *independently* of the UI, so an English TXT reads left-to-right inside the Arabic interface |
 | **Library** | Import through the Storage Access Framework, grid/list layouts, five sort orders, favourite and format filters, automatic cover extraction |
-| **Reader** | One toolbar across all five formats, adapting to what the open file can do; paged and reflowable modes; tap zones that turn the page (mirrored for Arabic) or scroll a screenful; pinch-zoom, double-tap and a clamped pan; three page-fit modes; per-document search, outlines, bookmarks; font/theme/line-height controls that apply live |
+| **Reader** | One toolbar across all five formats, adapting to what the open file can do; paged and reflowable modes; **EPUB and TXT can be split into pages** as well as scrolled; tap zones that turn the page (mirrored for Arabic) or scroll a screenful, with a haptic tick on every turn and a switch to turn them off; pinch-zoom, double-tap and a clamped pan; three page-fit modes; per-document search, outlines, bookmarks; font/theme/line-height controls that apply live, and one button that puts them all back |
 | **Storage** | No storage permission at all — only scoped `content://` access to files the user picked |
 
 ## 2. Requirements compliance
@@ -73,7 +73,7 @@ Every hard constraint from the specification, and where it is satisfied:
 
 A signed, installable build is attached to the latest release:
 
-**→ [MyLibrary-v1.1.0.apk](https://github.com/ammar-alfifi/MyLibrary/releases/download/v1.1.0/MyLibrary-v1.1.0.apk)** (~33 MB)
+**→ [MyLibrary-v1.2.0.apk](https://github.com/ammar-alfifi/MyLibrary/releases/download/v1.2.0/MyLibrary-v1.2.0.apk)** (~33 MB)
 
 Android 8.0 (API 26) and above. Signed with APK Signature Scheme v2 + v3. The app requests **no
 storage permission** — books are added through the system file picker, which grants access to the
@@ -185,6 +185,21 @@ every action for every format (the toolbar then offers a comic a search that can
 branching on `isPaged` instead of on capabilities (which conflates "has pages" with "has text" — a
 CBZ has pages and no text, a TXT the reverse).
 
+**A page in a text file is a decision, not a fact.** An EPUB chapter has no pages: how many it
+becomes depends on the screen, the font size and the leading, all of which the reader can change
+while reading. So the paginator measures the chapter with the same `TextMeasurer` that will draw it,
+cuts text blocks at line boundaries — a page never ends mid-line, and the continuation re-wraps
+identically — and moves what cannot be divided whole. That split is why `BlockMeasure` is an
+interface: *which characters go on which page* is arithmetic, `paginate` is a pure function over it,
+and both are tested without a device. Only *how tall is this text* needs a text shaper.
+
+Two consequences are deliberate. A page is a character offset, not a page number, so a font-size
+change re-paginates and lands the reader on the text they were already reading rather than on page
+one. And an image or a table is given a page to itself rather than an estimated height, because
+neither is knowable without decoding or laying it out, and a wrong guess puts a caption on top of a
+picture. The cost is white space around a small illustration; the alternative is a rendering fault
+that looks like a bug in the app.
+
 **The fit mode is expressed in the render box, not in the view.** `PageFitMode` was stored, offered
 in two settings screens and never read by the renderer. Wiring it up in the view layer would not have
 worked: pdfium maps a page onto whatever rectangle it is handed instead of letterboxing, so the
@@ -206,12 +221,12 @@ tracks a scroll fraction to pass it yet, so both screens are chapter-accurate an
 
 ## 6. Testing
 
-**375 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
+**393 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
 
 | Module | Tests | Covers |
 |---|---:|---|
 | `format-epub` | 84 | container/OPF parsing, nav + NCX, sanitiser, path resolution, traversal refusal, embedded fonts, links |
-| `feature-reader` | 87 | HTML → block parsing, chapter text offsets and link anchors, which toolbar actions a document supports, tap-zone mirroring, page-fit geometry, progress agreement with the library |
+| `feature-reader` | 103 | HTML → block parsing, chapter text offsets and link anchors, which toolbar actions a document supports, tap-zone mirroring, page-fit geometry, **page-breaking arithmetic** (line boundaries, spacing, atomic blocks, degenerate pages), progress agreement with the library |
 | `format-text` | 47 | Windows-1256/UTF-16/BOM decoding, chapter splitting, escaping, search offsets |
 | `core-domain` | 32 | format resolution, progress arithmetic, library join, import rules |
 | `core-common` | 30 | natural sort key, file-name parsing, byte formatting, result combinators |
@@ -220,7 +235,7 @@ tracks a scroll fraction to pass it yet, so both screens are chapter-accurate an
 | `core-data` | 17 | **real SQLite**: every sort order, `LIKE … ESCAPE`, cascade deletes, upserts |
 | `format-pdf` | 15 | aspect fitting, outline nesting, malformed bookmark trees |
 | `app` | 8 | **cold start**: real Hilt graph + `MainActivity` lifecycle, and the language override |
-| `feature-settings` | 6 | intent → settings mapping |
+| `feature-settings` | 8 | intent → settings mapping, and that the reader's own reset touches only reading settings |
 
 Three properties of the suite are worth pointing out:
 
@@ -357,16 +372,26 @@ Stated rather than hidden:
   does not currently inject one.
 - **Highlights are modelled and stored** (`Bookmark` carries `colorArgb`) but the reader exposes
   bookmarking only, not text selection.
+- **The reader's gestures are the part of this app least covered by tests.** The geometry, the
+  action rules and the page-breaking arithmetic behind them are pure functions with unit tests, but
+  the gestures themselves — tap zones, pinch-zoom, the clamped pan — have only been exercised by
+  reading the code and building the APK, because the environment this was developed in has no device
+  or emulator to run them on. The same goes for pagination end to end: what it *decides* is tested,
+  what it *looks like* is not. Treat the first run on real hardware as the real test.
+- **Paged text stops at the end of a chapter.** Swiping turns pages within the chapter and no
+  further, because the view paginates one chapter at a time — a pager spanning several would have to
+  re-index its pages every time a window shifted, and a jump nobody can test is worse than a
+  boundary. The edge tap zones do move on to the next chapter, and the last page says so and offers
+  a button.
+- **An image or a table gets a page to itself in paged mode**, because neither height is knowable
+  before decoding or laying it out. A small illustration therefore leaves some white space around
+  it. Measuring the bounds without decoding is possible — `BitmapFactory` will report them from a
+  header — and is the way to fix this properly; it is not done here.
 - **`pageSnapping` is still a stored-but-unhonoured setting.** It is offered in Settings and
   persisted, and the reader does not read it: Compose's `HorizontalPager` always snaps, so
-  "continuous scrolling instead of snapping to one page" would mean a second rendering path — a
-  `LazyColumn` of pages — rather than a flag on the pager. It is called out here rather than quietly
-  left to look implemented, which is exactly the state `pageFitMode` was in until it was wired up.
-- **The reader's gestures are the part of this app least covered by tests.** The geometry and the
-  action rules behind them are pure functions with unit tests, but the gestures themselves —
-  tap zones, pinch-zoom, the clamped pan — have only been exercised by reading the code and building
-  the APK, because the environment this was developed in has no device or emulator to run them on.
-  Treat the first run on real hardware as the real test.
+  "continuous scrolling instead of snapping to one page" would mean a second rendering path for
+  *fixed-page* documents. It is called out here rather than quietly left to look implemented, which
+  is exactly the state `pageFitMode` was in until it was wired up.
 - **R8/minification is disabled** for the release build, which is why the APK is ~33 MB. Turning it
   on needs keep rules for pdfium's JNI entry points and the Room/Hilt generated code; the proguard
   files are already wired up for it.

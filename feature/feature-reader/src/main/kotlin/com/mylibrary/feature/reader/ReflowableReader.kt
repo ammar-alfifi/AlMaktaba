@@ -38,8 +38,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
@@ -91,8 +93,10 @@ fun ReflowableReaderContent(
     }
 
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val currentOnIntent by rememberUpdatedState(onIntent)
+    val currentTapToTurn by rememberUpdatedState(state.settings.tapToTurnPages)
 
     // A page turn has no meaning in a reflowed chapter, so the side zones advance by a screenful
     // instead — the same gesture and the same physical direction as the paged reader, which is what
@@ -103,16 +107,24 @@ fun ReflowableReaderContent(
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectTapGestures { position ->
+                    val zone = if (currentTapToTurn) {
+                        tapZoneFor(position.x, size.width.toFloat(), isRtl)
+                    } else {
+                        TapZone.CENTER
+                    }
                     val viewport = listState.layoutInfo.viewportSize.height
-                    when (tapZoneFor(position.x, size.width.toFloat(), isRtl)) {
+
+                    when (zone) {
                         TapZone.CENTER -> currentOnIntent(ReaderIntent.ToggleChrome)
 
-                        TapZone.NEXT -> scope.launch {
-                            listState.animateScrollBy(viewport * SCROLL_PAGE_FRACTION)
+                        TapZone.NEXT -> {
+                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                            scope.launch { listState.animateScrollBy(viewport * SCROLL_PAGE_FRACTION) }
                         }
 
-                        TapZone.PREVIOUS -> scope.launch {
-                            listState.animateScrollBy(-viewport * SCROLL_PAGE_FRACTION)
+                        TapZone.PREVIOUS -> {
+                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                            scope.launch { listState.animateScrollBy(-viewport * SCROLL_PAGE_FRACTION) }
                         }
                     }
                 }
@@ -203,6 +215,55 @@ private fun ChapterContentView(
                 BlockView(block = block, viewModel = viewModel, state = state)
             }
         }
+    }
+}
+
+/**
+ * Draws one slice of a block: the block whole, or the run of its text that landed on this page.
+ *
+ * Only the paged view produces partial blocks — a scrolling chapter always passes a slice covering
+ * the whole thing — so this deliberately falls straight through to [BlockView] in that case, and the
+ * scrolling reader's rendering stays exactly what it was.
+ */
+@Composable
+internal fun BlockSliceView(
+    block: ContentBlock,
+    slice: BlockSlice,
+    viewModel: ReaderViewModel,
+    state: ReaderUiState,
+) {
+    val text = block.bodyText()
+    if (!block.isSplittable() || (slice.start <= 0 && slice.end >= text.length)) {
+        BlockView(block = block, viewModel = viewModel, state = state)
+        return
+    }
+
+    val from = slice.start.coerceIn(0, text.length)
+    val to = slice.end.coerceIn(from, text.length)
+    val part = text.subSequence(from, to)
+
+    when (block) {
+        is ContentBlock.Paragraph -> BodyText(text = part, state = state)
+
+        is ContentBlock.Heading -> Text(
+            text = part,
+            style = state.headingStyle(block.level),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+
+        is ContentBlock.Quote -> QuoteText(text = part, state = state)
+
+        // The marker belongs to the item, not to the page: repeating the bullet at the top of a
+        // continuation reads as a second item that happens to have no text in it.
+        is ContentBlock.ListItem -> ListItemText(
+            block = block.copy(text = part),
+            state = state,
+            showMarker = slice.start <= 0,
+        )
+
+        is ContentBlock.Image, is ContentBlock.Table, ContentBlock.Divider ->
+            BlockView(block = block, viewModel = viewModel, state = state)
     }
 }
 
@@ -333,7 +394,12 @@ private fun QuoteText(text: AnnotatedString, state: ReaderUiState) {
 }
 
 @Composable
-private fun ListItemText(block: ContentBlock.ListItem, state: ReaderUiState) {
+private fun ListItemText(
+    block: ContentBlock.ListItem,
+    state: ReaderUiState,
+    /** False for the continuation of an item that was split across a page break. */
+    showMarker: Boolean = true,
+) {
     val marker = if (block.ordered) "${block.number}." else "•"
     Row(
         modifier = Modifier
@@ -341,8 +407,10 @@ private fun ListItemText(block: ContentBlock.ListItem, state: ReaderUiState) {
             .padding(start = (block.depth * 16).dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // An empty marker rather than a missing one, so a continuation stays aligned with the item
+        // it continues instead of snapping back to the margin.
         Text(
-            text = marker,
+            text = if (showMarker) marker else "",
             style = state.bodyTextStyle(),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -458,7 +526,7 @@ private fun ChapterMarker(index: Int, title: String?) {
  * any other font overrides the book, which is the point of choosing it.
  */
 @Composable
-private fun ReaderUiState.readingFontFamily(): FontFamily =
+internal fun ReaderUiState.readingFontFamily(): FontFamily =
     if (settings.readerFont == ReaderFont.SYSTEM && documentFont != null) {
         documentFont
     } else {
@@ -473,7 +541,7 @@ private fun ReaderUiState.readingFontFamily(): FontFamily =
  * `:core:core-ui` is preserved rather than replaced.
  */
 @Composable
-private fun ReaderUiState.bodyTextStyle(): TextStyle {
+internal fun ReaderUiState.bodyTextStyle(): TextStyle {
     val base = MaterialTheme.typography.bodyLarge
     val size = base.fontSize.value * settings.fontScale
     return base.copy(
@@ -485,7 +553,7 @@ private fun ReaderUiState.bodyTextStyle(): TextStyle {
 
 /** Headings follow the same scaling as body text so the hierarchy stays proportional. */
 @Composable
-private fun ReaderUiState.headingStyle(level: Int): TextStyle {
+internal fun ReaderUiState.headingStyle(level: Int): TextStyle {
     val base = when (level) {
         1 -> MaterialTheme.typography.headlineMedium
         2 -> MaterialTheme.typography.headlineSmall

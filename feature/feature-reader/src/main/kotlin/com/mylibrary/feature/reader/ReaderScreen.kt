@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mylibrary.core.domain.model.ReadingDirection
+import com.mylibrary.core.domain.model.ReflowMode
 import com.mylibrary.core.ui.component.ErrorState
 import com.mylibrary.core.ui.component.LoadingState
 import com.mylibrary.core.ui.mvi.ObserveEffects
@@ -140,14 +141,23 @@ fun ReaderScreen(
             state.totalUnits == 0 -> LoadingState()
 
             else -> ProvideLayoutDirection(contentDirection) {
-                if (state.isPaged) {
-                    PagedReaderContent(
+                when {
+                    state.isPaged -> PagedReaderContent(
                         state = state,
                         viewModel = viewModel,
                         onIntent = onIntent,
                     )
-                } else {
-                    ReflowableReaderContent(
+
+                    // Same document, two answers to "how much text is a screenful". The paged view
+                    // measures the chapter and turns it in pages; the scrolling one leaves the text
+                    // in a single column and lets it move.
+                    state.settings.reflowMode == ReflowMode.PAGED -> ReflowablePagedContent(
+                        state = state,
+                        viewModel = viewModel,
+                        onIntent = onIntent,
+                    )
+
+                    else -> ReflowableReaderContent(
                         state = state,
                         viewModel = viewModel,
                         onIntent = onIntent,
@@ -225,7 +235,7 @@ private fun ReaderBottomBar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = state.positionDescription(),
+                    text = state.progressDescription(),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -276,6 +286,7 @@ private fun readerMessageText(message: ReaderMessage): String = stringResource(
         ReaderMessage.BookmarkRemoved -> R.string.reader_bookmark_removed
         ReaderMessage.NoSearchResults -> R.string.reader_no_results
         ReaderMessage.SearchUnavailable -> R.string.reader_search_unavailable
+        ReaderMessage.SettingsReset -> R.string.reader_settings_reset_done
         ReaderMessage.LinkUnavailable -> R.string.reader_link_unavailable
     },
 )

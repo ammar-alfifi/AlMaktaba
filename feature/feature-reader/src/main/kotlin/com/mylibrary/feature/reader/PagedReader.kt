@@ -28,9 +28,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
@@ -88,6 +90,7 @@ fun PagedReaderContent(
         ZoomablePage(
             pageIndex = pageIndex,
             fitMode = state.settings.pageFitMode,
+            tapToTurnPages = state.settings.tapToTurnPages,
             viewModel = viewModel,
             onIntent = onIntent,
             modifier = Modifier.fillMaxSize(),
@@ -111,6 +114,7 @@ fun PagedReaderContent(
 private fun ZoomablePage(
     pageIndex: Int,
     fitMode: PageFitMode,
+    tapToTurnPages: Boolean,
     viewModel: ReaderViewModel,
     onIntent: (ReaderIntent) -> Unit,
     modifier: Modifier = Modifier,
@@ -121,6 +125,12 @@ private fun ZoomablePage(
 
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val currentOnIntent by rememberUpdatedState(onIntent)
+    val haptics = LocalHapticFeedback.current
+
+    // A page turn is felt as well as seen. It is the cheapest confirmation a touch interface has,
+    // and it is what tells the reader the tap registered during the fraction of a second before the
+    // page has finished moving.
+    val currentTapToTurn by rememberUpdatedState(tapToTurnPages)
 
     // Bucketed to whole steps so that a continuous pinch does not request a new render on every
     // frame; only crossing 2x or 3x triggers a sharper render.
@@ -205,13 +215,21 @@ private fun ZoomablePage(
                         // A zoomed page is being inspected, not read, so a tap only reveals the
                         // toolbar; turning the page under the reader's fingers would lose the place
                         // they zoomed in to look at.
-                        if (scale > 1f) {
+                        if (scale > 1f || !currentTapToTurn) {
                             currentOnIntent(ReaderIntent.ToggleChrome)
                             return@detectTapGestures
                         }
                         when (tapZoneFor(position.x, size.width.toFloat(), isRtl)) {
-                            TapZone.PREVIOUS -> currentOnIntent(ReaderIntent.PreviousUnit)
-                            TapZone.NEXT -> currentOnIntent(ReaderIntent.NextUnit)
+                            TapZone.PREVIOUS -> {
+                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                currentOnIntent(ReaderIntent.PreviousUnit)
+                            }
+
+                            TapZone.NEXT -> {
+                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                currentOnIntent(ReaderIntent.NextUnit)
+                            }
+
                             TapZone.CENTER -> currentOnIntent(ReaderIntent.ToggleChrome)
                         }
                     },

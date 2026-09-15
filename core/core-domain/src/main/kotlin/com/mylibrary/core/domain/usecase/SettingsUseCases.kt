@@ -6,6 +6,7 @@ import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
+import com.mylibrary.core.domain.model.ReflowMode
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.ViewMode
 import com.mylibrary.core.domain.repository.SettingsRepository
@@ -59,7 +60,40 @@ class UpdateSettingsUseCase @Inject constructor(
 
     suspend fun setPageSnapping(enabled: Boolean) = settingsRepository.update { it.copy(pageSnapping = enabled) }
 
+    suspend fun setReflowMode(mode: ReflowMode) = settingsRepository.update { it.copy(reflowMode = mode) }
+
+    suspend fun setTapToTurnPages(enabled: Boolean) =
+        settingsRepository.update { it.copy(tapToTurnPages = enabled) }
+
     suspend fun resetToDefaults() = settingsRepository.update { ReaderSettings.Default }
+
+    /**
+     * Puts back everything that decides how a book is *read*, and nothing else.
+     *
+     * Deliberately narrower than [resetToDefaults], which is the app's own "reset everything" and
+     * takes the language and the library's layout with it. Someone who has made a book unreadable —
+     * a font size they cannot see past, a leading that has run lines together — wants *that* undone,
+     * in the screen where they did it; resetting the app's language at the same time turns a small
+     * fix into a scare.
+     *
+     * The theme is left alone for the same reason: it is offered in the reader's panel, but it is
+     * the app's appearance setting, and flipping a dark-mode user to light is not what "reset the
+     * reading settings" should mean.
+     */
+    suspend fun resetReaderDefaults() = settingsRepository.update { settings ->
+        settings.copy(
+            readerFont = ReaderSettings.Default.readerFont,
+            fontScale = ReaderSettings.Default.fontScale,
+            lineHeightScale = ReaderSettings.Default.lineHeightScale,
+            pageFitMode = ReaderSettings.Default.pageFitMode,
+            readingDirection = ReaderSettings.Default.readingDirection,
+            keepScreenOn = ReaderSettings.Default.keepScreenOn,
+            showProgressIndicator = ReaderSettings.Default.showProgressIndicator,
+            pageSnapping = ReaderSettings.Default.pageSnapping,
+            reflowMode = ReaderSettings.Default.reflowMode,
+            tapToTurnPages = ReaderSettings.Default.tapToTurnPages,
+        )
+    }
 
     companion object {
         /** Beyond this the text no longer fits a phone screen in any useful way. */

@@ -61,6 +61,11 @@
     <string name="settings_show_progress_summary">Show the page number or percentage while reading.</string>
     <string name="settings_page_snapping">Snap to pages</string>
     <string name="settings_page_snapping_summary">Advance one page at a time instead of scrolling continuously.</string>
+    <string name="settings_reflow_mode">Text layout</string>
+    <string name="settings_reflow_scroll">Scroll</string>
+    <string name="settings_reflow_paged">Pages</string>
+    <string name="settings_tap_to_turn">Tap the sides to turn pages</string>
+    <string name="settings_tap_to_turn_summary">The sides turn the page; the middle of the screen shows the toolbar.</string>
 
     <!-- About -->
     <string name="settings_about_version_title">Version</string>

@@ -66,6 +66,11 @@
     <string name="settings_show_progress_summary">عرض رقم الصفحة أو نسبة التقدم أثناء القراءة.</string>
     <string name="settings_page_snapping">محاذاة الصفحة</string>
     <string name="settings_page_snapping_summary">الانتقال صفحة واحدة في كل مرة بدل التمرير المتصل.</string>
+    <string name="settings_reflow_mode">طريقة عرض الكتب النصية</string>
+    <string name="settings_reflow_scroll">تمرير</string>
+    <string name="settings_reflow_paged">صفحات</string>
+    <string name="settings_tap_to_turn">النقر على الجانبين لقلب الصفحات</string>
+    <string name="settings_tap_to_turn_summary">يقلّب الجانبان الصفحة، ويُظهر وسط الشاشة شريط الأدوات.</string>
 
     <!-- About -->
     <string name="settings_about_version_title">الإصدار</string>

@@ -10,6 +10,7 @@ import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingLocator
+import com.mylibrary.core.domain.model.ReflowMode
 import com.mylibrary.core.domain.model.SearchHit
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.TocEntry
@@ -53,6 +54,26 @@ data class ReaderUiState(
 
     /** The label shown in the toolbar: a page counter or the current chapter's title. */
     val positionLabel: String? = null,
+
+    /**
+     * Where the reader is inside a paginated chapter, and how many pages that chapter came to.
+     *
+     * Only ever set by the paged view for a reflowable document; [reflowPageCount] stays zero in
+     * scrolling mode, which is how the rest of the reader tells the two apart without asking the
+     * settings — a chapter can be re-paginated while it is open, by a font-size change or a
+     * rotation, and the count is the honest answer to "how long is this chapter" at that moment.
+     */
+    val reflowPage: Int = 0,
+    val reflowPageCount: Int = 0,
+
+    /**
+     * The character offset in the chapter's text at which the current page begins.
+     *
+     * This is what makes a paged book survive being closed: a page number is meaningless after a
+     * font-size change, while the character a page started at is still there, still in the same
+     * place, and the page that now contains it is the one to reopen on.
+     */
+    val reflowOffset: Int = 0,
 
     val outline: List<TocEntry> = emptyList(),
     val bookmarks: List<Bookmark> = emptyList(),
@@ -123,8 +144,19 @@ data class ReaderUiState(
         get() = when {
             totalUnits <= 0 -> 0f
             isPaged -> (currentUnit + 1).toFloat() / totalUnits
-            else -> currentUnit.toFloat() / totalUnits
+            else -> (currentUnit + chapterFraction) / totalUnits
         }
+
+    /**
+     * How far through the current chapter the reader is, in 0f..1f.
+     *
+     * Zero while scrolling, because a scroll offset is not a fraction of anything until the text has
+     * been laid out into pages — it is the paged view that knows how many pages the chapter made.
+     * The saved percentage and the one on screen both come from this, so the shelf cannot disagree
+     * with the book.
+     */
+    val chapterFraction: Float
+        get() = if (reflowPageCount > 0) reflowPage.toFloat() / reflowPageCount else 0f
 
     val isBookmarked: Boolean
         get() = bookmarks.any { it.locator == currentLocator }
@@ -137,7 +169,7 @@ data class ReaderUiState(
         get() = when {
             book == null -> null
             isPaged -> ReadingLocator.Paged(currentUnit)
-            else -> ReadingLocator.Reflowable(currentUnit, 0)
+            else -> ReadingLocator.Reflowable(currentUnit, reflowOffset)
         }
 }
 
@@ -148,6 +180,21 @@ sealed interface ReaderIntent {
 
     data class PageChanged(val pageIndex: Int) : ReaderIntent
     data class ChapterChanged(val chapterIndex: Int) : ReaderIntent
+
+    /**
+     * A reflowable chapter was re-paginated, or the reader moved within it.
+     *
+     * The paged view reports all three together because they are only meaningful together: the count
+     * changes whenever the text is re-laid out, and the offset is where the page it just settled on
+     * begins. Splitting them into three intents would let the state hold a page index from one
+     * pagination beside a count from another.
+     */
+    data class ReflowPositionChanged(
+        val pageIndex: Int,
+        val pageCount: Int,
+        val offset: Int,
+    ) : ReaderIntent
+
     data class JumpTo(val locator: ReadingLocator) : ReaderIntent
     data object NextUnit : ReaderIntent
     data object PreviousUnit : ReaderIntent
@@ -174,6 +221,11 @@ sealed interface ReaderIntent {
     data class SetLineHeight(val scale: Float) : ReaderIntent
     data class SetPageFit(val mode: PageFitMode) : ReaderIntent
     data class SetKeepScreenOn(val enabled: Boolean) : ReaderIntent
+    data class SetReflowMode(val mode: ReflowMode) : ReaderIntent
+    data class SetTapToTurnPages(val enabled: Boolean) : ReaderIntent
+
+    /** Put the reading settings back to their defaults, after the reader has confirmed it. */
+    data object RequestResetSettings : ReaderIntent
 
     data class PasswordSubmitted(val password: String) : ReaderIntent
     data object PasswordDismissed : ReaderIntent
@@ -197,6 +249,9 @@ sealed interface ReaderMessage {
     data object BookmarkRemoved : ReaderMessage
     data object NoSearchResults : ReaderMessage
     data object SearchUnavailable : ReaderMessage
+
+    /** Confirmation that the reading settings are back to their defaults. */
+    data object SettingsReset : ReaderMessage
 
     /** A link that the engine could not resolve to anywhere in the document. */
     data object LinkUnavailable : ReaderMessage

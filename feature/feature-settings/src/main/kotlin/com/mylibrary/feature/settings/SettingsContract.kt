@@ -8,6 +8,7 @@ import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
+import com.mylibrary.core.domain.model.ReflowMode
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.ViewMode
 
@@ -74,6 +75,10 @@ sealed interface SettingsIntent {
     data class ShowProgressToggled(val enabled: Boolean) : SettingsIntent
 
     data class PageSnappingToggled(val enabled: Boolean) : SettingsIntent
+
+    data class ReflowModeChanged(val mode: ReflowMode) : SettingsIntent
+
+    data class TapToTurnToggled(val enabled: Boolean) : SettingsIntent
 
     data object ResetToDefaults : SettingsIntent
 }

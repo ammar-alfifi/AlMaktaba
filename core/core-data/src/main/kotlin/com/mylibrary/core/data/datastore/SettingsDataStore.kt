@@ -14,6 +14,7 @@ import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
+import com.mylibrary.core.domain.model.ReflowMode
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.ViewMode
 import kotlinx.coroutines.flow.Flow
@@ -75,6 +76,8 @@ class SettingsDataStore @Inject constructor(
         this[Keys.KEEP_SCREEN_ON] = settings.keepScreenOn
         this[Keys.SHOW_PROGRESS_INDICATOR] = settings.showProgressIndicator
         this[Keys.PAGE_SNAPPING] = settings.pageSnapping
+        this[Keys.REFLOW_MODE] = settings.reflowMode.name
+        this[Keys.TAP_TO_TURN_PAGES] = settings.tapToTurnPages
     }
 
 }
@@ -100,6 +103,8 @@ private object Keys {
     val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
     val SHOW_PROGRESS_INDICATOR = booleanPreferencesKey("show_progress_indicator")
     val PAGE_SNAPPING = booleanPreferencesKey("page_snapping")
+    val REFLOW_MODE = stringPreferencesKey("reflow_mode")
+    val TAP_TO_TURN_PAGES = booleanPreferencesKey("tap_to_turn_pages")
 }
 
 /**
@@ -125,6 +130,8 @@ private fun ReaderSettings.Companion.fromPreferences(preferences: Preferences): 
         showProgressIndicator = preferences[Keys.SHOW_PROGRESS_INDICATOR]
             ?: defaults.showProgressIndicator,
         pageSnapping = preferences[Keys.PAGE_SNAPPING] ?: defaults.pageSnapping,
+        reflowMode = preferences[Keys.REFLOW_MODE].toEnum(defaults.reflowMode),
+        tapToTurnPages = preferences[Keys.TAP_TO_TURN_PAGES] ?: defaults.tapToTurnPages,
     )
 }
 

@@ -21,6 +21,15 @@
 
     <!-- Settings -->
     <string name="reader_settings_theme">المظهر</string>
+    <string name="reader_settings_reflow">طريقة العرض</string>
+    <string name="reader_reflow_scroll">تمرير</string>
+    <string name="reader_reflow_paged">صفحات</string>
+    <string name="reader_settings_tap_to_turn">النقر على الجانبين لقلب الصفحات</string>
+    <string name="reader_settings_reset">إعادة ضبط إعدادات القراءة</string>
+    <string name="reader_settings_reset_message">سيُعاد ضبط الخط وحجمه وتباعد الأسطر وطريقة العرض وملاءمة الصفحة واتجاه القراءة. لن يتغيّر مظهر التطبيق ولا لغته ولا ترتيب مكتبتك.</string>
+    <string name="reader_settings_reset_done">أُعيد ضبط إعدادات القراءة</string>
+    <string name="reader_page_of_chapter">صفحة %1$d من %2$d</string>
+    <string name="reader_next_chapter">الفصل التالي</string>
     <string name="reader_theme_system">النظام</string>
     <string name="reader_theme_light">فاتح</string>
     <string name="reader_theme_dark">داكن</string>

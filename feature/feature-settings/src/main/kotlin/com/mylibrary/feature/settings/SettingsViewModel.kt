@@ -150,6 +150,8 @@ internal fun ReaderSettings.updatedBy(intent: SettingsIntent): ReaderSettings = 
     is SettingsIntent.KeepScreenOnToggled -> copy(keepScreenOn = intent.enabled)
     is SettingsIntent.ShowProgressToggled -> copy(showProgressIndicator = intent.enabled)
     is SettingsIntent.PageSnappingToggled -> copy(pageSnapping = intent.enabled)
+    is SettingsIntent.ReflowModeChanged -> copy(reflowMode = intent.mode)
+    is SettingsIntent.TapToTurnToggled -> copy(tapToTurnPages = intent.enabled)
     SettingsIntent.ResetToDefaults -> ReaderSettings.Default
 }
 
@@ -174,6 +176,8 @@ internal suspend fun UpdateSettingsUseCase.persist(intent: SettingsIntent): Unit
     is SettingsIntent.KeepScreenOnToggled -> setKeepScreenOn(intent.enabled)
     is SettingsIntent.ShowProgressToggled -> setShowProgressIndicator(intent.enabled)
     is SettingsIntent.PageSnappingToggled -> setPageSnapping(intent.enabled)
+    is SettingsIntent.ReflowModeChanged -> setReflowMode(intent.mode)
+    is SettingsIntent.TapToTurnToggled -> setTapToTurnPages(intent.enabled)
     SettingsIntent.ResetToDefaults -> resetToDefaults()
 }
 

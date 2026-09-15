@@ -23,6 +23,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -48,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReadingLocator
+import com.mylibrary.core.domain.model.ReflowMode
 import com.mylibrary.core.domain.model.SearchHit
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.TocEntry
@@ -233,6 +235,24 @@ private fun ReaderSettingsPanel(
             HorizontalDivider()
 
             Text(
+                text = stringResource(R.string.reader_settings_reflow),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                ReflowMode.entries.forEachIndexed { index, mode ->
+                    SegmentedButton(
+                        selected = state.settings.reflowMode == mode,
+                        onClick = { onIntent(ReaderIntent.SetReflowMode(mode)) },
+                        shape = SegmentedButtonDefaults.itemShape(index, ReflowMode.entries.size),
+                    ) {
+                        Text(reflowModeLabel(mode))
+                    }
+                }
+            }
+
+            HorizontalDivider()
+
+            Text(
                 text = stringResource(R.string.reader_settings_font),
                 style = MaterialTheme.typography.titleSmall,
             )
@@ -299,8 +319,77 @@ private fun ReaderSettingsPanel(
                 onCheckedChange = { onIntent(ReaderIntent.SetKeepScreenOn(it)) },
             )
         }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = stringResource(R.string.reader_settings_tap_to_turn),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Switch(
+                checked = state.settings.tapToTurnPages,
+                onCheckedChange = { onIntent(ReaderIntent.SetTapToTurnPages(it)) },
+            )
+        }
+
+        HorizontalDivider()
+
+        ResetReaderSettingsButton(onClick = { onIntent(ReaderIntent.RequestResetSettings) })
     }
 }
+
+/**
+ * Puts the reading settings back.
+ *
+ * Behind a confirmation, and the dialog says what will and will not change rather than asking "are
+ * you sure?" — the reader has just made a book unreadable and is about to lose whatever else they
+ * had set, so the useful thing to tell them is that their theme and their library are untouched.
+ */
+@Composable
+private fun ResetReaderSettingsButton(onClick: () -> Unit) {
+    var confirming by remember { mutableStateOf(false) }
+
+    OutlinedButton(
+        onClick = { confirming = true },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(stringResource(R.string.reader_settings_reset))
+    }
+
+    if (confirming) {
+        AlertDialog(
+            onDismissRequest = { confirming = false },
+            title = { Text(stringResource(R.string.reader_settings_reset)) },
+            text = { Text(stringResource(R.string.reader_settings_reset_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirming = false
+                        onClick()
+                    },
+                ) {
+                    Text(stringResource(com.mylibrary.core.ui.R.string.ui_ok))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirming = false }) {
+                    Text(stringResource(com.mylibrary.core.ui.R.string.ui_cancel))
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun reflowModeLabel(mode: ReflowMode): String = stringResource(
+    when (mode) {
+        ReflowMode.SCROLL -> R.string.reader_reflow_scroll
+        ReflowMode.PAGED -> R.string.reader_reflow_paged
+    },
+)
 
 @Composable
 private fun LabelledSlider(

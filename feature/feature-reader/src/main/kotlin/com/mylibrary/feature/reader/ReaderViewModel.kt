@@ -175,7 +175,7 @@ class ReaderViewModel @Inject constructor(
             is AppResult.Success -> {
                 val opened = result.data
                 document = opened
-                val restored = withContext(dispatchers.io) { restoredUnitIndex(opened) }
+                val (restored, restoredOffset) = withContext(dispatchers.io) { restoredPosition(opened) }
                 setState {
                     copy(
                         isLoading = false,
@@ -186,6 +186,7 @@ class ReaderViewModel @Inject constructor(
                         isPaged = opened is PagedDocument,
                         totalUnits = unitCountOf(opened),
                         currentUnit = restored,
+                        reflowOffset = restoredOffset,
                         outline = opened.outline,
                         isRtlContent = opened.metadata.language?.startsWith("ar")
                             ?: currentState.isRtlContent,
@@ -207,19 +208,24 @@ class ReaderViewModel @Inject constructor(
     }
 
     /**
-     * The saved unit index, clamped to what the document actually contains.
+     * The saved position — chapter and, for a reflowable book, the character offset within it —
+     * clamped to what the document actually contains.
      *
      * Clamping matters when a book is re-imported at a different revision: a saved page 900 in a
-     * document that now has 200 pages must open at page 200, not crash or show a blank page.
+     * document that now has 200 pages must open at page 200, not crash or show a blank page. The
+     * offset comes back with it because it is what lets a *paginated* book reopen on the page the
+     * reader left, rather than at the top of the chapter — the chapter is the same either way, and
+     * the page inside it is not.
      */
-    private suspend fun restoredUnitIndex(opened: OpenDocument): Int {
-        val locator = restorePosition(bookId)?.locator ?: return 0
+    private suspend fun restoredPosition(opened: OpenDocument): Pair<Int, Int> {
+        val locator = restorePosition(bookId)?.locator ?: return 0 to 0
         val total = unitCountOf(opened)
         val index = when (locator) {
             is ReadingLocator.Paged -> locator.pageIndex
             is ReadingLocator.Reflowable -> locator.chapterIndex
         }
-        return index.coerceIn(0, (total - 1).coerceAtLeast(0))
+        val offset = (locator as? ReadingLocator.Reflowable)?.charOffset ?: 0
+        return index.coerceIn(0, (total - 1).coerceAtLeast(0)) to offset.coerceAtLeast(0)
     }
 
     private fun unitCountOf(opened: OpenDocument): Int = when (opened) {
@@ -389,6 +395,7 @@ class ReaderViewModel @Inject constructor(
 
             is ReaderIntent.PageChanged -> moveTo(intent.pageIndex)
             is ReaderIntent.ChapterChanged -> moveTo(intent.chapterIndex)
+            is ReaderIntent.ReflowPositionChanged -> reportReflowPosition(intent)
             is ReaderIntent.JumpTo -> jumpTo(intent.locator)
             ReaderIntent.NextUnit -> moveTo(currentState.currentUnit + 1)
             ReaderIntent.PreviousUnit -> moveTo(currentState.currentUnit - 1)
@@ -412,6 +419,15 @@ class ReaderViewModel @Inject constructor(
             is ReaderIntent.SetLineHeight -> launch { updateSettings.setLineHeightScale(intent.scale) }
             is ReaderIntent.SetPageFit -> launch { updateSettings.setPageFitMode(intent.mode) }
             is ReaderIntent.SetKeepScreenOn -> launch { updateSettings.setKeepScreenOn(intent.enabled) }
+            is ReaderIntent.SetReflowMode -> launch { updateSettings.setReflowMode(intent.mode) }
+            is ReaderIntent.SetTapToTurnPages -> launch { updateSettings.setTapToTurnPages(intent.enabled) }
+
+            ReaderIntent.RequestResetSettings -> launch {
+                updateSettings.resetReaderDefaults()
+                // Said out loud because most of what changed is behind the sheet that is still open:
+                // without it the only evidence is the controls moving back on their own.
+                sendEffect(ReaderEffect.ShowMessage(ReaderMessage.SettingsReset))
+            }
 
             is ReaderIntent.PasswordSubmitted -> launch {
                 setState { copy(isAwaitingPassword = false, lastPasswordWasWrong = false) }
@@ -434,8 +450,36 @@ class ReaderViewModel @Inject constructor(
         val clamped = unit.coerceIn(0, (total - 1).coerceAtLeast(0))
         if (clamped == currentState.currentUnit && !currentState.isLoading) return
 
-        setState { copy(currentUnit = clamped) }
+        setState {
+            copy(
+                currentUnit = clamped,
+                // A chapter that has not been laid out yet has no pages and no offset. Carrying the
+                // previous chapter's across would put the reader's saved position — and the page
+                // count in the toolbar — inside a chapter they have only just arrived in.
+                reflowPage = 0,
+                reflowPageCount = 0,
+                reflowOffset = 0,
+            )
+        }
         refreshPositionLabel()
+        scheduleProgressSave()
+    }
+
+    /**
+     * Takes the paged view's word for where the reader is.
+     *
+     * The offset is stored, not just displayed, because it is what the position is saved as: a page
+     * number means nothing once the font size changes, while the character the page began at is
+     * still in the same place.
+     */
+    private fun reportReflowPosition(intent: ReaderIntent.ReflowPositionChanged) {
+        setState {
+            copy(
+                reflowPage = intent.pageIndex.coerceAtLeast(0),
+                reflowPageCount = intent.pageCount.coerceAtLeast(0),
+                reflowOffset = intent.offset.coerceAtLeast(0),
+            )
+        }
         scheduleProgressSave()
     }
 
@@ -463,7 +507,7 @@ class ReaderViewModel @Inject constructor(
         saveProgress(
             bookId = bookId,
             locator = locator,
-            percent = progressCalculator(locator, document ?: return),
+            percent = progressCalculator(locator, document ?: return, state.chapterFraction),
             excerpt = excerpt,
         )
     }

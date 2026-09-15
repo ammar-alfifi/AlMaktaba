@@ -6,6 +6,7 @@ import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
+import com.mylibrary.core.domain.model.ReflowMode
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.ViewMode
 import com.mylibrary.core.domain.repository.SettingsRepository
@@ -266,5 +267,74 @@ private class FakeSettingsRepository : SettingsRepository {
     /** Test-only seeding, so each case can start from the state it is about. */
     fun set(settings: ReaderSettings) {
         state.value = settings
+    }
+}
+
+/**
+ * Tests for the reader's own reset, which is deliberately not the app's.
+ *
+ * The reader's settings panel offers a way back from a font size that has made a book unreadable.
+ * The temptation is to implement it as `resetToDefaults()` and be done — and that is the bug this
+ * pins down: it would also put the app's language back to Arabic and the library back to a grid,
+ * which is not what someone who has just made their text too large is asking for, and is startling
+ * enough to make them stop trusting the button.
+ */
+class ResetReaderDefaultsTest {
+
+    private val repository = FakeSettingsRepository()
+    private val updateSettings = UpdateSettingsUseCase(repository)
+
+    /** Every field set to something that is *not* its default, so a reset has to do work. */
+    private val customised = ReaderSettings(
+        themeMode = ThemeMode.DARK,
+        dynamicColor = false,
+        language = AppLanguage.ENGLISH,
+        viewMode = ViewMode.LIST,
+        librarySort = LibrarySort.TITLE_DESC,
+        readerFont = ReaderFont.SERIF,
+        fontScale = 2.4f,
+        lineHeightScale = 2.1f,
+        pageFitMode = PageFitMode.ACTUAL_SIZE,
+        readingDirection = ReadingDirection.LEFT_TO_RIGHT,
+        keepScreenOn = false,
+        showProgressIndicator = false,
+        pageSnapping = false,
+        reflowMode = ReflowMode.PAGED,
+        tapToTurnPages = false,
+    )
+
+    private fun afterReset(): ReaderSettings = runBlocking {
+        repository.set(customised)
+        updateSettings.resetReaderDefaults()
+        repository.currentSettings()
+    }
+
+    @Test
+    fun `every reading setting goes back to its default`() {
+        val reset = afterReset()
+        val defaults = ReaderSettings.Default
+
+        assertEquals(defaults.readerFont, reset.readerFont)
+        assertEquals("font size", defaults.fontScale, reset.fontScale, 0.0001f)
+        assertEquals("line height", defaults.lineHeightScale, reset.lineHeightScale, 0.0001f)
+        assertEquals(defaults.pageFitMode, reset.pageFitMode)
+        assertEquals(defaults.readingDirection, reset.readingDirection)
+        assertEquals(defaults.keepScreenOn, reset.keepScreenOn)
+        assertEquals(defaults.showProgressIndicator, reset.showProgressIndicator)
+        assertEquals(defaults.pageSnapping, reset.pageSnapping)
+        assertEquals(defaults.reflowMode, reset.reflowMode)
+        assertEquals(defaults.tapToTurnPages, reset.tapToTurnPages)
+    }
+
+    /** The half of the rule that is easy to lose, and the reason this reset exists separately. */
+    @Test
+    fun `the app's appearance, language and library layout are left alone`() {
+        val reset = afterReset()
+
+        assertEquals(ThemeMode.DARK, reset.themeMode)
+        assertTrue("dynamic colour was switched back on", !reset.dynamicColor)
+        assertEquals(AppLanguage.ENGLISH, reset.language)
+        assertEquals(ViewMode.LIST, reset.viewMode)
+        assertEquals(LibrarySort.TITLE_DESC, reset.librarySort)
     }
 }

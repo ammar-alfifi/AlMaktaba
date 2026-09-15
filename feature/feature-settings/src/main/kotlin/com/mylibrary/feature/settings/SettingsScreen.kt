@@ -56,6 +56,7 @@ import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
+import com.mylibrary.core.domain.model.ReflowMode
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.ViewMode
 import com.mylibrary.core.domain.usecase.UpdateSettingsUseCase
@@ -263,6 +264,21 @@ private fun ReadingSection(settings: ReaderSettings, onIntent: (SettingsIntent) 
             value = settings.lineHeightScale,
             valueRange = UpdateSettingsUseCase.MIN_LINE_HEIGHT..UpdateSettingsUseCase.MAX_LINE_HEIGHT,
             onValueChange = { onIntent(SettingsIntent.LineHeightChanged(it)) },
+        )
+        SectionDivider()
+        SegmentedSettingRow(
+            title = stringResource(R.string.settings_reflow_mode),
+            options = ReflowMode.entries,
+            selected = settings.reflowMode,
+            labelRes = ReflowMode::labelRes,
+            onSelect = { onIntent(SettingsIntent.ReflowModeChanged(it)) },
+        )
+        SectionDivider()
+        SwitchRow(
+            title = stringResource(R.string.settings_tap_to_turn),
+            summary = stringResource(R.string.settings_tap_to_turn_summary),
+            checked = settings.tapToTurnPages,
+            onCheckedChange = { onIntent(SettingsIntent.TapToTurnToggled(it)) },
         )
         SectionDivider()
         SegmentedSettingRow(
@@ -609,6 +625,12 @@ private fun PageFitMode.labelRes(): Int = when (this) {
     PageFitMode.WIDTH -> R.string.settings_fit_width
     PageFitMode.PAGE -> R.string.settings_fit_page
     PageFitMode.ACTUAL_SIZE -> R.string.settings_fit_actual
+}
+
+@StringRes
+private fun ReflowMode.labelRes(): Int = when (this) {
+    ReflowMode.SCROLL -> R.string.settings_reflow_scroll
+    ReflowMode.PAGED -> R.string.settings_reflow_paged
 }
 
 @StringRes

@@ -25,6 +25,19 @@ enum class AppLanguage(val languageTag: String?) {
 /** Font family used for reflowable text. */
 enum class ReaderFont { SYSTEM, SERIF, SANS_SERIF, MONOSPACE }
 
+/**
+ * How a reflowable document — an EPUB or a plain-text file — is presented.
+ *
+ * [SCROLL] is one continuous column: the text moves under a still reader, and where they are in the
+ * book is a chapter and a scroll offset that means nothing once the font size changes.
+ *
+ * [PAGED] splits the chapter into screen-sized pages that are turned like a paper book. It costs a
+ * measurement pass over the chapter whenever the text is re-laid out — a font-size change, a
+ * rotation, a new chapter — and it buys two things scrolling cannot: a page is a unit the reader can
+ * hold in mind, and its position is a character offset that survives being reopened.
+ */
+enum class ReflowMode { SCROLL, PAGED }
+
 /** How a paged document is scaled into the viewport. */
 enum class PageFitMode {
     /** Fit the page width, scrolling vertically for the rest of the page. */
@@ -85,6 +98,25 @@ data class ReaderSettings(
     val showProgressIndicator: Boolean = true,
     /** Snap paged documents to one page at a time instead of continuous scrolling. */
     val pageSnapping: Boolean = true,
+
+    /**
+     * Whether a reflowable document scrolls or is split into pages.
+     *
+     * [ReflowMode.SCROLL] by default: the reader has to work on a phone nobody has put this build on
+     * yet, and a scrolling column cannot produce a blank page or a cut-off line, whatever the
+     * measurement does. Paging is one tap away in the reader's own settings.
+     */
+    val reflowMode: ReflowMode = ReflowMode.SCROLL,
+
+    /**
+     * Whether tapping the sides of the page turns it.
+     *
+     * On by default, because it is the cheapest gesture a reader has and the middle of the screen
+     * still reveals the toolbar. Off for anyone who would rather the whole surface toggled the
+     * chrome and page turns came only from a swipe — a real preference, not a hypothetical one, and
+     * the reason tap-to-turn is not baked in.
+     */
+    val tapToTurnPages: Boolean = true,
 ) {
     companion object {
         val Default = ReaderSettings()

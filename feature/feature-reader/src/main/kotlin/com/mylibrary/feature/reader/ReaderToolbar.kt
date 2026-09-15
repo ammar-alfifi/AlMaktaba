@@ -202,12 +202,12 @@ internal fun ReaderTopBar(
 }
 
 /**
- * Where the reader is, in words that are true of the document.
+ * What the toolbar says about where the reader is.
  *
- * Both bars show this, which is why it is one function: a reflowable book has no pages — its position
- * is a chapter — and printing "page 4 of 40" over an EPUB chapter index states something untrue about
- * the file. Paged documents get a page counter; reflowable ones get the chapter's own name, falling
- * back to its number for a document that does not name its chapters.
+ * A reflowable book has no pages of its own — its position is a chapter — and printing "page 4 of
+ * 40" over an EPUB chapter index states something untrue about the file. Paged documents get a page
+ * counter; reflowable ones get the chapter's own name, falling back to its number for a document
+ * that does not name its chapters.
  */
 @Composable
 internal fun ReaderUiState.positionDescription(): String = when {
@@ -221,6 +221,26 @@ internal fun ReaderUiState.positionDescription(): String = when {
 
     else -> stringResource(R.string.reader_chapter_of, currentUnit + 1, totalUnits)
 }
+
+/**
+ * What the progress bar says.
+ *
+ * Almost always the same as [positionDescription] — but a reflowable chapter that has been split
+ * into pages has a position *inside* it, and that is the number worth showing next to a progress
+ * bar, because it is the one that changes as the reader turns a page. The toolbar keeps the
+ * chapter's name, where there is room for it.
+ */
+@Composable
+internal fun ReaderUiState.progressDescription(): String =
+    if (!isPaged && reflowPageCount > 0) {
+        stringResource(
+            R.string.reader_page_of_chapter,
+            (reflowPage + 1).coerceAtMost(reflowPageCount),
+            reflowPageCount,
+        )
+    } else {
+        positionDescription()
+    }
 
 @Composable
 private fun readerMenuActionLabel(action: ReaderMenuAction): String = stringResource(
