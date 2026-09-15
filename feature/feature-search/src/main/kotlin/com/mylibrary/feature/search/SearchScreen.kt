@@ -103,7 +103,9 @@ fun SearchRoute(
             is SearchEffect.ShowMessage -> scope.launch {
                 // Resolved here rather than in the ViewModel: a message that outlives a locale
                 // change should come back in the new language, which a stored String would not.
-                snackbarHostState.showSnackbar(context.getString(effect.messageRes))
+                snackbarHostState.showSnackbar(
+                    context.getString(effect.messageRes, *effect.formatArgs.toTypedArray()),
+                )
             }
         }
     }

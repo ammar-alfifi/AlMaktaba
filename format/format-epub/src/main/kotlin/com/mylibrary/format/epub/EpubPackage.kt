@@ -20,6 +20,16 @@ internal data class ManifestItem(
     val isNcx: Boolean get() = mediaType.equals(NCX_MEDIA_TYPE, ignoreCase = true)
 
     /**
+     * True for a stylesheet the document carries.
+     *
+     * Matched on the media type, not on the `.css` extension: the manifest is what the document
+     * declares and the extension is what its producer happened to name the file, and a book whose
+     * fonts live in a stylesheet called `book.CSS` still needs its fonts found. This is the one place
+     * the two disagree that costs something worth having.
+     */
+    val isStylesheet: Boolean get() = mediaType.equals(CSS_MEDIA_TYPE, ignoreCase = true)
+
+    /**
      * True when the item is a document the reader can pull text out of.
      *
      * A denylist, not a list of blessed media types: a spine item with a missing or misspelled
@@ -33,13 +43,14 @@ internal data class ManifestItem(
         get() {
             val type = mediaType?.trim()?.lowercase().orEmpty()
             if (type.isEmpty()) return true
-            if (type == "text/css") return false
+            if (type == CSS_MEDIA_TYPE) return false
             return NON_FLOWABLE_PREFIXES.none { type.startsWith(it) }
         }
 
     private companion object {
         const val NAVIGATION_PROPERTY = "nav"
         const val NCX_MEDIA_TYPE = "application/x-dtbncx+xml"
+        const val CSS_MEDIA_TYPE = "text/css"
         val NON_FLOWABLE_PREFIXES = listOf("image/", "audio/", "video/", "font/")
     }
 }
@@ -61,6 +72,14 @@ internal data class EpubPackage(
     val navigationPath: String?,
     /** Archive path of the EPUB 2 NCX, when the book has one. */
     val ncxPath: String?,
+    /**
+     * CSS written inside a `<style>` element of the package document.
+     *
+     * Rare, and not how EPUB is meant to carry styling — a stylesheet belongs in the manifest, linked
+     * from the documents that use it — but producers do emit it, and it is the one place a
+     * `@font-face` can hide with no stylesheet item in the manifest to find it through.
+     */
+    val inlineStyles: List<String>,
 )
 
 /** Reads `META-INF/container.xml`, the fixed entry point of every EPUB. */
@@ -110,6 +129,10 @@ internal object OpfParser {
             spine = parseSpine(packageElement, manifest),
             navigationPath = manifest.values.firstOrNull { it.isNavigationDocument }?.path,
             ncxPath = (manifest.values.firstOrNull { it.isNcx } ?: ncxById)?.path,
+            // Every descendant, not just a direct child: producers put `<style>` in the places the
+            // schema of their day allowed it, which was not always the same place.
+            inlineStyles = packageElement.descendantsNamed("style")
+                .mapNotNull { it.wholeText().trim().ifEmpty { null } },
         )
     }
 

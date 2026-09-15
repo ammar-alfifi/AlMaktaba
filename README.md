@@ -34,7 +34,7 @@ Jetpack Compose و Material 3، ومعمارية نظيفة متعددة الو�
 | **Languages** | Arabic by default, English as a complete second locale, switchable in-app without a restart |
 | **Direction** | Full RTL for Arabic, LTR for English — and a document's own direction is honoured *independently* of the UI, so an English TXT reads left-to-right inside the Arabic interface |
 | **Library** | Import through the Storage Access Framework, grid/list layouts, five sort orders, favourite and format filters, automatic cover extraction |
-| **Reader** | Paged and reflowable modes, pinch-zoom and double-tap, per-document search, outlines, bookmarks, font/theme/line-height controls that apply live |
+| **Reader** | One toolbar across all five formats, adapting to what the open file can do; paged and reflowable modes; tap zones that turn the page (mirrored for Arabic) or scroll a screenful; pinch-zoom, double-tap and a clamped pan; three page-fit modes; per-document search, outlines, bookmarks; font/theme/line-height controls that apply live |
 | **Storage** | No storage permission at all — only scoped `content://` access to files the user picked |
 
 ## 2. Requirements compliance
@@ -175,21 +175,44 @@ by bytes so a heavy book keeps fewer pages and a light one keeps more.
 meaningless the moment the user changes the font size, which is a control the reader puts one tap
 away. Anchoring to the text means re-flowing never loses the reader's place.
 
+**The reader has one toolbar, and it asks the document what it can do.** PDF, EPUB, TXT, CBZ and CBR
+do not offer the same things — a comic has no text layer to search and no outline to navigate, a
+plain-text file has no outline either — so the toolbar's spine is fixed (back, title and position,
+bookmark, settings, overflow) and the *overflow's contents* are derived from the opened document's
+`EngineCapabilities` by a pure function, `readerMenuActions`. An action that cannot work is absent
+rather than present and inert. Two rejected alternatives, both of which looked reasonable: rendering
+every action for every format (the toolbar then offers a comic a search that can only apologise), and
+branching on `isPaged` instead of on capabilities (which conflates "has pages" with "has text" — a
+CBZ has pages and no text, a TXT the reverse).
+
+**The fit mode is expressed in the render box, not in the view.** `PageFitMode` was stored, offered
+in two settings screens and never read by the renderer. Wiring it up in the view layer would not have
+worked: pdfium maps a page onto whatever rectangle it is handed instead of letterboxing, so the
+*shape* of the box a page is rendered into decides how it comes out. Page fit asks for the viewport
+(contained, letterboxed), width fit for the viewport's width and as much height as the page's own
+proportions require, and actual size for the page's own dimensions — and the two whose size comes
+from the file are then capped, because a PDF page tree may declare any MediaBox it likes. What the
+file controls gets bounded; what the screen controls does not.
+
 **Progress for a paged document is exact; for a reflowable one it is per-chapter.** Page *n* of *N*
-is honest. A chapter index is not — chapters range from one page to a hundred — so the reader
-combines it with the offset within the chapter rather than pretending to a precision it does not
-have.
+is honest. A chapter index is not — chapters range from one page to a hundred — so reflowable
+progress counts the chapters *behind* the reader, and the reader's own progress bar reads the same
+`ReadingProgressUseCase` arithmetic the library card and bookmarks list do, because a reader showing
+40% for a book the shelf says is 12% through is worse than either number alone. Refining it further
+with a character offset within the chapter is modelled — `fromChapter` takes a fraction — but nothing
+tracks a scroll fraction to pass it yet, so both screens are chapter-accurate and agree.
 
 **Room generates Java here, deliberately.** See [§7](#7-engineering-findings-worth-knowing).
 
 ## 6. Testing
 
-**249 unit tests, 0 failures, across 10 modules.** `./gradlew test` runs them all.
+**375 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
 
 | Module | Tests | Covers |
 |---|---:|---|
+| `format-epub` | 84 | container/OPF parsing, nav + NCX, sanitiser, path resolution, traversal refusal, embedded fonts, links |
+| `feature-reader` | 87 | HTML → block parsing, chapter text offsets and link anchors, which toolbar actions a document supports, tap-zone mirroring, page-fit geometry, progress agreement with the library |
 | `format-text` | 47 | Windows-1256/UTF-16/BOM decoding, chapter splitting, escaping, search offsets |
-| `format-epub` | 45 | container/OPF parsing, nav + NCX, sanitiser, path resolution, traversal refusal |
 | `core-domain` | 32 | format resolution, progress arithmetic, library join, import rules |
 | `core-common` | 30 | natural sort key, file-name parsing, byte formatting, result combinators |
 | `format-archive` | 29 | natural page ordering, junk-entry filtering, container sniffing, sample-size maths |
@@ -334,6 +357,16 @@ Stated rather than hidden:
   does not currently inject one.
 - **Highlights are modelled and stored** (`Bookmark` carries `colorArgb`) but the reader exposes
   bookmarking only, not text selection.
+- **`pageSnapping` is still a stored-but-unhonoured setting.** It is offered in Settings and
+  persisted, and the reader does not read it: Compose's `HorizontalPager` always snaps, so
+  "continuous scrolling instead of snapping to one page" would mean a second rendering path — a
+  `LazyColumn` of pages — rather than a flag on the pager. It is called out here rather than quietly
+  left to look implemented, which is exactly the state `pageFitMode` was in until it was wired up.
+- **The reader's gestures are the part of this app least covered by tests.** The geometry and the
+  action rules behind them are pure functions with unit tests, but the gestures themselves —
+  tap zones, pinch-zoom, the clamped pan — have only been exercised by reading the code and building
+  the APK, because the environment this was developed in has no device or emulator to run them on.
+  Treat the first run on real hardware as the real test.
 - **R8/minification is disabled** for the release build, which is why the APK is ~33 MB. Turning it
   on needs keep rules for pdfium's JNI entry points and the Room/Hilt generated code; the proguard
   files are already wired up for it.

@@ -13,4 +13,8 @@ dependencies {
     // blocks. jsoup is a parser, not a decoder — the page-decoding work still happens entirely
     // behind the `:core:core-domain` interfaces.
     implementation(libs.jsoup)
+
+    // `parseChapterHtml` and the pagination packer are pure functions over strings and lists, so
+    // they are covered by plain JVM tests rather than on a device.
+    testImplementation(libs.junit)
 }

@@ -86,11 +86,33 @@ internal class EpubBuilder private constructor(
                 "OEBPS/Text/chapter one.xhtml" to CHAPTER_ONE_XHTML.asBytes(),
                 "OEBPS/Text/chapter-two.xhtml" to CHAPTER_TWO_XHTML.asBytes(),
                 "OEBPS/Images/plate.png" to PLATE_PNG,
-                "OEBPS/Styles/book.css" to "p { color: red }".asBytes(),
+                STYLESHEET_PATH to PLAIN_CSS.asBytes(),
             ),
         )
     }
 }
+
+/**
+ * The path of the fixture's stylesheet, in a directory of its own.
+ *
+ * A subdirectory rather than beside the package document, because that is what EPUB books do and
+ * because it is the only shape in which a resolution bug is visible: `url("plate.png")` in this
+ * sheet means `OEBPS/Styles/plate.png`, and a reader that resolved it against the OPF would find
+ * `OEBPS/plate.png` instead — or, more often, nothing at all.
+ */
+internal const val STYLESHEET_PATH = "OEBPS/Styles/book.css"
+
+/** The fixture's stylesheet: real CSS that says nothing about type. */
+internal const val PLAIN_CSS = "p { color: red }"
+
+/**
+ * Stand-in font bytes.
+ *
+ * Nothing parses a font here — the archive hands bytes over and the reader gives them to the
+ * platform — so the fixture only needs bytes it can recognise after they have been through the zip.
+ */
+internal val FONT_BYTES: ByteArray = "OTTO-not-a-real-font".asBytes()
+
 
 internal const val MIMETYPE = "application/epub+zip"
 
@@ -140,6 +162,23 @@ internal const val OPF_XML = """<?xml version="1.0" encoding="UTF-8"?>
 
 /** The same book as [OPF_XML], with the nav document no longer marked as navigation. */
 internal val OPF_XML_WITHOUT_NAV: String = OPF_XML.replace(" properties=\"nav\"", "")
+
+/**
+ * The same book as [OPF_XML], with CSS inlined in the package document.
+ *
+ * Legal in the older package format and still emitted by producer toolchains, and the one place a
+ * `@font-face` can declare a font with no stylesheet item in the manifest to find it through — which
+ * is why it is worth a fixture of its own rather than an assumption that fonts arrive in `text/css`.
+ */
+internal val OPF_XML_WITH_INLINE_STYLE: String = OPF_XML.replace(
+    "  <manifest>",
+    """
+      <style>
+        @font-face { font-family: "Inline Face"; src: url("Fonts/inline.otf"); }
+      </style>
+      <manifest>
+    """.trimIndent(),
+)
 
 internal const val NAV_XHTML = """<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
@@ -201,7 +240,9 @@ internal const val COVER_XHTML = """<?xml version="1.0" encoding="utf-8"?>
 
 /**
  * The chapter that exercises the sanitiser: scripts, inline styling, presentational attributes,
- * event handlers, an unknown wrapper, a comment, and document-level right-to-left direction.
+ * event handlers, an unknown wrapper, a comment, document-level right-to-left direction, and the
+ * three kinds of link a reader has to tell apart — a footnote reference, a cross-reference, and a
+ * web address — plus `epub:type` values that mean nothing to it.
  */
 internal const val CHAPTER_ONE_XHTML = """<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ar" dir="rtl">
@@ -216,6 +257,12 @@ internal const val CHAPTER_ONE_XHTML = """<?xml version="1.0" encoding="utf-8"?>
   <script>alert('xss')</script>
   <p>The quick brown fox jumps over the lazy dog.</p>
   <p>Kafkaesque marmalade appears exactly once in this book.</p>
+  <p>A footnote reference<a href="#note-1" epub:type="noteref">1</a> and an
+    <a href="chapter-two.xhtml#end" epub:type="noteref footnote">end note</a>.</p>
+  <p><a href="https://example.com/sand" epub:type="landmarks">Sand</a>,
+    <a href="mailto:editor@example.com">the editor</a>, and
+    <a href="#note-1" epub:type="banana">a link whose type means nothing</a>.</p>
+  <p id="note-1">1. The note the reference above points at.</p>
   <img src="../Images/plate.png" alt="A plate" onerror="evil()" width="600" style="border:0"/>
   <img src="../../../outside/secret.png" alt="Outside"/>
   <ul><li>first item</li><li>second item</li></ul>

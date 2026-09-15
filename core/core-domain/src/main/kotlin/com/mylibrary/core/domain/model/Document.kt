@@ -41,6 +41,29 @@ data class SearchHit(
 data class PageSize(val width: Int, val height: Int)
 
 /**
+ * A font the document carries inside itself.
+ *
+ * Arabic books are routinely typeset in a Naskh or modern Kufi face rather than in whatever the
+ * device calls its default, and a publisher that licenses a face embeds it in the book so the book
+ * looks like the book everywhere. An embedded font is therefore content, not a preference: it
+ * belongs to the document, and the reader's font-size setting is a separate question from whether
+ * the publisher's typeface is used at all.
+ *
+ * The face is identified by what the document said about it — [family], [weight] and [italic] are
+ * the descriptors of its `@font-face` rule — so a caller can match a family the document asks for
+ * (see [com.mylibrary.core.domain.engine.ReflowableDocument.defaultFontFamily]) against the faces
+ * that are actually available, rather than against a name it hopes is installed.
+ */
+data class EmbeddedFont(
+    val family: String,
+    /** CSS weight, 100..900. */
+    val weight: Int = 400,
+    val italic: Boolean = false,
+    /** Path readable through [com.mylibrary.core.domain.engine.ReflowableDocument.resource]. */
+    val path: String,
+)
+
+/**
  * A rendered page as straight ARGB_8888 pixels, row-major.
  *
  * Why raw pixels rather than an encoded image or a platform `Bitmap`: the domain layer is a plain

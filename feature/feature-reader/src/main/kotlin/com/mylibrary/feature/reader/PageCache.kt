@@ -21,12 +21,21 @@ import androidx.compose.ui.graphics.asImageBitmap
  */
 class PageCache(private val maxBytes: Int) {
 
-    /** Identifies a rendered page: the same page at a different zoom is a different entry. */
+    /**
+     * Identifies a rendered page.
+     *
+     * The background colour is part of the identity, not an afterthought: a page composited onto
+     * white and the same page composited onto another colour are different images, and a key that
+     * omitted it would hand back the first one for the second request. That is a latent bug today —
+     * every render currently uses the same white — but it becomes a visible one the moment a
+     * reading theme or a night mode varies the background.
+     */
     data class Key(
         val documentId: String,
         val pageIndex: Int,
         val widthPx: Int,
         val heightPx: Int,
+        val backgroundColorArgb: Int,
     )
 
     private data class Entry(val image: ImageBitmap, val byteSize: Int)

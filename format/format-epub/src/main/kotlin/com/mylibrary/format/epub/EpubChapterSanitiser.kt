@@ -22,6 +22,10 @@ internal class SanitisedChapter(val html: String, val text: String)
  *    stylesheet can recover information that was thrown away.
  *  - `id` is kept so that in-book links and TOC fragments still have something to land on.
  *  - `href`, `src`, `alt` and the table cell spans are kept because they are content.
+ *  - `epub:type` on an `<a>` is kept, but only the terms `noteref` and `footnote`. It is the one
+ *    attribute whose value is filtered rather than passed through, because its vocabulary is
+ *    open-ended: a book may write anything there, and everything but those two terms means nothing
+ *    to a reader that decides its own presentation.
  *  - Everything else — `style`, `class`, `font`, `color`, `bgcolor`, `width`, `height`, `align`,
  *    `face`, `size`, and every `on*` handler — is dropped.
  *
@@ -62,9 +66,32 @@ internal object EpubChapterSanitiser {
     /** Attributes kept on any element: direction and language, plus anchor targets. */
     private val GLOBAL_ATTRIBUTES = setOf("dir", "lang", "xml:lang", "id")
 
+    /**
+     * The link attribute that survives, spelled as XHTML spells it.
+     *
+     * The `epub:` prefix is part of the attribute *name*, not a namespace jsoup resolves: jsoup's HTML
+     * parser lower-cases attribute names but leaves the prefix attached, so `epub:type` is exactly
+     * what arrives here whatever case the document wrote it in. Matching the unprefixed `type` would
+     * also catch the XHTML attribute of that name, which says nothing about linking.
+     */
+    private const val LINK_TYPE_ATTRIBUTE = "epub:type"
+
+    /**
+     * The `epub:type` terms that mean something to a reader, and the only ones that survive.
+     *
+     * `epub:type` is EPUB 3's open vocabulary: a book may write anything there, and most of it
+     * describes structure the reader already decides for itself (`landmarks`, `pagebreak`, a
+     * publisher's own terms). `noteref` and `footnote` are the exception — they are the only
+     * machine-readable signal separating a footnote reference from an ordinary web link, and nothing
+     * in the markup recovers that distinction once the attribute is dropped. Everything else is
+     * dropped rather than passed through: forwarding arbitrary vocabulary would let any document push
+     * its own terms into the reader's output for no benefit.
+     */
+    private val LINK_TYPE_VALUES = setOf("noteref", "footnote")
+
     /** Attributes kept on specific elements, because they are content rather than presentation. */
     private val ELEMENT_ATTRIBUTES = mapOf(
-        "a" to setOf("href"),
+        "a" to setOf("href", LINK_TYPE_ATTRIBUTE),
         "img" to setOf("src", "alt"),
         "td" to setOf("colspan", "rowspan"),
         "th" to setOf("colspan", "rowspan"),
@@ -173,6 +200,7 @@ internal object EpubChapterSanitiser {
                 // The one attribute whose value is rewritten, so it is applied by the caller.
                 name == "src" -> resolvedSource?.let { target.attr("src", it) }
                 name !in GLOBAL_ATTRIBUTES && name !in specific -> Unit
+                name == LINK_TYPE_ATTRIBUTE -> meaningfulLinkTypes(attribute.value)?.let { target.attr(name, it) }
                 // `alt=""` is a real statement — "this image is decorative, announce nothing" — so
                 // it survives; an empty `dir=""` or `id=""` is just noise the reader has to ignore.
                 name == "alt" -> target.attr(name, attribute.value)
@@ -181,4 +209,21 @@ internal object EpubChapterSanitiser {
             }
         }
     }
+
+    /**
+     * The reader-meaningful terms of an `epub:type` value, or `null` when it has none.
+     *
+     * The value is a space-separated property list (`epub:type="noteref footnote"` is legal), so the
+     * terms are filtered one at a time rather than the whole string being matched against a list —
+     * a book that tags a link with a footnote term *and* a term the reader ignores still gets a
+     * tappable footnote out of it. Terms are compared without regard to case and written back in the
+     * lowercase form the specification defines, because producers do mistype the case and the reader
+     * should have exactly one spelling to compare against.
+     */
+    private fun meaningfulLinkTypes(value: String): String? =
+        value.split(' ', '\t', '\n', '\r')
+            .map { it.lowercase() }
+            .filter { it in LINK_TYPE_VALUES }
+            .joinToString(" ")
+            .ifEmpty { null }
 }

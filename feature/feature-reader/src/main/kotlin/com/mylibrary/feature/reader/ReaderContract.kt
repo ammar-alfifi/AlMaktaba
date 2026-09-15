@@ -1,9 +1,11 @@
 package com.mylibrary.feature.reader
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.text.font.FontFamily
 import com.mylibrary.core.common.AppError
 import com.mylibrary.core.domain.model.Book
 import com.mylibrary.core.domain.model.Bookmark
+import com.mylibrary.core.domain.model.EngineCapabilities
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
@@ -34,6 +36,16 @@ data class ReaderUiState(
     val lastPasswordWasWrong: Boolean = false,
 
     val book: Book? = null,
+
+    /**
+     * What the open document can actually do.
+     *
+     * The reader serves five formats through four engines, and they do not offer the same things: a
+     * comic has no text layer to search and no outline to navigate, a plain-text file has no outline
+     * either, and only a PDF or a comic has pages to render. The toolbar reads this rather than
+     * guessing from [isPaged], so an action that cannot work is absent instead of present and inert.
+     */
+    val capabilities: EngineCapabilities = EngineCapabilities(),
 
     val isPaged: Boolean = false,
     val totalUnits: Int = 0,
@@ -67,12 +79,58 @@ data class ReaderUiState(
      * still reads left-to-right, and the *page* has to honour the document rather than the app.
      */
     val isRtlContent: Boolean = false,
+
+    /**
+     * An anchor waiting to be scrolled to, set when a link was just followed.
+     *
+     * The target chapter may not be laid out yet — following a footnote link crosses into a
+     * different chapter — so the anchor is parked here and the renderer clears it once it has
+     * scrolled to the block carrying it. Resolving the anchor eagerly would mean parsing a chapter
+     * the reader is not looking at.
+     */
+    val pendingAnchor: String? = null,
+
+    /**
+     * Places the reader has jumped from by following a link, most recent last.
+     *
+     * Without this a footnote is a one-way trip: the reader lands at the end of the book with no way
+     * back except scrubbing the progress bar. Popping restores the position that was on screen
+     * before the jump.
+     */
+    val linkBackStack: List<ReadingLocator> = emptyList(),
+
+    /**
+     * The document's own body typeface, when it embeds one.
+     *
+     * Applied only while `ReaderSettings.readerFont` is `SYSTEM` — that setting already means "do
+     * not override the text", and a publisher's face is what it resolves to when the document
+     * carries one. Any explicit choice wins, so the user keeps control without a second control to
+     * learn.
+     */
+    val documentFont: FontFamily? = null,
 ) {
+    /**
+     * How far through the document the reader is, in 0f..1f.
+     *
+     * Deliberately the same arithmetic as `ReadingProgressUseCase`, which is what the library card
+     * and the bookmarks list show: if the reader's progress bar says 40% the shelf must not say 12%.
+     * That is why the two kinds differ by one unit — a page index is a position the reader has
+     * arrived at and finished (*n* of *N* is honest), while a chapter index is one they have only
+     * just entered, so the chapters behind them are the ones that count. The reader has no
+     * within-chapter scroll fraction to refine it with, and neither does the saved value.
+     */
     val progress: Float
-        get() = if (totalUnits <= 0) 0f else (currentUnit + 1).toFloat() / totalUnits
+        get() = when {
+            totalUnits <= 0 -> 0f
+            isPaged -> (currentUnit + 1).toFloat() / totalUnits
+            else -> currentUnit.toFloat() / totalUnits
+        }
 
     val isBookmarked: Boolean
         get() = bookmarks.any { it.locator == currentLocator }
+
+    /** True when a link was followed and there is somewhere to return to. */
+    val canReturnFromLink: Boolean get() = linkBackStack.isNotEmpty()
 
     /** The locator for the position on screen, or `null` while the document is still opening. */
     val currentLocator: ReadingLocator?
@@ -97,6 +155,15 @@ sealed interface ReaderIntent {
     data object ToggleBookmark : ReaderIntent
     data class DeleteBookmark(val bookmarkId: Long) : ReaderIntent
 
+    /** A link inside the document was tapped. The engine decides where it goes. */
+    data class FollowLink(val href: String) : ReaderIntent
+
+    /** Go back to where the reader was before the last link was followed. */
+    data object ReturnFromLink : ReaderIntent
+
+    /** The renderer has scrolled to a pending anchor; it no longer needs to be remembered. */
+    data object AnchorReached : ReaderIntent
+
     data class SearchQueryChanged(val query: String) : ReaderIntent
     data object SubmitSearch : ReaderIntent
     data object ClearSearch : ReaderIntent
@@ -116,6 +183,12 @@ sealed interface ReaderIntent {
 sealed interface ReaderEffect {
     data object NavigateBack : ReaderEffect
     data class ShowMessage(val message: ReaderMessage) : ReaderEffect
+
+    /**
+     * A link leaving the document. The screen hands it to the platform, which is the only layer that
+     * can show a chooser or refuse a scheme — the ViewModel deliberately cannot.
+     */
+    data class OpenExternalUrl(val url: String) : ReaderEffect
 }
 
 /** One-shot reader messages, resolved to text by the screen so they are localized at render time. */
@@ -124,4 +197,7 @@ sealed interface ReaderMessage {
     data object BookmarkRemoved : ReaderMessage
     data object NoSearchResults : ReaderMessage
     data object SearchUnavailable : ReaderMessage
+
+    /** A link that the engine could not resolve to anywhere in the document. */
+    data object LinkUnavailable : ReaderMessage
 }

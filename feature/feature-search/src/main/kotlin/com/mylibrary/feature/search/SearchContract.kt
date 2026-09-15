@@ -106,6 +106,16 @@ sealed interface SearchEffect {
     /** Go to a book and jump straight to [locator]. */
     data class OpenLocation(val bookId: Long, val locator: ReadingLocator) : SearchEffect
 
-    /** A transient explanation, shown as a snackbar. A resource id, so it localizes at the edge. */
-    data class ShowMessage(@param:StringRes val messageRes: Int) : SearchEffect
+    /**
+     * A transient explanation, shown as a snackbar.
+     *
+     * A resource id — resolved at the edge so a message that outlives a locale change returns in the
+     * new language — plus any format arguments the string needs. Without [formatArgs] a string with
+     * a `%1$d` placeholder renders that placeholder literally, which is how the scan-cap message
+     * shipped showing "أحدث %1$d كتابًا" to the user.
+     */
+    data class ShowMessage(
+        @param:StringRes val messageRes: Int,
+        val formatArgs: List<Any> = emptyList(),
+    ) : SearchEffect
 }

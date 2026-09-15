@@ -101,6 +101,9 @@ class EpubEngine : DocumentEngine {
                 opfDir = epubPackage.opfDir,
                 chapterPaths = chapterPaths,
                 chapterTitles = EpubNavigation.titlesByChapter(outline),
+                // Passed rather than read: the package document is already parsed here, and the
+                // stylesheets stay unread until the reader asks the document what type it is set in.
+                stylesheets = StylesheetSources.of(epubPackage),
                 metadata = epubPackage.metadata,
                 outline = outline,
             ),

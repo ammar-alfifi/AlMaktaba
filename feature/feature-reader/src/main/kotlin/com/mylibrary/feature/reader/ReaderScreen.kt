@@ -1,5 +1,7 @@
 package com.mylibrary.feature.reader
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
@@ -11,16 +13,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Snackbar
@@ -28,8 +20,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,7 +39,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mylibrary.core.domain.model.ReadingDirection
 import com.mylibrary.core.ui.component.ErrorState
 import com.mylibrary.core.ui.component.LoadingState
-import androidx.compose.material3.ExperimentalMaterial3Api
 import com.mylibrary.core.ui.mvi.ObserveEffects
 import com.mylibrary.core.ui.theme.ProvideLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection as ComposeLayoutDirection
@@ -69,12 +59,28 @@ fun ReaderRoute(
     val viewModel: ReaderViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     var pendingMessage by remember { mutableStateOf<ReaderMessage?>(null) }
     ObserveEffects(viewModel.effects) { effect ->
         when (effect) {
             ReaderEffect.NavigateBack -> onBack()
+
             is ReaderEffect.ShowMessage -> pendingMessage = effect.message
+
+            is ReaderEffect.OpenExternalUrl -> {
+                // Opening a URL needs a platform context, which is exactly why the ViewModel emits
+                // this as an effect rather than trying to do it itself. A device with no browser —
+                // or a scheme nothing handles — must not crash the reader, hence the guard.
+                val opened = runCatching {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse(effect.url)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        },
+                    )
+                }.isSuccess
+                if (!opened) pendingMessage = ReaderMessage.LinkUnavailable
+            }
         }
     }
 
@@ -103,7 +109,6 @@ fun ReaderRoute(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderScreen(
     state: ReaderUiState,
@@ -192,113 +197,16 @@ fun ReaderScreen(
 }
 
 /**
- * The reader's toolbar: where you are, and everything you can do from here.
- *
- * Bookmark is a toggle in the toolbar rather than buried in a menu because it is the action people
- * take mid-page; everything else is one tap away and none of it is destructive.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ReaderTopBar(
-    state: ReaderUiState,
-    onIntent: (ReaderIntent) -> Unit,
-    onBack: () -> Unit,
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 3.dp,
-    ) {
-        TopAppBar(
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-            ),
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(com.mylibrary.core.ui.R.string.ui_close),
-                    )
-                }
-            },
-            title = {
-                Column {
-                    Text(
-                        text = state.book?.title.orEmpty(),
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    val label = state.positionLabel
-                    if (label != null) {
-                        Text(
-                            text = if (state.isPaged) {
-                                stringResource(
-                                    com.mylibrary.core.ui.R.string.ui_page_of,
-                                    state.currentUnit + 1,
-                                    state.totalUnits,
-                                )
-                            } else {
-                                label
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            },
-            actions = {
-                IconButton(onClick = { onIntent(ReaderIntent.ToggleBookmark) }) {
-                    Icon(
-                        imageVector = if (state.isBookmarked) {
-                            Icons.Filled.Bookmark
-                        } else {
-                            Icons.Filled.BookmarkBorder
-                        },
-                        contentDescription = stringResource(R.string.reader_bookmark),
-                        tint = if (state.isBookmarked) {
-                            MaterialTheme.colorScheme.tertiary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
-                IconButton(onClick = { onIntent(ReaderIntent.OpenPanel(ReaderPanel.TABLE_OF_CONTENTS)) }) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.List,
-                        contentDescription = stringResource(R.string.reader_toc),
-                    )
-                }
-                IconButton(onClick = { onIntent(ReaderIntent.OpenPanel(ReaderPanel.SEARCH)) }) {
-                    Icon(
-                        imageVector = Icons.Filled.Search,
-                        contentDescription = stringResource(R.string.reader_search_action),
-                    )
-                }
-                IconButton(onClick = { onIntent(ReaderIntent.OpenPanel(ReaderPanel.BOOKMARKS)) }) {
-                    Icon(
-                        imageVector = Icons.Filled.BookmarkBorder,
-                        contentDescription = stringResource(R.string.reader_bookmarks),
-                    )
-                }
-                IconButton(onClick = { onIntent(ReaderIntent.OpenPanel(ReaderPanel.SETTINGS)) }) {
-                    Icon(
-                        imageVector = Icons.Filled.Tune,
-                        contentDescription = stringResource(R.string.reader_settings),
-                    )
-                }
-            },
-        )
-    }
-}
-
-/**
  * The progress bar and page slider.
  *
  * The slider is the one control that makes a 900-page PDF navigable: dragging it is debounced
  * upstream in the ViewModel, so scrubbing across the whole book writes to the database once, at the
  * end, rather than nine hundred times.
+ *
+ * The label is deliberately built per document kind. A reflowable book has no pages — its position
+ * is a chapter — and printing "page 4 of 40" over an EPUB chapter index states something untrue
+ * about the file, so the left-hand text names a page only when there are pages, and otherwise names
+ * the chapter the reader is actually in.
  */
 @Composable
 private fun ReaderBottomBar(
@@ -317,19 +225,21 @@ private fun ReaderBottomBar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
+                    text = state.positionDescription(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Text(
                     text = stringResource(
-                        com.mylibrary.core.ui.R.string.ui_page_of,
-                        (state.currentUnit + 1).coerceAtMost(state.totalUnits),
-                        state.totalUnits,
+                        com.mylibrary.core.ui.R.string.ui_percent_read,
+                        (state.progress * 100).toInt().coerceIn(0, 100),
                     ),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Icon(
-                    imageVector = Icons.Filled.Settings,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(2.dp),
+                    modifier = Modifier.padding(start = 12.dp),
                 )
             }
 
@@ -366,5 +276,6 @@ private fun readerMessageText(message: ReaderMessage): String = stringResource(
         ReaderMessage.BookmarkRemoved -> R.string.reader_bookmark_removed
         ReaderMessage.NoSearchResults -> R.string.reader_no_results
         ReaderMessage.SearchUnavailable -> R.string.reader_search_unavailable
+        ReaderMessage.LinkUnavailable -> R.string.reader_link_unavailable
     },
 )

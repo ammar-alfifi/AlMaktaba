@@ -7,10 +7,14 @@ import com.mylibrary.core.common.AppError
 import com.mylibrary.core.common.AppResult
 import com.mylibrary.core.common.DispatcherProvider
 import com.mylibrary.core.common.getOrNull
+import com.mylibrary.core.domain.engine.DocumentEngine
+import com.mylibrary.core.domain.engine.LinkTarget
 import com.mylibrary.core.domain.engine.OpenDocument
 import com.mylibrary.core.domain.engine.PagedDocument
 import com.mylibrary.core.domain.engine.ReflowableDocument
+import com.mylibrary.core.domain.model.Chapter
 import com.mylibrary.core.domain.model.PageRenderRequest
+import com.mylibrary.core.domain.model.PageSize
 import com.mylibrary.core.domain.model.ReadingLocator
 import com.mylibrary.core.domain.repository.BookmarkRepository
 import com.mylibrary.core.domain.repository.DocumentRepository
@@ -39,6 +43,26 @@ sealed interface PageRenderState {
     data object Loading : PageRenderState
     data class Ready(val image: ImageBitmap) : PageRenderState
     data class Failed(val error: AppError) : PageRenderState
+}
+
+/**
+ * A chapter ready to render.
+ *
+ * [title] comes from the document's own navigation, so a chapter announces itself the way the
+ * publisher named it rather than by its position in the spine. [anchorBlocks] and [offsets] are what
+ * let a link target and a stored highlight be turned into a place on the page.
+ */
+data class ChapterContent(
+    val title: String?,
+    val blocks: List<ContentBlock>,
+    /** Element id → index into [blocks], for resolving link anchors. */
+    val anchorBlocks: Map<String, Int> = emptyMap(),
+    /** Block → character offset in the document's chapter text. */
+    val offsets: ChapterTextMap = ChapterTextMap.Empty,
+) {
+    companion object {
+        val Empty = ChapterContent(title = null, blocks = emptyList())
+    }
 }
 
 /**
@@ -74,6 +98,7 @@ class ReaderViewModel @Inject constructor(
     private val observeSettings: ObserveSettingsUseCase,
     private val updateSettings: UpdateSettingsUseCase,
     private val searchInDocument: SearchInDocumentUseCase,
+    private val fontLoader: DocumentFontLoader,
     private val dispatchers: DispatcherProvider,
 ) : MviViewModel<ReaderUiState, ReaderIntent, ReaderEffect>(ReaderUiState()) {
 
@@ -157,6 +182,7 @@ class ReaderViewModel @Inject constructor(
                         error = null,
                         isAwaitingPassword = false,
                         lastPasswordWasWrong = false,
+                        capabilities = opened.capabilities,
                         isPaged = opened is PagedDocument,
                         totalUnits = unitCountOf(opened),
                         currentUnit = restored,
@@ -167,6 +193,15 @@ class ReaderViewModel @Inject constructor(
                 }
                 refreshPositionLabel()
                 saveCurrentProgress()
+
+                // The document's own typeface, if it carries one. Loaded after the state update so
+                // the first frame is not delayed by reading a font out of the archive: the reader
+                // starts in the fallback face and switches when the face arrives, which is far less
+                // noticeable than a blank screen.
+                if (opened is ReflowableDocument) {
+                    val font = fontLoader.load(opened)
+                    if (font != null) setState { copy(documentFont = font) }
+                }
             }
         }
     }
@@ -193,6 +228,13 @@ class ReaderViewModel @Inject constructor(
         else -> 0
     }
 
+    /** What [chapterContent] reads from a decoder in one pass. */
+    private data class LoadedChapter(
+        val chapter: Chapter,
+        val parsed: ParsedChapter,
+        val text: String,
+    )
+
     /**
      * Renders a page at the requested size, using the cache where possible.
      *
@@ -204,7 +246,13 @@ class ReaderViewModel @Inject constructor(
         val book = currentState.book ?: return PageRenderState.Loading
         if (widthPx <= 0 || heightPx <= 0) return PageRenderState.Loading
 
-        val key = PageCache.Key(book.uri, pageIndex, widthPx, heightPx)
+        val key = PageCache.Key(
+            documentId = book.uri,
+            pageIndex = pageIndex,
+            widthPx = widthPx,
+            heightPx = heightPx,
+            backgroundColorArgb = PAGE_BACKGROUND_ARGB,
+        )
         pageCache[key]?.let { return PageRenderState.Ready(it) }
 
         val paged = document as? PagedDocument ?: return PageRenderState.Loading
@@ -215,6 +263,7 @@ class ReaderViewModel @Inject constructor(
                     pageIndex = pageIndex,
                     targetWidthPx = widthPx,
                     targetHeightPx = heightPx,
+                    backgroundColorArgb = PAGE_BACKGROUND_ARGB,
                 ),
             )
         }
@@ -229,11 +278,52 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    /** The parsed content of a chapter, for the reflowable reader. */
-    suspend fun chapterContent(chapterIndex: Int): List<ContentBlock> {
-        val reflowable = document as? ReflowableDocument ?: return emptyList()
-        val html = documentMutex.withLock { reflowable.chapterHtml(chapterIndex) }
-        return parseChapterHtml(html)
+    /**
+     * The page's intrinsic size, or `null` when the document has no pages or will not report one.
+     *
+     * The reader needs the page's proportions *before* it can ask for pixels: a width-fitted page is
+     * as tall as its own proportions make it, and an actual-size page is rendered at its own
+     * dimensions. A document that cannot answer — a closed handle, a page whose entry will not
+     * decode — reports `null`, and the reader falls back to fitting the viewport, which is what it
+     * did before [ReaderUiState.settings]' fit mode existed.
+     */
+    suspend fun pageSize(pageIndex: Int): PageSize? {
+        val paged = document as? PagedDocument ?: return null
+        return withContext(dispatchers.io) {
+            documentMutex.withLock {
+                runCatching { paged.pageSize(pageIndex) }
+                    .getOrNull()
+                    ?.takeIf { it.width > 0 && it.height > 0 }
+            }
+        }
+    }
+
+    /**
+     * A parsed chapter: its title, its blocks, where its anchors are, and where its blocks sit in
+     * the chapter text.
+     *
+     * All four are produced under one lock acquisition because they are derived from the same
+     * chapter and must agree with each other — building them from separate reads would let a
+     * document that changed underneath produce an anchor map that points into a different chapter's
+     * text.
+     */
+    suspend fun chapterContent(chapterIndex: Int, links: LinkStyling? = null): ChapterContent {
+        val reflowable = document as? ReflowableDocument ?: return ChapterContent.Empty
+
+        val loaded = documentMutex.withLock {
+            LoadedChapter(
+                chapter = reflowable.chapter(chapterIndex),
+                parsed = parseChapterHtml(reflowable.chapterHtml(chapterIndex), links),
+                text = reflowable.chapterText(chapterIndex),
+            )
+        }
+
+        return ChapterContent(
+            title = loaded.chapter.title?.takeIf { it.isNotBlank() },
+            blocks = loaded.parsed.blocks,
+            anchorBlocks = loaded.parsed.anchorBlocks,
+            offsets = buildChapterTextMap(loaded.parsed.blocks, loaded.text),
+        )
     }
 
     /**
@@ -306,6 +396,10 @@ class ReaderViewModel @Inject constructor(
             ReaderIntent.ToggleBookmark -> toggleBookmarkAtCurrentPosition()
             is ReaderIntent.DeleteBookmark -> launch { deleteBookmark(intent.bookmarkId) }
 
+            is ReaderIntent.FollowLink -> followLink(intent.href)
+            ReaderIntent.ReturnFromLink -> returnFromLink()
+            ReaderIntent.AnchorReached -> setState { copy(pendingAnchor = null) }
+
             is ReaderIntent.SearchQueryChanged -> setState { copy(searchQuery = intent.query) }
             ReaderIntent.SubmitSearch -> runSearch()
             ReaderIntent.ClearSearch -> setState {
@@ -372,6 +466,78 @@ class ReaderViewModel @Inject constructor(
             percent = progressCalculator(locator, document ?: return),
             excerpt = excerpt,
         )
+    }
+
+    /**
+     * Follows a link the user tapped.
+     *
+     * The engine decides *where* it goes; this decides what the reader does about it. An external
+     * target becomes an effect rather than an action, because opening a URL needs a platform
+     * context the ViewModel deliberately has no access to.
+     *
+     * The current position is pushed onto a back stack first, which is what makes a footnote a
+     * round trip instead of a one-way jump to the end of the book.
+     */
+    private fun followLink(href: String) {
+        val reflowable = document as? ReflowableDocument ?: return
+        val fromChapter = currentState.currentUnit
+
+        launch {
+            val target = documentMutex.withLock { reflowable.resolveLink(fromChapter, href) }
+
+            when (target) {
+                null -> sendEffect(ReaderEffect.ShowMessage(ReaderMessage.LinkUnavailable))
+
+                is LinkTarget.External -> sendEffect(ReaderEffect.OpenExternalUrl(target.url))
+
+                is LinkTarget.Internal -> {
+                    val chapterIndex = when (val locator = target.locator) {
+                        is ReadingLocator.Paged -> locator.pageIndex
+                        is ReadingLocator.Reflowable -> locator.chapterIndex
+                    }
+                    val origin = currentState.currentLocator
+                    val clamped = chapterIndex.coerceIn(0, (currentState.totalUnits - 1).coerceAtLeast(0))
+
+                    setState {
+                        copy(
+                            currentUnit = clamped,
+                            pendingAnchor = target.anchor,
+                            linkBackStack = if (origin != null) linkBackStack + origin else linkBackStack,
+                        )
+                    }
+                    refreshPositionLabel()
+                    scheduleProgressSave()
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns to where the reader was before following a link.
+     *
+     * Restores the chapter, not the exact scroll position within it: the back stack holds a
+     * [ReadingLocator] whose offset is not yet meaningful in scroll mode. Once pagination lands, the
+     * stored offset will place the reader back on the exact page they left.
+     */
+    private fun returnFromLink() {
+        val stack = currentState.linkBackStack
+        val target = stack.lastOrNull() ?: return
+
+        val chapterIndex = when (target) {
+            is ReadingLocator.Paged -> target.pageIndex
+            is ReadingLocator.Reflowable -> target.chapterIndex
+        }
+        val clamped = chapterIndex.coerceIn(0, (currentState.totalUnits - 1).coerceAtLeast(0))
+
+        setState {
+            copy(
+                currentUnit = clamped,
+                linkBackStack = stack.dropLast(1),
+                pendingAnchor = null,
+            )
+        }
+        refreshPositionLabel()
+        scheduleProgressSave()
     }
 
     private fun toggleBookmarkAtCurrentPosition() {
@@ -468,6 +634,18 @@ class ReaderViewModel @Inject constructor(
 
         /** 64 MB: enough for several comic pages at phone resolution, far short of an OOM. */
         private const val PAGE_CACHE_BYTES = 64 * 1024 * 1024
+
+        /**
+         * White, because a PDF or comic page *is* white paper.
+         *
+         * This is deliberately not derived from the reading theme. Inverting or tinting a rendered
+         * page would change the artwork and, for a PDF, could render black text invisible on a
+         * black background. A night-reading mode, if added, belongs on the chrome around the page
+         * rather than baked into the pixels — which is also why the value is a named constant here
+         * rather than a literal, so the decision is visible and can be varied per book later
+         * without the cache serving a stale image (see `PageCache.Key`).
+         */
+        private const val PAGE_BACKGROUND_ARGB = 0xFFFFFFFF.toInt()
 
         private const val PROGRESS_SAVE_DEBOUNCE_MS = 600L
         private const val EXCERPT_LENGTH = 160

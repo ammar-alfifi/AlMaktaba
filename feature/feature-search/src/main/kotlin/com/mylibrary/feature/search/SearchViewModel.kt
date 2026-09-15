@@ -270,8 +270,14 @@ class SearchViewModel @Inject constructor(
         if (books.size > scan.size) {
             // Say so rather than let an empty card read as "not in any of your books": the scan
             // stopped early, and a user who is told that can narrow the library instead of
-            // concluding the text is not there.
-            sendEffect(SearchEffect.ShowMessage(R.string.search_message_scan_capped))
+            // concluding the text is not there. The count is passed with it — the string has a
+            // placeholder, and leaving it unformatted printed "%1$d" on screen.
+            sendEffect(
+                SearchEffect.ShowMessage(
+                    messageRes = R.string.search_message_scan_capped,
+                    formatArgs = listOf(scan.size),
+                ),
+            )
         }
     }
 
