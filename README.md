@@ -69,6 +69,16 @@ Every hard constraint from the specification, and where it is satisfied:
 
 ## 3. Building and running
 
+### Download
+
+A signed, installable build is attached to the latest release:
+
+**→ [MyLibrary-v1.0.0.apk](https://github.com/ammar-alfifi/MyLibrary/releases/download/v1.0.0/MyLibrary-v1.0.0.apk)** (~33 MB)
+
+Android 8.0 (API 26) and above. Signed with APK Signature Scheme v2 + v3. The app requests **no
+storage permission** — books are added through the system file picker, which grants access to the
+files you choose and nothing else.
+
 ### Requirements
 
 - JDK 17+ (JDK 21 verified)
@@ -251,8 +261,13 @@ parse.
 
 Stated rather than hidden:
 
-- **No release signing config.** `assembleRelease` produces an unsigned APK; add a keystore before
-  shipping.
+- **Release signing is opt-in, and the keystore is not in this repository.** `:app` reads
+  `keystore.properties` from the repository root if it exists and signs the release build with it;
+  if it does not exist, `assembleRelease` still succeeds and produces an unsigned APK. Both that
+  file and the keystore are gitignored, which is why a fresh clone builds with no secret material —
+  but it also means **the key used for the published APK exists only on the machine that built it**.
+  Anyone shipping an update must keep that keystore: Android refuses to install an update signed
+  with a different key.
 - **Search inside books is capped at the 20 most recently added books** and is off by default, since
   it opens every book it scans. The cap is reported to the user rather than silently narrowing the
   result.
@@ -260,10 +275,14 @@ Stated rather than hidden:
   does not currently inject one.
 - **Highlights are modelled and stored** (`Bookmark` carries `colorArgb`) but the reader exposes
   bookmarking only, not text selection.
+- **R8/minification is disabled** for the release build, which is why the APK is ~33 MB. Turning it
+  on needs keep rules for pdfium's JNI entry points and the Room/Hilt generated code; the proguard
+  files are already wired up for it.
 - **`getRelativeTimeSpanString` follows the system locale**, not the in-app language, so relative
   dates can disagree with the rest of the UI when the two differ. The fix is to pass the
   locale-scoped context, which is a one-line change once the API level allows it.
 - **CBR has no automated success-path test** — see [§6](#6-testing).
+- **The app has not been run on a device** in the environment it was built in; see §6.
 
 ---
 
