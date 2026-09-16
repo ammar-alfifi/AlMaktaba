@@ -59,4 +59,40 @@
     <string name="lib_details_cd_favorite">Add to favourites</string>
     <string name="lib_page_number">Page %1$d</string>
     <string name="lib_chapter_number">Chapter %1$d</string>
+
+    <!-- Folders: a device directory the user granted access to, so a series stays together -->
+    <string name="lib_import_files">Add files</string>
+    <string name="lib_import_folder">Add a folder</string>
+    <string name="lib_folder_all">All books</string>
+    <string name="lib_folders_title">Your folders</string>
+    <string name="lib_folders_manage">Folders</string>
+    <string name="lib_folder_book_count">%1$d book(s)</string>
+    <string name="lib_folder_cd">Folder options</string>
+    <string name="lib_folder_menu_rescan">Rescan</string>
+    <string name="lib_folder_menu_rename">Rename</string>
+    <string name="lib_folder_menu_delete">Delete folder</string>
+    <string name="lib_folder_unavailable">Unavailable</string>
+    <string name="lib_folder_unavailable_message">That folder can no longer be read. Add it again from the add button to grant access.</string>
+    <string name="lib_folder_move">Move to folder…</string>
+    <string name="lib_folder_move_title">Move “%1$s”</string>
+    <string name="lib_folder_move_none">No folder</string>
+    <string name="lib_folder_rename_title">Rename folder</string>
+    <string name="lib_folder_rename_label">Folder name</string>
+    <string name="lib_folder_delete_title">Delete this folder?</string>
+    <string name="lib_folder_delete_message">“%1$s” will be removed from your library, and its %2$d book(s) will stay in your library without a folder. Reading positions and bookmarks are kept.</string>
+    <string name="lib_folder_delete_contents">Delete this folder\'s books too</string>
+    <string name="lib_folder_deleted">Folder removed</string>
+    <string name="lib_folder_renamed">Folder renamed</string>
+    <string name="lib_folder_importing">Importing from “%1$s”…</string>
+    <string name="lib_folder_imported">Added %1$d from “%2$s”</string>
+    <string name="lib_folder_imported_with_skipped">Added %1$d from “%2$s”, %3$d already in the library, %4$d unsupported</string>
+    <string name="lib_folder_imported_all_present">Every file in “%1$s” is already in your library</string>
+    <string name="lib_folder_imported_nothing">No supported files were found in that folder</string>
+    <string name="lib_folder_rescanned">Added %1$d from “%2$s”</string>
+    <string name="lib_folder_rescanned_missing">Added %1$d, and %2$d are no longer on the device</string>
+    <string name="lib_folder_rescan_all_present">Nothing new in “%1$s”</string>
+    <string name="lib_folder_scan_truncated">That folder is very large; the scan stopped after %1$d files</string>
+    <string name="lib_folder_permission_lost">That folder can no longer be read. Add it again to grant access.</string>
+    <string name="lib_book_moved">Book moved to “%1$s”</string>
+    <string name="lib_book_unfiled">Book removed from its folder</string>
 </resources>

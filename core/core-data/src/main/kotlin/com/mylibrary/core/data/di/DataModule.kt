@@ -11,8 +11,12 @@ import androidx.room.Room
 import com.mylibrary.core.common.DefaultDispatcherProvider
 import com.mylibrary.core.common.DispatcherProvider
 import com.mylibrary.core.data.local.MyLibraryDatabase
+import com.mylibrary.core.data.local.ALL_MIGRATIONS
 import com.mylibrary.core.data.local.dao.BookDao
 import com.mylibrary.core.data.local.dao.BookmarkDao
+import com.mylibrary.core.data.local.dao.FolderDao
+import com.mylibrary.core.data.source.SafFolderScanner
+import com.mylibrary.core.domain.engine.FolderScanner
 import com.mylibrary.core.data.local.dao.ReadingPositionDao
 import dagger.Module
 import dagger.Provides
@@ -46,15 +50,16 @@ object DataModule {
      * without them the `ON DELETE CASCADE` on reading positions and bookmarks would silently do
      * nothing — leaving orphan rows pointing at books that no longer exist.
      *
-     * Migrations are not registered yet because version 1 is the first schema. When version 2
-     * arrives this is where `addMigrations(...)` goes, and the exported schema in `schemas/` is what
-     * makes those migrations testable.
+     * The version 1 → 2 migration adds device folders. It is registered rather than assuming a
+     * destructive fallback, which is not configured at all: the library is the user's own data, and
+     * an upgrade that silently emptied it would be the worst bug this app could ship.
      */
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): MyLibraryDatabase =
         Room.databaseBuilder(context, MyLibraryDatabase::class.java, MyLibraryDatabase.NAME)
             .setJournalMode(androidx.room.RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+            .addMigrations(*ALL_MIGRATIONS)
             .build()
 
     @Provides
@@ -66,6 +71,22 @@ object DataModule {
 
     @Provides
     fun provideBookmarkDao(database: MyLibraryDatabase): BookmarkDao = database.bookmarkDao()
+
+    @Provides
+    fun provideFolderDao(database: MyLibraryDatabase): FolderDao = database.folderDao()
+
+    /**
+     * The scanner that enumerates a folder the user granted access to.
+     *
+     * Bound here rather than in the feature module that launches the picker, because taking and
+     * releasing the SAF grant belongs with the code that reads the tree — see [SafFolderScanner].
+     */
+    @Provides
+    @Singleton
+    fun provideFolderScanner(
+        @ApplicationContext context: Context,
+        dispatchers: DispatcherProvider,
+    ): FolderScanner = SafFolderScanner(context, dispatchers)
 
     /**
      * The preferences DataStore.

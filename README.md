@@ -33,9 +33,9 @@ Jetpack Compose و Material 3، ومعمارية نظيفة متعددة الو�
 | **Formats** | PDF (pdfium), EPUB 2 & 3, plain text (with Arabic charset detection), CBZ (zip), CBR (RAR) |
 | **Languages** | Arabic by default, English as a complete second locale, switchable in-app without a restart |
 | **Direction** | Full RTL for Arabic, LTR for English — and a document's own direction is honoured *independently* of the UI, so an English TXT reads left-to-right inside the Arabic interface |
-| **Library** | Import through the Storage Access Framework, grid/list layouts, five sort orders, favourite and format filters, automatic cover extraction |
-| **Reader** | One toolbar across all five formats, adapting to what the open file can do; paged and reflowable modes; **EPUB and TXT can be split into pages** as well as scrolled; tap zones that turn the page (mirrored for Arabic) or scroll a screenful, with a haptic tick on every turn and a switch to turn them off; pinch-zoom, double-tap and a clamped pan; three page-fit modes; per-document search, outlines, bookmarks; font/theme/line-height controls that apply live, and one button that puts them all back |
-| **Storage** | No storage permission at all — only scoped `content://` access to files the user picked |
+| **Library** | Import through the Storage Access Framework — single files **or a whole device folder**, which keeps a series together as one shelf and can be re-scanned for new volumes later; grid/list layouts, five sort orders, favourite, format and folder filters, automatic cover extraction, moving a book between folders |
+| **Reader** | One toolbar across all five formats, adapting to what the open file can do; paged and reflowable modes; **EPUB and TXT can be split into pages** as well as scrolled; tap zones that turn the page (mirrored for Arabic) or scroll a screenful, with a haptic tick on every turn and a switch to turn them off; pinch-zoom, double-tap and a clamped pan; **double-tap a speech bubble or panel in a comic to zoom into it**; page turns animated by a page-curl, a slide or a fade; three page-fit modes; per-document search, outlines, bookmarks; font/theme/line-height controls that apply live, three bundled Arabic typefaces plus an interface font of their own, and one button that puts them all back |
+| **Storage** | No storage permission at all — only scoped `content://` access to files and folders the user picked |
 
 ## 2. Requirements compliance
 
@@ -66,6 +66,7 @@ Every hard constraint from the specification, and where it is satisfied:
 | 7 | Proactive memory handling | `inSampleSize` downsampling in every image path; `OutOfMemoryError` mapped to `AppError.OutOfMemory` |
 | 8 | Scoped storage | Zero storage permissions; SAF only; `FileProvider`-free because nothing is shared by path |
 | 8 | `cacheDir` for temporaries | Covers in `cacheDir/covers`, CBR extraction in `cacheDir/comic-archives` (deleted on close) |
+| 8 | Folder access through SAF | A folder is added with `OpenDocumentTree`, its grant persisted and released when the folder is removed — still no storage permission |
 
 ## 3. Building and running
 
@@ -73,7 +74,7 @@ Every hard constraint from the specification, and where it is satisfied:
 
 A signed, installable build is attached to the latest release:
 
-**→ [MyLibrary-v1.2.0.apk](https://github.com/ammar-alfifi/MyLibrary/releases/download/v1.2.0/MyLibrary-v1.2.0.apk)** (~33 MB)
+**→ [MyLibrary-v1.3.0.apk](https://github.com/ammar-alfifi/MyLibrary/releases/download/v1.3.0/MyLibrary-v1.3.0.apk)** (~33 MB)
 
 Android 8.0 (API 26) and above. Signed with APK Signature Scheme v2 + v3. The app requests **no
 storage permission** — books are added through the system file picker, which grants access to the
@@ -217,22 +218,39 @@ progress counts the chapters *behind* the reader, and the reader's own progress 
 with a character offset within the chapter is modelled — `fromChapter` takes a fraction — but nothing
 tracks a scroll fraction to pass it yet, so both screens are chapter-accurate and agree.
 
+**Arabic typefaces are bundled, and the interface can wear one.** The app shipped with the platform's
+own families — Noto Naskh Arabic and Noto Sans Arabic, resolved by the system stack — on the argument
+that the platform already shapes Arabic correctly and a bundled face would cost megabytes for nothing.
+That argument holds for *correctness* and fails for *choice*: a reader has no way to change the voice
+of a book, and the same page looks different on two devices. Three faces under the SIL Open Font
+License are therefore in `:core:core-ui`'s `res/font` — Amiri (a Naskh revival), IBM Plex Sans Arabic
+and Reem Kufi — offered as reading fonts *and* as an interface font, drawn in the picker in their own
+face so the choice is made by looking rather than by reading a name. ~790 KB, and the licence texts
+ship in `licenses/`.
+
+**The folder is the unit of a series, and a folder is not a copy.** Adding a folder through the
+Storage Access Framework records the *tree* URI, takes a persistable read grant, walks the tree and
+files what it finds under it. Nothing is copied and nothing is moved: the association is an id on each
+book, which is why a re-scan can pick up new volumes, why removing a folder keeps its books, and why a
+folder whose permission has been revoked is shown as unavailable rather than silently disappearing
+with the reader's series inside it.
+
 **Room generates Java here, deliberately.** See [§7](#7-engineering-findings-worth-knowing).
 
 ## 6. Testing
 
-**393 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
+**453 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
 
 | Module | Tests | Covers |
 |---|---:|---|
 | `format-epub` | 84 | container/OPF parsing, nav + NCX, sanitiser, path resolution, traversal refusal, embedded fonts, links |
-| `feature-reader` | 103 | HTML → block parsing, chapter text offsets and link anchors, which toolbar actions a document supports, tap-zone mirroring, page-fit geometry, **page-breaking arithmetic** (line boundaries, spacing, atomic blocks, degenerate pages), progress agreement with the library |
+| `feature-reader` | 145 | HTML → block parsing, chapter text offsets and link anchors, which toolbar actions a document supports, tap-zone mirroring, page-fit geometry, **page-breaking arithmetic** (line boundaries, spacing, atomic blocks, degenerate pages), progress agreement with the library, **the speech-bubble detector** (enclosed regions, leaks, specks, slivers, resolution independence), **the tap-to-page geometry** and the page-turn effects |
 | `format-text` | 47 | Windows-1256/UTF-16/BOM decoding, chapter splitting, escaping, search offsets |
-| `core-domain` | 32 | format resolution, progress arithmetic, library join, import rules |
+| `core-domain` | 46 | format resolution, progress arithmetic, library join, import rules, **folder import and re-scan** (adoption, missing files, revoked grants, deleting with or without contents) |
 | `core-common` | 30 | natural sort key, file-name parsing, byte formatting, result combinators |
 | `format-archive` | 29 | natural page ordering, junk-entry filtering, container sniffing, sample-size maths |
 | `feature-search` | 20 | snippet offsets, result grouping, query history |
-| `core-data` | 17 | **real SQLite**: every sort order, `LIKE … ESCAPE`, cascade deletes, upserts |
+| `core-data` | 21 | **real SQLite**: every sort order, `LIKE … ESCAPE`, cascade deletes, upserts, folders, and **the version 1 → 2 migration against a real version 1 database** |
 | `format-pdf` | 15 | aspect fitting, outline nesting, malformed bookmark trees |
 | `app` | 8 | **cold start**: real Hilt graph + `MainActivity` lifecycle, and the language override |
 | `feature-settings` | 8 | intent → settings mapping, and that the reader's own reset touches only reading settings |
@@ -348,6 +366,21 @@ mojibake. `:format:format-text` therefore runs a byte-distribution fingerprint f
 *before* consulting the detector, but only overrules a single-byte-character-set verdict — a
 multi-byte detection is never second-guessed.
 
+**A foreign key on `books.folderId` would have deleted the library's reading positions.** The
+obvious schema for "a book belongs to a folder" is a foreign key with `ON DELETE SET NULL`. SQLite
+cannot add a constraint with `ALTER TABLE`, so a foreign key in a migration means the twelve-step
+rebuild — create, copy, drop, rename — and `books` is the *parent* of `reading_positions` and
+`bookmarks`, both declared `ON DELETE CASCADE`. Dropping it performs an implicit
+`DELETE FROM books`, and with foreign keys enforced (which Room enables, and which the existing
+cascade test proves) every reading position and every bookmark in the user's library would go with
+it, on the upgrade, for every user. `PRAGMA foreign_keys = OFF` does not help: it is a no-op inside a
+transaction, and Room runs migrations inside one. So `books.folderId` carries no constraint, and
+`FolderRepositoryImpl.deleteFolder` clears the association and deletes the row in a single
+transaction instead — the same place the "match on URI and update rather than replace" rule already
+lived. The migration is tested against a real version 1 database, because no other test in the
+project would notice a migration that is merely *wrong*: it would pass every build and then throw on
+the first launch after an upgrade, on the only copy of the library that exists.
+
 **An EPUB's `encryption.xml` is not evidence of DRM.** IDPF and Adobe *font obfuscation* ships in a
 large share of DRM-free commercial books. Treating the mere presence of that file as DRM would
 refuse to open books the user legitimately owns, so `:format:format-epub` only reports
@@ -372,6 +405,14 @@ Stated rather than hidden:
   does not currently inject one.
 - **Highlights are modelled and stored** (`Bookmark` carries `colorArgb`) but the reader exposes
   bookmarking only, not text selection.
+- **The bubble detector is a heuristic, not image analysis.** It floods the light region under the
+  double-tap and accepts it only if it is enclosed, small enough to be worth framing, and dense
+  enough to be a shape. Every way that can fail returns "no region" and falls back to a plain zoom
+  about the tapped point — a leak through a broken outline reaches the page border, which is checked,
+  so a wrong-but-plausible rectangle is not reachable. What it cannot do is understand artwork: a
+  bubble drawn *inside* a panel of a similar tone is one region, and a panel that bleeds off the page
+  is refused rather than framed. Related: a bubble zoomed far enough is limited by `MAX_RENDER_SCALE`
+  (3×), so the sharpest render is 3× the viewport however far the zoom goes.
 - **The reader's gestures are the part of this app least covered by tests.** The geometry, the
   action rules and the page-breaking arithmetic behind them are pure functions with unit tests, but
   the gestures themselves — tap zones, pinch-zoom, the clamped pan — have only been exercised by
@@ -387,6 +428,13 @@ Stated rather than hidden:
   before decoding or laying it out. A small illustration therefore leaves some white space around
   it. Measuring the bounds without decoding is possible — `BitmapFactory` will report them from a
   header — and is the way to fix this properly; it is not done here.
+- **A folder re-scan reports files it can no longer see, and never deletes them.** A book whose
+  file has been moved, or whose storage is not mounted, is indistinguishable from one that was
+  genuinely removed — so the count is reported and the book stays. The scan also stops at 2000 files
+  and 8 levels deep, and says so when it does.
+- **Folders are a grouping, not a copy.** Books are never moved or duplicated; a folder is a
+  remembered SAF tree plus an id on each book. That is why removing a folder keeps its books, and why
+  a folder whose permission has been revoked shows as "unavailable" until the user points at it again.
 - **`pageSnapping` is still a stored-but-unhonoured setting.** It is offered in Settings and
   persisted, and the reader does not read it: Compose's `HorizontalPager` always snaps, so
   "continuous scrolling instead of snapping to one page" would mean a second rendering path for
@@ -409,3 +457,7 @@ Book decoding is performed by third-party libraries, each under its own licence:
 junrar (UnRAR licence), jsoup (MIT) and juniversalchardet (MPL 1.1/GPL/LGPL tri-licence). EPUB
 parsing is implemented in this project directly on `java.util.zip` and jsoup — there is no Readium
 dependency.
+
+The three bundled typefaces — Amiri, IBM Plex Sans Arabic and Reem Kufi — are under the SIL Open Font
+License 1.1, and their licence texts are in `licenses/`. The launcher icon is drawn in this repository
+as vector paths.

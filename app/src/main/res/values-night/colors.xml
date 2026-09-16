@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="window_background">#101413</color>
+    <!-- Must equal `DarkColors.background` in `:core:core-ui` (`#0F1513`); see the light file. -->
+    <color name="window_background">#0F1513</color>
 
-    <color name="ic_launcher_background">#0E6E62</color>
+    <color name="ic_launcher_background">#0B4C55</color>
 </resources>

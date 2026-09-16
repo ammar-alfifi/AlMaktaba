@@ -2,11 +2,13 @@ package com.mylibrary.core.data.di
 
 import com.mylibrary.core.data.repository.BookmarkRepositoryImpl
 import com.mylibrary.core.data.repository.DocumentRepositoryImpl
+import com.mylibrary.core.data.repository.FolderRepositoryImpl
 import com.mylibrary.core.data.repository.LibraryRepositoryImpl
 import com.mylibrary.core.data.repository.ReadingProgressRepositoryImpl
 import com.mylibrary.core.data.repository.SettingsRepositoryImpl
 import com.mylibrary.core.domain.repository.BookmarkRepository
 import com.mylibrary.core.domain.repository.DocumentRepository
+import com.mylibrary.core.domain.repository.FolderRepository
 import com.mylibrary.core.domain.repository.LibraryRepository
 import com.mylibrary.core.domain.repository.ReadingProgressRepository
 import com.mylibrary.core.domain.repository.SettingsRepository
@@ -48,4 +50,8 @@ internal abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindDocumentRepository(impl: DocumentRepositoryImpl): DocumentRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindFolderRepository(impl: FolderRepositoryImpl): FolderRepository
 }

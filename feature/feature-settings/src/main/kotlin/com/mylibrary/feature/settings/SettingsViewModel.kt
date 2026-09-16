@@ -152,6 +152,9 @@ internal fun ReaderSettings.updatedBy(intent: SettingsIntent): ReaderSettings = 
     is SettingsIntent.PageSnappingToggled -> copy(pageSnapping = intent.enabled)
     is SettingsIntent.ReflowModeChanged -> copy(reflowMode = intent.mode)
     is SettingsIntent.TapToTurnToggled -> copy(tapToTurnPages = intent.enabled)
+    is SettingsIntent.PageTurnEffectChanged -> copy(pageTurnEffect = intent.effect)
+    is SettingsIntent.BubbleZoomToggled -> copy(bubbleZoom = intent.enabled)
+    is SettingsIntent.UiFontChanged -> copy(uiFont = intent.font)
     SettingsIntent.ResetToDefaults -> ReaderSettings.Default
 }
 
@@ -178,6 +181,9 @@ internal suspend fun UpdateSettingsUseCase.persist(intent: SettingsIntent): Unit
     is SettingsIntent.PageSnappingToggled -> setPageSnapping(intent.enabled)
     is SettingsIntent.ReflowModeChanged -> setReflowMode(intent.mode)
     is SettingsIntent.TapToTurnToggled -> setTapToTurnPages(intent.enabled)
+    is SettingsIntent.PageTurnEffectChanged -> setPageTurnEffect(intent.effect)
+    is SettingsIntent.BubbleZoomToggled -> setBubbleZoom(intent.enabled)
+    is SettingsIntent.UiFontChanged -> setUiFont(intent.font)
     SettingsIntent.ResetToDefaults -> resetToDefaults()
 }
 

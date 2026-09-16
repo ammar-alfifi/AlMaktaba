@@ -66,6 +66,7 @@ class SettingsDataStore @Inject constructor(
         this[Keys.THEME_MODE] = settings.themeMode.name
         this[Keys.DYNAMIC_COLOR] = settings.dynamicColor
         this[Keys.LANGUAGE] = settings.language.name
+        this[Keys.UI_FONT] = settings.uiFont.name
         this[Keys.VIEW_MODE] = settings.viewMode.name
         this[Keys.LIBRARY_SORT] = settings.librarySort.name
         this[Keys.READER_FONT] = settings.readerFont.name
@@ -78,6 +79,8 @@ class SettingsDataStore @Inject constructor(
         this[Keys.PAGE_SNAPPING] = settings.pageSnapping
         this[Keys.REFLOW_MODE] = settings.reflowMode.name
         this[Keys.TAP_TO_TURN_PAGES] = settings.tapToTurnPages
+        this[Keys.PAGE_TURN_EFFECT] = settings.pageTurnEffect.name
+        this[Keys.BUBBLE_ZOOM] = settings.bubbleZoom
     }
 
 }
@@ -93,6 +96,7 @@ private object Keys {
     val THEME_MODE = stringPreferencesKey("theme_mode")
     val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
     val LANGUAGE = stringPreferencesKey("language")
+    val UI_FONT = stringPreferencesKey("ui_font")
     val VIEW_MODE = stringPreferencesKey("view_mode")
     val LIBRARY_SORT = stringPreferencesKey("library_sort")
     val READER_FONT = stringPreferencesKey("reader_font")
@@ -105,6 +109,8 @@ private object Keys {
     val PAGE_SNAPPING = booleanPreferencesKey("page_snapping")
     val REFLOW_MODE = stringPreferencesKey("reflow_mode")
     val TAP_TO_TURN_PAGES = booleanPreferencesKey("tap_to_turn_pages")
+    val PAGE_TURN_EFFECT = stringPreferencesKey("page_turn_effect")
+    val BUBBLE_ZOOM = booleanPreferencesKey("bubble_zoom")
 }
 
 /**
@@ -119,6 +125,7 @@ private fun ReaderSettings.Companion.fromPreferences(preferences: Preferences): 
         themeMode = preferences[Keys.THEME_MODE].toEnum(defaults.themeMode),
         dynamicColor = preferences[Keys.DYNAMIC_COLOR] ?: defaults.dynamicColor,
         language = preferences[Keys.LANGUAGE].toEnum(defaults.language),
+        uiFont = preferences[Keys.UI_FONT].toEnum(defaults.uiFont),
         viewMode = preferences[Keys.VIEW_MODE].toEnum(defaults.viewMode),
         librarySort = preferences[Keys.LIBRARY_SORT].toEnum(defaults.librarySort),
         readerFont = preferences[Keys.READER_FONT].toEnum(defaults.readerFont),
@@ -132,6 +139,8 @@ private fun ReaderSettings.Companion.fromPreferences(preferences: Preferences): 
         pageSnapping = preferences[Keys.PAGE_SNAPPING] ?: defaults.pageSnapping,
         reflowMode = preferences[Keys.REFLOW_MODE].toEnum(defaults.reflowMode),
         tapToTurnPages = preferences[Keys.TAP_TO_TURN_PAGES] ?: defaults.tapToTurnPages,
+        pageTurnEffect = preferences[Keys.PAGE_TURN_EFFECT].toEnum(defaults.pageTurnEffect),
+        bubbleZoom = preferences[Keys.BUBBLE_ZOOM] ?: defaults.bubbleZoom,
     )
 }
 

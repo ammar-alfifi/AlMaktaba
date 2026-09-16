@@ -3,6 +3,7 @@ package com.mylibrary.feature.settings
 import com.mylibrary.core.domain.model.AppLanguage
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.PageFitMode
+import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
@@ -301,6 +302,8 @@ class ResetReaderDefaultsTest {
         pageSnapping = false,
         reflowMode = ReflowMode.PAGED,
         tapToTurnPages = false,
+        pageTurnEffect = PageTurnEffect.FADE,
+        bubbleZoom = false,
     )
 
     private fun afterReset(): ReaderSettings = runBlocking {
@@ -324,6 +327,8 @@ class ResetReaderDefaultsTest {
         assertEquals(defaults.pageSnapping, reset.pageSnapping)
         assertEquals(defaults.reflowMode, reset.reflowMode)
         assertEquals(defaults.tapToTurnPages, reset.tapToTurnPages)
+        assertEquals("the turn effect is a reading setting", defaults.pageTurnEffect, reset.pageTurnEffect)
+        assertEquals("bubble zoom is a reading setting", defaults.bubbleZoom, reset.bubbleZoom)
     }
 
     /** The half of the rule that is easy to lose, and the reason this reset exists separately. */

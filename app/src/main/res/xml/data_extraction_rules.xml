@@ -1,11 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  What cloud backup and device-to-device transfer copy, for API 31 and above.
+
+  The same two rules as `backup_rules.xml`, stated for the newer format: the reader's own file cache
+  is left out, and so is the database's write-ahead log, which is a half-finished transaction rather
+  than data. The platform never copies `cacheDir`, so the cover images and extracted archives in it
+  need no rule here — and cannot have one, because `cache` is not a domain a rule accepts.
+-->
 <data-extraction-rules>
     <cloud-backup>
-        <exclude domain="cache" path="." />
         <exclude domain="file" path="reader_cache" />
+        <exclude domain="database" path="mylibrary.db-wal" />
+        <exclude domain="database" path="mylibrary.db-shm" />
     </cloud-backup>
     <device-transfer>
-        <exclude domain="cache" path="." />
         <exclude domain="file" path="reader_cache" />
+        <exclude domain="database" path="mylibrary.db-wal" />
+        <exclude domain="database" path="mylibrary.db-shm" />
     </device-transfer>
 </data-extraction-rules>

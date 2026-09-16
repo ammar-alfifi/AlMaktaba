@@ -1,16 +1,23 @@
 package com.mylibrary.core.domain
 
 import com.mylibrary.core.common.AppResult
+import com.mylibrary.core.domain.engine.FolderEntry
+import com.mylibrary.core.domain.engine.FolderScan
+import com.mylibrary.core.domain.engine.FolderScanner
 import com.mylibrary.core.domain.model.Book
 import com.mylibrary.core.domain.model.BookFormat
 import com.mylibrary.core.domain.model.Bookmark
+import com.mylibrary.core.domain.model.Folder
+import com.mylibrary.core.domain.model.FolderSummary
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.ReadingPosition
 import com.mylibrary.core.domain.repository.BookmarkRepository
+import com.mylibrary.core.domain.repository.FolderRepository
 import com.mylibrary.core.domain.repository.LibraryRepository
 import com.mylibrary.core.domain.repository.ReadingProgressRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 /**
@@ -172,3 +179,120 @@ class FakeDocumentRepository(
 
     override fun supportsFormat(format: BookFormat): Boolean = format in supportedFormats
 }
+
+/**
+ * A folder store and a folder scanner, in memory.
+ *
+ * The scanner's fake is the more interesting of the two: it is where "what is in this folder" is
+ * decided, so a test can say *the file was deleted between scans* or *the grant was revoked* by
+ * changing one list, with no Android and no file system involved.
+ */
+/**
+ * A folder store over the same in-memory library the books live in.
+ *
+ * Membership is read from the *books*, not kept in a map of its own, because that is where the real
+ * database keeps it: `books.folderId` is the association, and a fake with its own copy could agree
+ * with the code under test while disagreeing with the schema.
+ */
+class FakeFolderRepository(
+    private val library: FakeLibraryRepository = FakeLibraryRepository(),
+) : FolderRepository {
+    val folders = MutableStateFlow<List<Folder>>(emptyList())
+    var nextId = 1L
+    val assignments = mutableListOf<Pair<List<Long>, Long?>>()
+
+    private fun idsIn(folderId: Long): List<Long> =
+        library.books.value.filter { it.folderId == folderId }.map { it.id }
+
+    override fun observeFolders(): Flow<List<FolderSummary>> =
+        combine(folders, library.books) { list, books ->
+            list.sortedBy { it.name }.map { folder ->
+                FolderSummary(folder = folder, bookCount = books.count { it.folderId == folder.id })
+            }
+        }
+
+    override fun observeFolder(folderId: Long): Flow<Folder?> =
+        folders.map { list -> list.firstOrNull { it.id == folderId } }
+
+    override suspend fun getFolder(folderId: Long): Folder? =
+        folders.value.firstOrNull { it.id == folderId }
+
+    override suspend fun findFolderByUri(uri: String): Folder? =
+        folders.value.firstOrNull { it.uri == uri }
+
+    override suspend fun saveFolder(folder: Folder): Long {
+        val existing = folder.uri.let { uri -> folders.value.firstOrNull { it.uri == uri } }
+        return if (existing != null) {
+            existing.id
+        } else {
+            val id = nextId++
+            folders.value = folders.value + folder.copy(id = id)
+            id
+        }
+    }
+
+    override suspend fun renameFolder(folderId: Long, name: String) {
+        folders.value = folders.value.map { if (it.id == folderId) it.copy(name = name) else it }
+    }
+
+    override suspend fun markScanned(folderId: Long, scannedAt: Long) {
+        folders.value = folders.value.map {
+            if (it.id == folderId) it.copy(lastScannedAt = scannedAt) else it
+        }
+    }
+
+    override suspend fun deleteFolder(folderId: Long) {
+        // The real implementation clears the association and deletes the row in one transaction;
+        // here the books are un-filed first, so a test can assert the reader kept their library.
+        assignBooks(idsIn(folderId), folderId = null)
+        folders.value = folders.value.filterNot { it.id == folderId }
+    }
+
+    override suspend fun assignBooks(bookIds: List<Long>, folderId: Long?) {
+        assignments += bookIds to folderId
+        library.books.value = library.books.value.map { book ->
+            if (book.id in bookIds) book.copy(folderId = folderId) else book
+        }
+    }
+
+    override suspend fun bookIdsInFolder(folderId: Long): List<Long> = idsIn(folderId)
+}
+
+class FakeFolderScanner(
+    /** The entries each tree URI currently holds, so a test can add or remove files between scans. */
+    val contents: MutableMap<String, MutableList<FolderEntry>> = mutableMapOf(),
+) : FolderScanner {
+    var permissionGranted = true
+    val released = mutableListOf<String>()
+    var scanCount = 0
+    var failDirectories = 0
+    var truncate = false
+
+    override fun takePermission(treeUri: String): Boolean = permissionGranted
+
+    override fun releasePermission(treeUri: String) {
+        released += treeUri
+    }
+
+    override fun hasPermission(treeUri: String): Boolean = permissionGranted
+
+    override fun displayName(treeUri: String): String? = treeUri.substringAfterLast('/')
+
+    override suspend fun scan(treeUri: String): FolderScan {
+        scanCount++
+        return FolderScan(
+            entries = contents[treeUri].orEmpty().toList(),
+            truncated = truncate,
+            failedDirectories = failDirectories,
+        )
+    }
+}
+
+/** A folder entry for a supported format, which is what a test almost always needs. */
+fun folderEntry(path: String, extension: String = "epub") = FolderEntry(
+    uri = "content://tree/$path",
+    displayName = path.substringAfterLast('/'),
+    mimeType = null,
+    sizeBytes = 1024,
+    relativePath = path,
+)

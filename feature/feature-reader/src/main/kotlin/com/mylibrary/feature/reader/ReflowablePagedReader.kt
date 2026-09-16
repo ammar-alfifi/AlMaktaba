@@ -28,6 +28,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -224,6 +226,19 @@ fun ReflowablePagedContent(
                         viewModel = viewModel,
                         state = state,
                         isLastPage = pageIndex == pages.lastIndex,
+                        // The same turn effect as the fixed-page reader, driven by the same value, so
+                        // a text file split into pages and a comic turn alike — which is the whole
+                        // reason the reader has one toolbar and one set of gestures for five formats.
+                        turnModifier = Modifier.graphicsLayer {
+                            val offset = pagerState.getOffsetDistanceInPages(pageIndex)
+                            val turn = pageTurnTransform(offset, currentSettings.pageTurnEffect, isRtl)
+                            scaleX = turn.scale
+                            scaleY = turn.scale
+                            alpha = turn.alpha
+                            rotationY = turn.rotationY
+                            transformOrigin = TransformOrigin(pageTurnPivotX(offset, isRtl), 0.5f)
+                            cameraDistance = PAGE_TURN_CAMERA_DISTANCE * density.density
+                        },
                     )
                 }
             }
@@ -239,9 +254,10 @@ private fun PageContent(
     viewModel: ReaderViewModel,
     state: ReaderUiState,
     isLastPage: Boolean,
+    turnModifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = Modifier
+        modifier = turnModifier
             .fillMaxSize()
             // A safety valve rather than a feature: an image taller than the page is placed anyway
             // because the alternative is a page with nothing on it, and this is what lets a reader
@@ -375,3 +391,6 @@ private val PAGE_TOP_MARGIN = 24.dp
 private val PAGE_BOTTOM_MARGIN = 24.dp
 private val PAGE_BLOCK_SPACING = 10.dp
 private val PAGE_SPACING = 8.dp
+
+/** Camera distance for the page-turn rotation, matching the fixed-page reader's. */
+private const val PAGE_TURN_CAMERA_DISTANCE = 14f

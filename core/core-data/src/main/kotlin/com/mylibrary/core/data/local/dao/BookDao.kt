@@ -110,4 +110,25 @@ interface BookDao {
 
     @Query("DELETE FROM books WHERE id IN (:bookIds)")
     suspend fun deleteByIds(bookIds: List<Long>)
+
+    /** Files books under a folder, or clears their folder when [folderId] is `null`. */
+    @Query("UPDATE books SET folderId = :folderId WHERE id IN (:bookIds)")
+    suspend fun assignFolder(bookIds: List<Long>, folderId: Long?)
+
+    /** Un-files every book in a folder, used when the folder itself is removed. */
+    @Query("UPDATE books SET folderId = NULL WHERE folderId = :folderId")
+    suspend fun clearFolder(folderId: Long)
+
+    @Query("SELECT id FROM books WHERE folderId = :folderId")
+    suspend fun idsInFolder(folderId: Long): List<Long>
+
+    /**
+     * The folder of every filed book, for counting how many each holds.
+     *
+     * A column of ids rather than `COUNT(*) GROUP BY`, because the count has to stay live as books
+     * are imported, deleted or moved: a `Flow` over the column re-emits on any of those, and the
+     * tally is a `groupingBy` in the repository rather than a second query to keep in step.
+     */
+    @Query("SELECT folderId FROM books WHERE folderId IS NOT NULL")
+    fun observeAllFolderIds(): Flow<List<Long>>
 }

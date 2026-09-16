@@ -22,8 +22,45 @@ enum class AppLanguage(val languageTag: String?) {
     }
 }
 
-/** Font family used for reflowable text. */
-enum class ReaderFont { SYSTEM, SERIF, SANS_SERIF, MONOSPACE }
+/**
+ * Font family used for reflowable text.
+ *
+ * The first four are the platform's own families, resolved by Android to Noto Naskh Arabic / Noto
+ * Sans Arabic for Arabic text and Roboto for Latin. The last three are Arabic faces **bundled with
+ * the app** (`:core:core-ui`'s `res/font`), which is a deliberate change of policy: the system
+ * families are competent but generic, differ from device to device, and give a reader no way to
+ * change the *voice* of a book. A bundled face renders identically everywhere and can be relied on
+ * to exist, which is what makes it worth its size in the APK.
+ *
+ * Entries are only ever appended. The choice is persisted by name, so inserting one in the middle
+ * would not corrupt anything — but appending keeps the picker's order stable for users who have
+ * already learned it.
+ */
+enum class ReaderFont {
+    SYSTEM,
+    SERIF,
+    SANS_SERIF,
+    MONOSPACE,
+
+    /** Amiri — a Naskh revival in the tradition of Bulaq press types. The reading face. */
+    AMIRI,
+
+    /** IBM Plex Sans Arabic — a contemporary, unornamented sans. */
+    PLEX_ARABIC,
+
+    /** Reem Kufi — a geometric Kufic, for headings and for setting a book's title apart. */
+    REEM_KUFI,
+}
+
+/**
+ * The typeface the app's *own* interface is set in.
+ *
+ * Separate from [ReaderFont] rather than reusing it, because the two answer different questions.
+ * `ReaderFont` chooses how a *document* is set, which is why it offers serif, sans and monospace —
+ * distinctions that belong to typography for reading. This one chooses how MyLibrary looks, where
+ * the only real decision is which Arabic face the interface speaks in.
+ */
+enum class AppFont { SYSTEM, AMIRI, PLEX_ARABIC, REEM_KUFI }
 
 /**
  * How a reflowable document — an EPUB or a plain-text file — is presented.
@@ -48,6 +85,30 @@ enum class PageFitMode {
 
     /** No scaling: one page pixel per screen pixel. */
     ACTUAL_SIZE,
+}
+
+/**
+ * How a page is animated as it is turned.
+ *
+ * Three effects rather than a gallery of them. These are the three a reader actually chooses
+ * between — the feel of paper, the feel of a swipe, and a minimum of movement — and every one of
+ * them is driven by the finger's own position rather than played after the fact, which is what
+ * makes a turn feel connected to the gesture instead of merely following it.
+ */
+enum class PageTurnEffect {
+    /**
+     * The page swings away about its binding edge under a moving shadow, revealing the next.
+     *
+     * The default: it is the only one of the three that says *where* the page went, which is the
+     * thing a reader glancing up mid-gesture needs to know.
+     */
+    CURL,
+
+    /** The page slides aside with a slight lift and the next comes forward from behind it. */
+    SLIDE,
+
+    /** The page fades out as the next fades in, with almost no movement. */
+    FADE,
 }
 
 /**
@@ -81,6 +142,8 @@ data class ReaderSettings(
     /** Use the Android 12+ wallpaper-derived palette. Ignored below API 31 and when disabled. */
     val dynamicColor: Boolean = true,
     val language: AppLanguage = AppLanguage.ARABIC,
+    /** The face the app's own interface is set in. Bundled faces only — see [AppFont]. */
+    val uiFont: AppFont = AppFont.SYSTEM,
     val viewMode: ViewMode = ViewMode.GRID,
     val librarySort: LibrarySort = LibrarySort.RECENTLY_ADDED,
 
@@ -117,6 +180,22 @@ data class ReaderSettings(
      * the reason tap-to-turn is not baked in.
      */
     val tapToTurnPages: Boolean = true,
+
+    /** How a page is animated as it is turned. See [PageTurnEffect]. */
+    val pageTurnEffect: PageTurnEffect = PageTurnEffect.CURL,
+
+    /**
+     * Whether a double-tap zooms into the speech bubble or panel under the finger.
+     *
+     * On by default, and only meaningful for documents made of page images — a comic, a manga, a
+     * scanned PDF. It is the gesture that makes a phone a workable way to read a page that was
+     * drawn for print: a bubble of dialogue is a few millimetres wide on a phone, and pinching to
+     * read one line loses the panel it belongs to.
+     *
+     * Off restores the plain zoom, which is what a reader who wants to inspect artwork rather than
+     * read dialogue would rather have.
+     */
+    val bubbleZoom: Boolean = true,
 ) {
     companion object {
         val Default = ReaderSettings()

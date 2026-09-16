@@ -60,4 +60,40 @@
     <string name="lib_details_cd_favorite">إضافة إلى المفضلة</string>
     <string name="lib_page_number">صفحة %1$d</string>
     <string name="lib_chapter_number">الفصل %1$d</string>
+
+    <!-- Folders: a device directory the user granted access to, so a series stays together -->
+    <string name="lib_import_files">إضافة ملفات</string>
+    <string name="lib_import_folder">إضافة مجلد من الجهاز</string>
+    <string name="lib_folder_all">كل الكتب</string>
+    <string name="lib_folders_title">مجلداتك</string>
+    <string name="lib_folders_manage">المجلدات</string>
+    <string name="lib_folder_book_count">%1$d كتاب</string>
+    <string name="lib_folder_cd">خيارات المجلد</string>
+    <string name="lib_folder_menu_rescan">إعادة الفحص</string>
+    <string name="lib_folder_menu_rename">إعادة تسمية</string>
+    <string name="lib_folder_menu_delete">حذف المجلد</string>
+    <string name="lib_folder_unavailable">غير متاح</string>
+    <string name="lib_folder_unavailable_message">تعذّر الوصول إلى هذا المجلد. أضفه مرة أخرى من زر الإضافة لمنح الوصول.</string>
+    <string name="lib_folder_move">نقل إلى مجلد…</string>
+    <string name="lib_folder_move_title">نقل «%1$s»</string>
+    <string name="lib_folder_move_none">بدون مجلد</string>
+    <string name="lib_folder_rename_title">إعادة تسمية المجلد</string>
+    <string name="lib_folder_rename_label">اسم المجلد</string>
+    <string name="lib_folder_delete_title">حذف المجلد؟</string>
+    <string name="lib_folder_delete_message">سيُزال «%1$s» من مكتبتك، و%2$d كتاباً من كتبه ستبقى في مكتبتك بدون مجلد. مواضع القراءة والإشارات المرجعية لن تُمس.</string>
+    <string name="lib_folder_delete_contents">حذف كتب هذا المجلد أيضاً</string>
+    <string name="lib_folder_deleted">تم حذف المجلد</string>
+    <string name="lib_folder_renamed">تمت إعادة تسمية المجلد</string>
+    <string name="lib_folder_importing">جارٍ الاستيراد من «%1$s»…</string>
+    <string name="lib_folder_imported">أُضيف %1$d من «%2$s»</string>
+    <string name="lib_folder_imported_with_skipped">أُضيف %1$d من «%2$s»، و%3$d موجودة مسبقاً، و%4$d غير مدعومة</string>
+    <string name="lib_folder_imported_all_present">كل ملفات «%1$s» موجودة في مكتبتك</string>
+    <string name="lib_folder_imported_nothing">لم يُعثر على ملفات مدعومة في هذا المجلد</string>
+    <string name="lib_folder_rescanned">أُضيف %1$d من «%2$s»</string>
+    <string name="lib_folder_rescanned_missing">أُضيف %1$d، و%2$d لم تعد موجودة على الجهاز</string>
+    <string name="lib_folder_rescan_all_present">لا جديد في «%1$s»</string>
+    <string name="lib_folder_scan_truncated">المجلد كبير جداً؛ توقف الفحص عند %1$d ملف</string>
+    <string name="lib_folder_permission_lost">تعذّر الوصول إلى المجلد. أضفه مرة أخرى لمنح الوصول.</string>
+    <string name="lib_book_moved">نُقل الكتاب إلى «%1$s»</string>
+    <string name="lib_book_unfiled">أُزيل الكتاب من مجلده</string>
 </resources>

@@ -6,6 +6,7 @@
 -->
 <resources>
     <!-- Section headers -->
+    <string name="settings_title">Settings</string>
     <string name="settings_section_appearance">Appearance</string>
     <string name="settings_section_language">Language</string>
     <string name="settings_section_library">Library</string>
@@ -19,6 +20,7 @@
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_dynamic_color">Dynamic colour</string>
     <string name="settings_dynamic_color_summary">Match the app\'s colours to the device wallpaper (Android 12 and later).</string>
+    <string name="settings_ui_font">Interface font</string>
 
     <!-- Language -->
     <string name="settings_language">App language</string>
@@ -61,6 +63,12 @@
     <string name="settings_show_progress_summary">Show the page number or percentage while reading.</string>
     <string name="settings_page_snapping">Snap to pages</string>
     <string name="settings_page_snapping_summary">Advance one page at a time instead of scrolling continuously.</string>
+    <string name="settings_page_turn_effect">Page turn effect</string>
+    <string name="settings_page_turn_curl">Page curl</string>
+    <string name="settings_page_turn_slide">Slide</string>
+    <string name="settings_page_turn_fade">Fade</string>
+    <string name="settings_bubble_zoom">Zoom into speech bubbles</string>
+    <string name="settings_bubble_zoom_summary">A double-tap on a speech bubble or panel in a comic zooms into it.</string>
     <string name="settings_reflow_mode">Text layout</string>
     <string name="settings_reflow_scroll">Scroll</string>
     <string name="settings_reflow_paged">Pages</string>

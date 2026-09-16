@@ -2,10 +2,12 @@ package com.mylibrary.core.data.local
 
 import com.mylibrary.core.data.local.entity.BookEntity
 import com.mylibrary.core.data.local.entity.BookmarkEntity
+import com.mylibrary.core.data.local.entity.FolderEntity
 import com.mylibrary.core.data.local.entity.ReadingPositionEntity
 import com.mylibrary.core.domain.model.Book
 import com.mylibrary.core.domain.model.BookFormat
 import com.mylibrary.core.domain.model.Bookmark
+import com.mylibrary.core.domain.model.Folder
 import com.mylibrary.core.domain.model.ReadingLocator
 import com.mylibrary.core.domain.model.ReadingPosition
 
@@ -36,6 +38,7 @@ internal fun BookEntity.toDomain(): Book = Book(
     isFavorite = isFavorite,
     addedAt = addedAt,
     lastOpenedAt = lastOpenedAt,
+    folderId = folderId,
 )
 
 internal fun Book.toEntity(): BookEntity = BookEntity(
@@ -51,6 +54,23 @@ internal fun Book.toEntity(): BookEntity = BookEntity(
     isFavorite = isFavorite,
     addedAt = addedAt,
     lastOpenedAt = lastOpenedAt,
+    folderId = folderId,
+)
+
+internal fun FolderEntity.toDomain(): Folder = Folder(
+    id = id,
+    uri = uri,
+    name = name,
+    addedAt = addedAt,
+    lastScannedAt = lastScannedAt,
+)
+
+internal fun Folder.toEntity(): FolderEntity = FolderEntity(
+    id = id,
+    uri = uri,
+    name = name,
+    addedAt = addedAt,
+    lastScannedAt = lastScannedAt,
 )
 
 internal fun ReadingPositionEntity.toDomain(): ReadingPosition = ReadingPosition(

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -68,6 +69,7 @@ import com.mylibrary.core.ui.component.ErrorState
 import com.mylibrary.core.ui.component.FeatureScaffold
 import com.mylibrary.core.ui.component.LoadingState
 import com.mylibrary.core.ui.mvi.ObserveEffects
+import com.mylibrary.core.ui.theme.Spacing
 import kotlinx.coroutines.launch
 
 /**
@@ -262,6 +264,12 @@ private fun SearchOptions(
                         text = stringResource(R.string.search_scanning),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        // Weighted and ellipsised: the chip beside it sizes itself to its label,
+                        // and in English "Search inside books" plus this phrase overflows a phone
+                        // — which pushed the spinner off the row rather than shortening anything.
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
@@ -363,6 +371,8 @@ private fun NothingTypedYet(
                     text = stringResource(R.string.search_recent_title),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
                 TextButton(onClick = { onIntent(SearchIntent.ClearRecentQueries) }) {
@@ -429,8 +439,11 @@ private fun ResultsList(
     }
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp),
+        // `imePadding` because the search field sits above this list: without it the keyboard
+        // covers the bottom of the results — which is where the newest ones are — and the list
+        // cannot be scrolled clear of it.
+        modifier = modifier.fillMaxSize().imePadding(),
+        contentPadding = PaddingValues(bottom = Spacing.XLarge),
     ) {
         if (state.isSearching) {
             // Results are on screen but the scan is not finished, so the list keeps growing.

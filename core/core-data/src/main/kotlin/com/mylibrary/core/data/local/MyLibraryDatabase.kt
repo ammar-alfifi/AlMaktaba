@@ -4,18 +4,22 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.mylibrary.core.data.local.dao.BookDao
 import com.mylibrary.core.data.local.dao.BookmarkDao
+import com.mylibrary.core.data.local.dao.FolderDao
 import com.mylibrary.core.data.local.dao.ReadingPositionDao
 import com.mylibrary.core.data.local.entity.BookEntity
 import com.mylibrary.core.data.local.entity.BookmarkEntity
+import com.mylibrary.core.data.local.entity.FolderEntity
 import com.mylibrary.core.data.local.entity.ReadingPositionEntity
 
 /**
  * MyLibrary's local store.
  *
- * Version 1 is the initial schema. From here on, any change to an entity requires a bumped version
- * and a [androidx.room.migration.Migration]: the library is the user's own data and silently
- * dropping it on upgrade is not an acceptable failure mode. Schemas are exported to the module's
- * `schemas/` directory so migrations can be tested against a real previous version.
+ * Version 2 added device folders — a `folders` table and a nullable `books.folderId`. Every change
+ * to an entity from here on requires a bumped version and a [androidx.room.migration.Migration]: the
+ * library is the user's own data and silently dropping it on upgrade is not an acceptable failure
+ * mode. Schemas are exported to the module's `schemas/` directory, so a migration can be tested
+ * against a real previous version — and Room validates the result on open, so a migration that does
+ * not reproduce the generated schema fails loudly rather than quietly drifting.
  *
  * There are no `@TypeConverters`: every column is a primitive or a `String`. Enums are stored by
  * name and the reading locator is flattened into columns — both are deliberate, and both mean a
@@ -26,8 +30,9 @@ import com.mylibrary.core.data.local.entity.ReadingPositionEntity
         BookEntity::class,
         ReadingPositionEntity::class,
         BookmarkEntity::class,
+        FolderEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class MyLibraryDatabase : RoomDatabase() {
@@ -37,6 +42,8 @@ abstract class MyLibraryDatabase : RoomDatabase() {
     abstract fun readingPositionDao(): ReadingPositionDao
 
     abstract fun bookmarkDao(): BookmarkDao
+
+    abstract fun folderDao(): FolderDao
 
     companion object {
         const val NAME = "mylibrary.db"

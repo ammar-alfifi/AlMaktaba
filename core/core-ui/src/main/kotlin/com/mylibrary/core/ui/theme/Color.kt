@@ -66,10 +66,15 @@ internal val LightColors = lightColorScheme(
     surfaceDim = Color(0xFFD5DBD8),
     surfaceBright = Color(0xFFF5FBF8),
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFEFF5F2),
-    surfaceContainer = Color(0xFFE9EFEC),
-    surfaceContainerHigh = Color(0xFFE4EAE7),
-    surfaceContainerHighest = Color(0xFFDEE4E1),
+    // The container steps are deliberately deeper than Material 3's baseline. A filled card is
+    // drawn on `surfaceContainerHighest`, and against a background only a shade away from white the
+    // baseline step is nearly invisible: the settings screen read as one flat page with lines of
+    // text on it rather than as a stack of cards. Deepening each step keeps the *ordering* Material
+    // defines while making the separation visible, which is the whole job of these five roles.
+    surfaceContainerLow = Color(0xFFEDF4F0),
+    surfaceContainer = Color(0xFFE5EDE9),
+    surfaceContainerHigh = Color(0xFFDDE6E2),
+    surfaceContainerHighest = Color(0xFFD4DFDA),
 )
 
 // --- Dark ----------------------------------------------------------------

@@ -2,9 +2,11 @@ package com.mylibrary.feature.settings
 
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
+import com.mylibrary.core.domain.model.AppFont
 import com.mylibrary.core.domain.model.AppLanguage
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.PageFitMode
+import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
@@ -79,6 +81,12 @@ sealed interface SettingsIntent {
     data class ReflowModeChanged(val mode: ReflowMode) : SettingsIntent
 
     data class TapToTurnToggled(val enabled: Boolean) : SettingsIntent
+
+    data class PageTurnEffectChanged(val effect: PageTurnEffect) : SettingsIntent
+
+    data class BubbleZoomToggled(val enabled: Boolean) : SettingsIntent
+
+    data class UiFontChanged(val font: AppFont) : SettingsIntent
 
     data object ResetToDefaults : SettingsIntent
 }

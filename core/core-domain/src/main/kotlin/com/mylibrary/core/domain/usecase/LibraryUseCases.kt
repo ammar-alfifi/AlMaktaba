@@ -35,6 +35,7 @@ class ObserveLibraryUseCase @Inject constructor(
         query: String = "",
         favoritesOnly: Boolean = false,
         formats: Set<BookFormat> = emptySet(),
+        folderId: Long? = null,
     ): Flow<List<LibraryItem>> =
         combine(
             libraryRepository.observeBooks(sort, query),
@@ -44,6 +45,9 @@ class ObserveLibraryUseCase @Inject constructor(
             books.asSequence()
                 .filter { !favoritesOnly || it.isFavorite }
                 .filter { formats.isEmpty() || it.format in formats }
+                // Filtered here rather than in SQL, exactly like the two filters above: a change to
+                // either stream re-emits immediately, and the query above already carries the column.
+                .filter { folderId == null || it.folderId == folderId }
                 .map { book -> LibraryItem(book, progressByBook[book.id]) }
                 .toList()
         }
@@ -87,6 +91,8 @@ data class ImportCandidate(
     val displayName: String,
     val mimeType: String?,
     val sizeBytes: Long,
+    /** The folder this file came from, when it was found by scanning one rather than picked. */
+    val folderId: Long? = null,
 )
 
 /** What an import actually did, so the UI can report it honestly. */
@@ -127,7 +133,15 @@ class ImportBooksUseCase @Inject constructor(
                     unsupported++
                     continue
                 }
-                if (libraryRepository.findBookByUri(candidate.uri) != null) {
+                val existing = libraryRepository.findBookByUri(candidate.uri)
+                if (existing != null) {
+                    // A book the reader already had, now found inside a folder they just added: it is
+                    // filed under that folder rather than left out of it. Without this, importing a
+                    // series the reader had partly collected by hand leaves the shelf visibly missing
+                    // the volumes they already owned.
+                    if (candidate.folderId != null && existing.folderId == null) {
+                        libraryRepository.updateBook(existing.copy(folderId = candidate.folderId))
+                    }
                     already++
                     continue
                 }
@@ -137,6 +151,7 @@ class ImportBooksUseCase @Inject constructor(
                     uri = candidate.uri,
                     format = format,
                     sizeBytes = candidate.sizeBytes,
+                    folderId = candidate.folderId,
                 )
 
                 val metadata = documentRepository.readMetadata(placeholder).getOrNull()

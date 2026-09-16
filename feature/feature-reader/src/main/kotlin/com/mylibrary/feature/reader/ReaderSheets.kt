@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,9 +26,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -42,18 +40,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.mylibrary.core.domain.model.PageFitMode
+import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReadingLocator
 import com.mylibrary.core.domain.model.ReflowMode
 import com.mylibrary.core.domain.model.SearchHit
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.TocEntry
+import com.mylibrary.core.ui.component.ChoiceRow
 import com.mylibrary.core.ui.component.EmptyState
+import com.mylibrary.core.ui.theme.Spacing
+import com.mylibrary.core.ui.theme.readerFontFamily
 
 /**
  * The four panels that slide over the page, plus the password prompt.
@@ -211,61 +214,52 @@ private fun ReaderSettingsPanel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .padding(bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(horizontal = Spacing.XLarge)
+            .padding(bottom = Spacing.Huge),
+        verticalArrangement = Arrangement.spacedBy(Spacing.Large),
     ) {
-        Text(
-            text = stringResource(R.string.reader_settings_theme),
-            style = MaterialTheme.typography.titleSmall,
-        )
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            ThemeMode.entries.forEachIndexed { index, mode ->
-                SegmentedButton(
-                    selected = state.settings.themeMode == mode,
-                    onClick = { onIntent(ReaderIntent.SetThemeMode(mode)) },
-                    shape = SegmentedButtonDefaults.itemShape(index, ThemeMode.entries.size),
-                ) {
-                    Text(themeModeLabel(mode))
-                }
-            }
+        SettingGroup(title = stringResource(R.string.reader_settings_theme)) {
+            ChoiceRow(
+                options = ThemeMode.entries,
+                selected = state.settings.themeMode,
+                onSelect = { onIntent(ReaderIntent.SetThemeMode(it)) },
+                label = { mode -> Text(themeModeLabel(mode)) },
+            )
         }
 
         if (!state.isPaged) {
             HorizontalDivider()
 
-            Text(
-                text = stringResource(R.string.reader_settings_reflow),
-                style = MaterialTheme.typography.titleSmall,
-            )
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                ReflowMode.entries.forEachIndexed { index, mode ->
-                    SegmentedButton(
-                        selected = state.settings.reflowMode == mode,
-                        onClick = { onIntent(ReaderIntent.SetReflowMode(mode)) },
-                        shape = SegmentedButtonDefaults.itemShape(index, ReflowMode.entries.size),
-                    ) {
-                        Text(reflowModeLabel(mode))
-                    }
-                }
+            SettingGroup(title = stringResource(R.string.reader_settings_reflow)) {
+                ChoiceRow(
+                    options = ReflowMode.entries,
+                    selected = state.settings.reflowMode,
+                    onSelect = { onIntent(ReaderIntent.SetReflowMode(it)) },
+                    label = { mode -> Text(reflowModeLabel(mode)) },
+                )
             }
 
             HorizontalDivider()
 
-            Text(
-                text = stringResource(R.string.reader_settings_font),
-                style = MaterialTheme.typography.titleSmall,
-            )
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                ReaderFont.entries.forEachIndexed { index, font ->
-                    SegmentedButton(
-                        selected = state.settings.readerFont == font,
-                        onClick = { onIntent(ReaderIntent.SetFont(font)) },
-                        shape = SegmentedButtonDefaults.itemShape(index, ReaderFont.entries.size),
-                    ) {
-                        Text(readerFontLabel(font))
-                    }
-                }
+            SettingGroup(
+                title = stringResource(R.string.reader_settings_font),
+                // The font choice is the one control here whose options cannot explain themselves in
+                // words alone — the whole question is what the letters look like.
+                summary = stringResource(R.string.reader_settings_font_summary),
+            ) {
+                ChoiceRow(
+                    options = ReaderFont.entries,
+                    selected = state.settings.readerFont,
+                    onSelect = { onIntent(ReaderIntent.SetFont(it)) },
+                    label = { font ->
+                        // Drawn in the face it names. A font menu in the system font makes the
+                        // reader pick blind, which defeats the point of offering a choice.
+                        Text(
+                            text = readerFontLabel(font),
+                            style = TextStyle(fontFamily = readerFontFamily(font)),
+                        )
+                    },
+                )
             }
 
             LabelledSlider(
@@ -286,58 +280,111 @@ private fun ReaderSettingsPanel(
         } else {
             HorizontalDivider()
 
-            Text(
-                text = stringResource(R.string.reader_settings_page_fit),
-                style = MaterialTheme.typography.titleSmall,
-            )
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                PageFitMode.entries.forEachIndexed { index, mode ->
-                    SegmentedButton(
-                        selected = state.settings.pageFitMode == mode,
-                        onClick = { onIntent(ReaderIntent.SetPageFit(mode)) },
-                        shape = SegmentedButtonDefaults.itemShape(index, PageFitMode.entries.size),
-                    ) {
-                        Text(pageFitLabel(mode))
-                    }
-                }
+            SettingGroup(title = stringResource(R.string.reader_settings_page_fit)) {
+                ChoiceRow(
+                    options = PageFitMode.entries,
+                    selected = state.settings.pageFitMode,
+                    onSelect = { onIntent(ReaderIntent.SetPageFit(it)) },
+                    label = { mode -> Text(pageFitLabel(mode)) },
+                )
+            }
+
+            HorizontalDivider()
+
+            SettingGroup(
+                title = stringResource(R.string.reader_settings_page_turn),
+                summary = stringResource(R.string.reader_settings_page_turn_summary),
+            ) {
+                ChoiceRow(
+                    options = PageTurnEffect.entries,
+                    selected = state.settings.pageTurnEffect,
+                    onSelect = { onIntent(ReaderIntent.SetPageTurnEffect(it)) },
+                    label = { effect -> Text(pageTurnEffectLabel(effect)) },
+                )
+            }
+
+            HorizontalDivider()
+
+            SettingGroup(
+                title = stringResource(R.string.reader_settings_bubble_zoom),
+                summary = stringResource(R.string.reader_settings_bubble_zoom_summary),
+            ) {
+                Switch(
+                    checked = state.settings.bubbleZoom,
+                    onCheckedChange = { onIntent(ReaderIntent.SetBubbleZoom(it)) },
+                )
             }
         }
 
         HorizontalDivider()
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = stringResource(R.string.reader_settings_keep_awake),
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            Switch(
-                checked = state.settings.keepScreenOn,
-                onCheckedChange = { onIntent(ReaderIntent.SetKeepScreenOn(it)) },
-            )
-        }
+        SwitchSetting(
+            title = stringResource(R.string.reader_settings_keep_awake),
+            checked = state.settings.keepScreenOn,
+            onCheckedChange = { onIntent(ReaderIntent.SetKeepScreenOn(it)) },
+        )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = stringResource(R.string.reader_settings_tap_to_turn),
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            Switch(
-                checked = state.settings.tapToTurnPages,
-                onCheckedChange = { onIntent(ReaderIntent.SetTapToTurnPages(it)) },
-            )
-        }
+        SwitchSetting(
+            title = stringResource(R.string.reader_settings_tap_to_turn),
+            checked = state.settings.tapToTurnPages,
+            onCheckedChange = { onIntent(ReaderIntent.SetTapToTurnPages(it)) },
+        )
 
         HorizontalDivider()
 
         ResetReaderSettingsButton(onClick = { onIntent(ReaderIntent.RequestResetSettings) })
+    }
+}
+
+/**
+ * A labelled block of controls inside the settings sheet.
+ *
+ * One place that decides how a heading sits above its control, so the sheet's rows line up with each
+ * other instead of each one nudging itself into position. The summary is optional and sits between
+ * the two: a short line saying what the control does to the page, for the settings whose name is not
+ * enough — "Zoom into speech bubbles" is clear, *when* it applies is not.
+ */
+@Composable
+private fun SettingGroup(
+    title: String,
+    modifier: Modifier = Modifier,
+    summary: String? = null,
+    content: @Composable () -> Unit,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+        Text(text = title, style = MaterialTheme.typography.titleSmall)
+        if (summary != null) {
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        content()
+    }
+}
+
+/** A titled on/off control, laid out like every other row in the sheet. */
+@Composable
+private fun SwitchSetting(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            // Weighted so a long English label wraps within its own half rather than pushing the
+            // switch off the row.
+            modifier = Modifier.weight(1f),
+        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -426,7 +473,7 @@ private fun SearchPanel(
     state: ReaderUiState,
     onIntent: (ReaderIntent) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.XLarge)) {
         OutlinedTextField(
             value = state.searchQuery,
             onValueChange = { onIntent(ReaderIntent.SearchQueryChanged(it)) },
@@ -449,8 +496,10 @@ private fun SearchPanel(
             )
 
             state.searchResults.isNotEmpty() -> LazyColumn(
-                contentPadding = PaddingValues(vertical = 8.dp),
-                modifier = Modifier.heightIn(max = 400.dp),
+                contentPadding = PaddingValues(vertical = Spacing.Small),
+                // The sheet sits at the bottom of the screen and the field is the first thing in it,
+                // so the keyboard would otherwise cover every result.
+                modifier = Modifier.heightIn(max = 400.dp).imePadding(),
             ) {
                 items(items = state.searchResults, key = { hit -> "${hit.locator}:${hit.matchStart}" }) { hit ->
                     SearchResultRow(hit = hit, onClick = { onIntent(ReaderIntent.JumpTo(hit.locator)) })
@@ -570,6 +619,21 @@ private fun readerFontLabel(font: ReaderFont): String = stringResource(
         ReaderFont.SERIF -> R.string.reader_font_serif
         ReaderFont.SANS_SERIF -> R.string.reader_font_sans
         ReaderFont.MONOSPACE -> R.string.reader_font_mono
+
+        // The bundled Arabic faces are named once, in `:core:core-ui`, and shared with the app's own
+        // interface-font setting: the same three names are offered in both places.
+        ReaderFont.AMIRI -> com.mylibrary.core.ui.R.string.ui_font_amiri
+        ReaderFont.PLEX_ARABIC -> com.mylibrary.core.ui.R.string.ui_font_plex_arabic
+        ReaderFont.REEM_KUFI -> com.mylibrary.core.ui.R.string.ui_font_reem_kufi
+    },
+)
+
+@Composable
+private fun pageTurnEffectLabel(effect: PageTurnEffect): String = stringResource(
+    when (effect) {
+        PageTurnEffect.CURL -> R.string.reader_page_turn_curl
+        PageTurnEffect.SLIDE -> R.string.reader_page_turn_slide
+        PageTurnEffect.FADE -> R.string.reader_page_turn_fade
     },
 )
 

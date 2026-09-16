@@ -23,6 +23,7 @@ import androidx.room.PrimaryKey
         Index(value = ["addedAt"]),
         Index(value = ["lastOpenedAt"]),
         Index(value = ["title"]),
+        Index(value = ["folderId"]),
     ],
 )
 data class BookEntity(
@@ -41,4 +42,12 @@ data class BookEntity(
     val isFavorite: Boolean = false,
     val addedAt: Long,
     val lastOpenedAt: Long? = null,
+
+    /**
+     * The device folder this book was imported from.
+     *
+     * No foreign key, deliberately — see `Migrations.kt` for the upgrade that would have deleted
+     * every reading position and bookmark in the library had one been declared.
+     */
+    val folderId: Long? = null,
 )

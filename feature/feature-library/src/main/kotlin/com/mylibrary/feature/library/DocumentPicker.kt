@@ -46,6 +46,36 @@ fun rememberDocumentPicker(onPicked: (List<ImportCandidate>) -> Unit): () -> Uni
 }
 
 /**
+ * The folder picker: `OpenDocumentTree` wrapped as a callback.
+ *
+ * Handed on as a plain string, and the grant is deliberately *not* taken here. A folder is a tree
+ * rather than a file: its permission has to be persisted, checked before every later use and released
+ * when the user removes the folder, and all three of those belong with the code that reads the tree —
+ * `FolderScanner` in `:core:core-data`. Taking it here as well would mean two places that decide what
+ * "the app may read this folder" means.
+ *
+ * @return a function that launches the picker.
+ */
+@Composable
+fun rememberFolderPicker(onPicked: (String) -> Unit): () -> Unit {
+    val currentOnPicked by rememberUpdatedState(onPicked)
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri != null) currentOnPicked(uri.toString())
+    }
+
+    return remember(launcher) {
+        {
+            // No initial URI: the picker opens wherever the user was last time, which is where the
+            // folder they are about to choose usually is.
+            launcher.launch(null)
+        }
+    }
+}
+
+/**
  * Turns a picked [uri] into an [ImportCandidate].
  *
  * The persistable permission is taken *before* anything else, because without it the grant lasts

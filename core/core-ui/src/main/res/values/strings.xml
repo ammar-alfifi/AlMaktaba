@@ -36,4 +36,14 @@
     <string name="ui_unread">لم يُقرأ بعد</string>
     <string name="ui_finished">مكتمل</string>
     <string name="ui_continue_reading">متابعة القراءة</string>
+
+    <!--
+      The bundled Arabic typefaces, named once here and used by both pickers — the reader's panel
+      and the app's own appearance setting. Each name is shown in its own face, so the label and the
+      thing it labels cannot drift apart.
+    -->
+    <string name="ui_font_system">خط النظام</string>
+    <string name="ui_font_amiri">أميري (نسخ)</string>
+    <string name="ui_font_plex_arabic">بلكس العربي (حديث)</string>
+    <string name="ui_font_reem_kufi">ريم كوفي</string>
 </resources>

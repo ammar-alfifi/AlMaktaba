@@ -33,6 +33,14 @@
     <string name="reader_theme_light">Light</string>
     <string name="reader_theme_dark">Dark</string>
     <string name="reader_settings_font">Font</string>
+    <string name="reader_settings_font_summary">Applies to reflowable books such as EPUB and TXT.</string>
+    <string name="reader_settings_page_turn">Page turn</string>
+    <string name="reader_settings_page_turn_summary">Applies to paged files: PDF, comics, and text split into pages.</string>
+    <string name="reader_page_turn_curl">Page curl</string>
+    <string name="reader_page_turn_slide">Slide</string>
+    <string name="reader_page_turn_fade">Fade</string>
+    <string name="reader_settings_bubble_zoom">Zoom into speech bubbles</string>
+    <string name="reader_settings_bubble_zoom_summary">A double-tap on a speech bubble or panel in a comic zooms into it.</string>
     <string name="reader_font_system">Default</string>
     <string name="reader_font_serif">Serif</string>
     <string name="reader_font_sans">Sans serif</string>

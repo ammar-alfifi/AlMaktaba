@@ -1,8 +1,10 @@
 package com.mylibrary.core.domain.usecase
 
+import com.mylibrary.core.domain.model.AppFont
 import com.mylibrary.core.domain.model.AppLanguage
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.PageFitMode
+import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
@@ -65,6 +67,15 @@ class UpdateSettingsUseCase @Inject constructor(
     suspend fun setTapToTurnPages(enabled: Boolean) =
         settingsRepository.update { it.copy(tapToTurnPages = enabled) }
 
+    suspend fun setPageTurnEffect(effect: PageTurnEffect) =
+        settingsRepository.update { it.copy(pageTurnEffect = effect) }
+
+    suspend fun setBubbleZoom(enabled: Boolean) =
+        settingsRepository.update { it.copy(bubbleZoom = enabled) }
+
+    /** The face the app's own interface is set in. Part of appearance, not of reading. */
+    suspend fun setUiFont(font: AppFont) = settingsRepository.update { it.copy(uiFont = font) }
+
     suspend fun resetToDefaults() = settingsRepository.update { ReaderSettings.Default }
 
     /**
@@ -92,6 +103,10 @@ class UpdateSettingsUseCase @Inject constructor(
             pageSnapping = ReaderSettings.Default.pageSnapping,
             reflowMode = ReaderSettings.Default.reflowMode,
             tapToTurnPages = ReaderSettings.Default.tapToTurnPages,
+            // Both of these decide what happens when a page is turned, so they belong to reading
+            // rather than to appearance — unlike `uiFont`, which the reader's panel does not offer.
+            pageTurnEffect = ReaderSettings.Default.pageTurnEffect,
+            bubbleZoom = ReaderSettings.Default.bubbleZoom,
         )
     }
 

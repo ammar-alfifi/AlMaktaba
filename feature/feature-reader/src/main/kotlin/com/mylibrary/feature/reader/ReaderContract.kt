@@ -7,6 +7,7 @@ import com.mylibrary.core.domain.model.Book
 import com.mylibrary.core.domain.model.Bookmark
 import com.mylibrary.core.domain.model.EngineCapabilities
 import com.mylibrary.core.domain.model.PageFitMode
+import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingLocator
@@ -223,6 +224,8 @@ sealed interface ReaderIntent {
     data class SetKeepScreenOn(val enabled: Boolean) : ReaderIntent
     data class SetReflowMode(val mode: ReflowMode) : ReaderIntent
     data class SetTapToTurnPages(val enabled: Boolean) : ReaderIntent
+    data class SetPageTurnEffect(val effect: PageTurnEffect) : ReaderIntent
+    data class SetBubbleZoom(val enabled: Boolean) : ReaderIntent
 
     /** Put the reading settings back to their defaults, after the reader has confirmed it. */
     data object RequestResetSettings : ReaderIntent

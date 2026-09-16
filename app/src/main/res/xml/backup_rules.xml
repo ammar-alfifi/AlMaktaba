@@ -1,8 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Backup excludes the decoded-page cache and the Room WAL; the library itself is restorable. -->
+<!--
+  What Android's auto-backup copies, for API 30 and below.
+
+  The app's own storage is deliberately small — the library is a set of `content://` URIs and the
+  database is a few kilobytes — so the rules exist to keep two *derived* things out of the backup
+  rather than to protect anything.
+
+  `cache` is not listed, and cannot be: it is not one of the domains a backup rule accepts (`root`,
+  `file`, `database`, `sharedpref`, `external`, and their `device_*` counterparts), and it does not
+  need to be. Android never backs up `cacheDir` or `noBackupFilesDir`, so the cover images in
+  `cacheDir/covers` and the extracted comic archives in `cacheDir/comic-archives` are excluded by the
+  platform. A `<exclude domain="cache"/>` line reads as though it does that job; it does not compile
+  as a valid rule at all, which is how it was caught.
+-->
 <full-backup-content>
-    <exclude domain="cache" path="." />
+    <!-- A second page cache the reader used to keep in files; harmless if it is ever recreated. -->
     <exclude domain="file" path="reader_cache" />
+
+    <!-- A write-ahead log is a half-finished transaction. Restoring one without the database it
+         belongs to is a corrupt database. -->
     <exclude domain="database" path="mylibrary.db-wal" />
     <exclude domain="database" path="mylibrary.db-shm" />
 </full-backup-content>

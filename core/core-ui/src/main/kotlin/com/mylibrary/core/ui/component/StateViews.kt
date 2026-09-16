@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -21,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.mylibrary.core.common.AppError
 import com.mylibrary.core.ui.R
+import com.mylibrary.core.ui.theme.Spacing
 
 /**
  * The shared "nothing here yet" view.
@@ -40,7 +42,7 @@ fun EmptyState(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 32.dp, vertical = 24.dp),
+            .padding(horizontal = Spacing.Huge, vertical = Spacing.XLarge),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -62,7 +64,12 @@ fun EmptyState(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 8.dp),
+            // Capped rather than filled: on a tablet or a desktop-sized window, three lines of
+            // explanation stretched across 1200dp is a line length nobody can read, and it looks
+            // like a page that failed to lay itself out rather than like a considered empty state.
+            modifier = Modifier
+                .widthIn(max = Spacing.MaxContentWidth)
+                .padding(top = Spacing.Small),
         )
         if (action != null) {
             Box(modifier = Modifier.padding(top = 24.dp)) { action() }
@@ -97,7 +104,7 @@ fun ErrorState(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 32.dp, vertical = 24.dp),
+            .padding(horizontal = Spacing.Huge, vertical = Spacing.XLarge),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -112,13 +119,18 @@ fun ErrorState(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier
+                .widthIn(max = Spacing.MaxContentWidth)
+                .padding(top = Spacing.Small),
         )
         if (onRetry != null) {
             Button(
                 onClick = onRetry,
                 modifier = Modifier
-                    .padding(top = 24.dp)
+                    .padding(top = Spacing.XLarge)
+                    // A fraction of the *available* width, capped: on a phone the button is a
+                    // comfortable two-thirds of the screen, and on a tablet it is not most of it.
+                    .widthIn(max = Spacing.MaxContentWidth)
                     .fillMaxWidth(fraction = 0.6f),
             ) {
                 Text(text = stringResource(R.string.ui_retry))

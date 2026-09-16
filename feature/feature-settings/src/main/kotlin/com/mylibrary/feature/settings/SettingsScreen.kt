@@ -21,21 +21,20 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,13 +45,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mylibrary.core.domain.model.AppFont
 import com.mylibrary.core.domain.model.AppLanguage
 import com.mylibrary.core.domain.model.BookFormat
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.PageFitMode
+import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
@@ -60,7 +64,13 @@ import com.mylibrary.core.domain.model.ReflowMode
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.ViewMode
 import com.mylibrary.core.domain.usecase.UpdateSettingsUseCase
+import com.mylibrary.core.ui.component.ChoiceRow
+import com.mylibrary.core.ui.component.FeatureScaffold
+import com.mylibrary.core.ui.component.SectionHeader
+import com.mylibrary.core.ui.format.appLocale
 import com.mylibrary.core.ui.mvi.ObserveEffects
+import com.mylibrary.core.ui.theme.Spacing
+import com.mylibrary.core.ui.theme.appFontFamily
 import kotlinx.coroutines.launch
 import java.util.Locale
 import com.mylibrary.core.ui.R as CoreUiR
@@ -133,7 +143,13 @@ fun SettingsScreen(
  * The snackbar host is a parameter rather than something this function remembers, so that the route
  * can push effects into the host the screen actually renders — a host created here would be a
  * second, invisible one.
+ *
+ * It carries its own `TopAppBar`, which the other two top-level destinations do not need to think
+ * about: the library and the search screen each had one, so settings opened straight into a list of
+ * switches with nothing naming the screen. Coming back from the reader to a page whose first line is
+ * "Appearance" reads as a lost place rather than as a destination.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsContent(
     state: SettingsUiState,
@@ -146,13 +162,22 @@ private fun SettingsContent(
     // of what is stored — a reset confirmation left open across a process death would be a lie.
     var confirmingReset by remember { mutableStateOf(false) }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    FeatureScaffold(
+        modifier = modifier,
+        topBar = { SettingsTopBar() },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+    ) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(
+                start = Spacing.Large,
+                end = Spacing.Large,
+                top = Spacing.Large,
+                bottom = Spacing.Huge,
+            ),
             // Sections are spaced by the list rather than by each section's own trailing padding, so
             // the last one does not leave a gap above the reset button.
-            verticalArrangement = Arrangement.spacedBy(24.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.XLarge),
         ) {
             item { AppearanceSection(state.settings, onIntent) }
             item { LanguageSection(state.settings, onIntent) }
@@ -161,11 +186,6 @@ private fun SettingsContent(
             item { AboutSection(state.appVersionName) }
             item { ResetSection(onClick = { confirmingReset = true }) }
         }
-
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
     }
 
     if (confirmingReset) {
@@ -181,11 +201,21 @@ private fun SettingsContent(
     }
 }
 
-/** Theme mode and dynamic colour. */
+/** The screen's own top bar, so the destination names itself like the other two do. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SettingsTopBar(modifier: Modifier = Modifier) {
+    TopAppBar(
+        title = { Text(text = stringResource(R.string.settings_title)) },
+        modifier = modifier,
+    )
+}
+
+/** Theme mode, dynamic colour, and the face the interface is set in. */
 @Composable
 private fun AppearanceSection(settings: ReaderSettings, onIntent: (SettingsIntent) -> Unit) {
     SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
-        SegmentedSettingRow(
+        ChoiceSettingRow(
             title = stringResource(R.string.settings_theme_mode),
             options = ThemeMode.entries,
             selected = settings.themeMode,
@@ -199,6 +229,11 @@ private fun AppearanceSection(settings: ReaderSettings, onIntent: (SettingsInten
             checked = settings.dynamicColor,
             onCheckedChange = { onIntent(SettingsIntent.DynamicColorToggled(it)) },
         )
+        SectionDivider()
+        UiFontSettingRow(
+            selected = settings.uiFont,
+            onSelect = { onIntent(SettingsIntent.UiFontChanged(it)) },
+        )
     }
 }
 
@@ -206,7 +241,7 @@ private fun AppearanceSection(settings: ReaderSettings, onIntent: (SettingsInten
 @Composable
 private fun LanguageSection(settings: ReaderSettings, onIntent: (SettingsIntent) -> Unit) {
     SettingsSection(title = stringResource(R.string.settings_section_language)) {
-        SegmentedSettingRow(
+        ChoiceSettingRow(
             title = stringResource(R.string.settings_language),
             options = AppLanguage.entries,
             selected = settings.language,
@@ -220,7 +255,7 @@ private fun LanguageSection(settings: ReaderSettings, onIntent: (SettingsIntent)
 @Composable
 private fun LibrarySection(settings: ReaderSettings, onIntent: (SettingsIntent) -> Unit) {
     SettingsSection(title = stringResource(R.string.settings_section_library)) {
-        SegmentedSettingRow(
+        ChoiceSettingRow(
             title = stringResource(R.string.settings_view_mode),
             options = ViewMode.entries,
             selected = settings.viewMode,
@@ -266,7 +301,7 @@ private fun ReadingSection(settings: ReaderSettings, onIntent: (SettingsIntent) 
             onValueChange = { onIntent(SettingsIntent.LineHeightChanged(it)) },
         )
         SectionDivider()
-        SegmentedSettingRow(
+        ChoiceSettingRow(
             title = stringResource(R.string.settings_reflow_mode),
             options = ReflowMode.entries,
             selected = settings.reflowMode,
@@ -281,7 +316,7 @@ private fun ReadingSection(settings: ReaderSettings, onIntent: (SettingsIntent) 
             onCheckedChange = { onIntent(SettingsIntent.TapToTurnToggled(it)) },
         )
         SectionDivider()
-        SegmentedSettingRow(
+        ChoiceSettingRow(
             title = stringResource(R.string.settings_page_fit),
             options = PageFitMode.entries,
             selected = settings.pageFitMode,
@@ -289,7 +324,7 @@ private fun ReadingSection(settings: ReaderSettings, onIntent: (SettingsIntent) 
             onSelect = { onIntent(SettingsIntent.PageFitChanged(it)) },
         )
         SectionDivider()
-        SegmentedSettingRow(
+        ChoiceSettingRow(
             title = stringResource(R.string.settings_reading_direction),
             options = ReadingDirection.entries,
             selected = settings.readingDirection,
@@ -316,6 +351,24 @@ private fun ReadingSection(settings: ReaderSettings, onIntent: (SettingsIntent) 
             summary = stringResource(R.string.settings_page_snapping_summary),
             checked = settings.pageSnapping,
             onCheckedChange = { onIntent(SettingsIntent.PageSnappingToggled(it)) },
+        )
+        SectionDivider()
+        // Three options, so this renders as a scrolling chip row rather than a segmented one: the
+        // English labels ("Page curl", "Slide", "Fade") are the widest set on this screen, and a
+        // segmented row would give each of them a third of a phone.
+        ChoiceSettingRow(
+            title = stringResource(R.string.settings_page_turn_effect),
+            options = PageTurnEffect.entries,
+            selected = settings.pageTurnEffect,
+            labelRes = PageTurnEffect::labelRes,
+            onSelect = { onIntent(SettingsIntent.PageTurnEffectChanged(it)) },
+        )
+        SectionDivider()
+        SwitchRow(
+            title = stringResource(R.string.settings_bubble_zoom),
+            summary = stringResource(R.string.settings_bubble_zoom_summary),
+            checked = settings.bubbleZoom,
+            onCheckedChange = { onIntent(SettingsIntent.BubbleZoomToggled(it)) },
         )
     }
 }
@@ -393,9 +446,11 @@ private fun ResetConfirmationDialog(onConfirm: () -> Unit, onDismiss: () -> Unit
 /**
  * A titled group of rows.
  *
- * The header is a plain `Text` rather than a `ListItem` because a card is only as tall as its rows
- * — putting the header inside would make the card's background run behind it and turn a section
- * separator into something that looks like a setting.
+ * The header comes from `:core:core-ui` so that the three screens which group rows under a title —
+ * this one, the search results and the book details page — indent and weight it identically. It sits
+ * *outside* the card on purpose: a card is only as tall as its rows, so a header inside one would
+ * drag the card's background behind it and turn a section separator into something that looks like a
+ * setting the user can press.
  */
 @Composable
 private fun SettingsSection(
@@ -404,13 +459,7 @@ private fun SettingsSection(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(modifier = modifier) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            // Indented to sit above the *text* of the rows below, which the card itself insets.
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-        )
+        SectionHeader(title = title)
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(content = content)
         }
@@ -425,17 +474,22 @@ private fun SettingsSection(
  */
 @Composable
 private fun SectionDivider() {
-    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+    HorizontalDivider(modifier = Modifier.padding(horizontal = Spacing.Large))
 }
 
 /**
- * A row whose value is one of a fixed, small set of short labels.
+ * A row whose value is one of a fixed, small set of labels.
  *
- * Labels are short by contract — the segmented row gives every option an equal share of one line
- * and does not scroll, so a long label would be clipped rather than wrapped.
+ * Delegates to `:core:core-ui`'s `ChoiceRow`, which lays two options out as a segmented row and
+ * three or more as a horizontally scrolling row of chips. The settings screen used to render every
+ * set as a segmented row, which gives each option an equal share of one line and does not scroll —
+ * so a label that did not fit was wrapped or clipped. English labels are consistently longer than
+ * their Arabic counterparts ("System language" against لغة النظام, "Left to right" against من
+ * اليسار) and were the ones being cut. This is the same control as the reader's panel now, rather
+ * than a second implementation of it that had drifted in padding and label style.
  */
 @Composable
-private fun <T> SegmentedSettingRow(
+private fun <T> ChoiceSettingRow(
     title: String,
     options: List<T>,
     selected: T,
@@ -443,23 +497,48 @@ private fun <T> SegmentedSettingRow(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+    Column(modifier = modifier.padding(horizontal = Spacing.Large, vertical = Spacing.Medium)) {
         Text(
             text = title,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            options.forEachIndexed { index, option ->
-                SegmentedButton(
-                    selected = option == selected,
-                    onClick = { onSelect(option) },
-                    shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
-                    label = { Text(text = stringResource(labelRes(option))) },
+        Spacer(modifier = Modifier.height(Spacing.Small))
+        ChoiceRow(
+            options = options,
+            selected = selected,
+            onSelect = onSelect,
+            label = { option -> Text(text = stringResource(labelRes(option))) },
+        )
+    }
+}
+
+/**
+ * The interface's own typeface.
+ *
+ * Each option is drawn *in the face it names*. A font menu that lists "Amiri" in the system font
+ * makes the user choose blind, which is the one thing a font picker must not do.
+ */
+@Composable
+private fun UiFontSettingRow(selected: AppFont, onSelect: (AppFont) -> Unit) {
+    Column(modifier = Modifier.padding(horizontal = Spacing.Large, vertical = Spacing.Medium)) {
+        Text(
+            text = stringResource(R.string.settings_ui_font),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(modifier = Modifier.height(Spacing.Small))
+        ChoiceRow(
+            options = AppFont.entries,
+            selected = selected,
+            onSelect = onSelect,
+            label = { font ->
+                Text(
+                    text = stringResource(font.labelRes()),
+                    style = TextStyle(fontFamily = appFontFamily(font) ?: FontFamily.Default),
                 )
-            }
-        }
+            },
+        )
     }
 }
 
@@ -519,22 +598,33 @@ private fun SliderSettingRow(
     onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+    val locale = appLocale()
+    Column(modifier = modifier.padding(horizontal = Spacing.Large, vertical = Spacing.Medium)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             // SpaceBetween rather than absolute alignment: in RTL the title belongs on the right,
             // and Compose flips the row's main axis for the ambient layout direction.
             horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
+                // A weighted, ellipsised title rather than an intrinsic one: "Line spacing" and
+                // "Keep screen awake" are long enough in English that the pair used to squeeze the
+                // value beside them, and a readout pushed against its label is unreadable at a
+                // glance — which is the only way a readout is ever read.
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
             )
             Text(
-                text = stringResource(R.string.settings_scale_value, formatScale(value)),
+                text = stringResource(R.string.settings_scale_value, formatScale(value, locale)),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                modifier = Modifier.padding(start = Spacing.Medium),
             )
         }
         Slider(
@@ -578,10 +668,13 @@ private val SUPPORTED_FORMATS: String =
 /**
  * `1.0`-style multiplier text.
  *
- * Formatted with the default locale so the decimal separator and the digit shapes follow the
- * language the user picked, including Arabic-Indic digits.
+ * Formatted with the *app's* locale, not the device's. `Locale.getDefault()` follows the system, so
+ * an Arabic device running the app in English produced Arabic-Indic digits — "١٫٥×" — inside an
+ * otherwise English screen, which the comment here used to claim was the desired behaviour. The
+ * locale is passed in from the composition, where the in-app language has already been applied.
  */
-private fun formatScale(scale: Float): String = String.format(Locale.getDefault(), "%.1f", scale)
+private fun formatScale(scale: Float, locale: Locale): String =
+    String.format(locale, "%.1f", scale)
 
 @StringRes
 private fun ThemeMode.labelRes(): Int = when (this) {
@@ -618,6 +711,28 @@ private fun ReaderFont.labelRes(): Int = when (this) {
     ReaderFont.SERIF -> R.string.settings_font_serif
     ReaderFont.SANS_SERIF -> R.string.settings_font_sans_serif
     ReaderFont.MONOSPACE -> R.string.settings_font_monospace
+
+    // The bundled Arabic faces, named once in `:core:core-ui` and shared with the reader's panel:
+    // the same three names are offered in both places, and a second copy of them here is a second
+    // thing to keep in step for no benefit.
+    ReaderFont.AMIRI -> CoreUiR.string.ui_font_amiri
+    ReaderFont.PLEX_ARABIC -> CoreUiR.string.ui_font_plex_arabic
+    ReaderFont.REEM_KUFI -> CoreUiR.string.ui_font_reem_kufi
+}
+
+@StringRes
+private fun AppFont.labelRes(): Int = when (this) {
+    AppFont.SYSTEM -> CoreUiR.string.ui_font_system
+    AppFont.AMIRI -> CoreUiR.string.ui_font_amiri
+    AppFont.PLEX_ARABIC -> CoreUiR.string.ui_font_plex_arabic
+    AppFont.REEM_KUFI -> CoreUiR.string.ui_font_reem_kufi
+}
+
+@StringRes
+private fun PageTurnEffect.labelRes(): Int = when (this) {
+    PageTurnEffect.CURL -> R.string.settings_page_turn_curl
+    PageTurnEffect.SLIDE -> R.string.settings_page_turn_slide
+    PageTurnEffect.FADE -> R.string.settings_page_turn_fade
 }
 
 @StringRes

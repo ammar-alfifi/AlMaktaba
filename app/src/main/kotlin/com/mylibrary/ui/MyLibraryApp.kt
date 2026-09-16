@@ -1,5 +1,11 @@
 package com.mylibrary.ui
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
@@ -12,6 +18,7 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -22,6 +29,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -126,6 +136,17 @@ private fun MyLibraryNavHost(navController: NavHostController = rememberNavContr
         destinations = if (Routes.isTopLevel(currentRoute)) TopLevelDestinations else emptyList(),
         currentRoute = currentRoute,
         onNavigate = { route -> navController.navigateTopLevel(route) },
+        // The rail is the only place the app's name appears on a wide window: a bottom bar names
+        // itself by being at the bottom of a phone, where a rail is a column of three icons with
+        // nothing saying whose they are.
+        railHeader = {
+            Text(
+                text = stringResource(R.string.app_name),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 16.dp),
+            )
+        },
     ) { contentModifier ->
         NavHost(
             navController = navController,
@@ -162,6 +183,24 @@ private fun MyLibraryNavHost(navController: NavHostController = rememberNavContr
             composable(
                 route = Routes.READER,
                 arguments = listOf(navArgument(Routes.BOOK_ID_ARG) { type = NavType.LongType }),
+                // Opening a book rises into it rather than cutting to it: a page arriving at its
+                // final size from slightly smaller is what makes the transition read as the book
+                // opening rather than as a screen replacing another. Short, and deliberately not a
+                // setting — there is nothing here a reader would want to configure.
+                enterTransition = {
+                    fadeIn(tween(OPENING_MS)) + scaleIn(
+                        initialScale = BOOK_OPENING_SCALE,
+                        animationSpec = tween(OPENING_MS, easing = FastOutSlowInEasing),
+                    )
+                },
+                exitTransition = { fadeOut(tween(CLOSING_MS)) },
+                popEnterTransition = { fadeIn(tween(CLOSING_MS)) },
+                popExitTransition = {
+                    fadeOut(tween(CLOSING_MS)) + scaleOut(
+                        targetScale = BOOK_OPENING_SCALE,
+                        animationSpec = tween(CLOSING_MS, easing = FastOutSlowInEasing),
+                    )
+                },
             ) {
                 ReaderRoute(onBack = { navController.popBackStack() })
             }
@@ -183,6 +222,13 @@ private fun NavHostController.navigateTopLevel(route: String) {
         restoreState = true
     }
 }
+
+/** How long a book takes to open and to close, in milliseconds. */
+private const val OPENING_MS = 260
+private const val CLOSING_MS = 200
+
+/** How much smaller the page is at the start of the opening transition. */
+private const val BOOK_OPENING_SCALE = 0.92f
 
 /** The three destinations in the navigation bar and rail. */
 private val TopLevelDestinations: List<TopLevelDestination>

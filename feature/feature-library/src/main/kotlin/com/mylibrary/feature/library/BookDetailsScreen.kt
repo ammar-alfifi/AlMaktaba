@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material3.Button
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -27,12 +28,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -45,9 +48,11 @@ import com.mylibrary.core.ui.component.BookCover
 import com.mylibrary.core.ui.component.EmptyState
 import com.mylibrary.core.ui.component.FeatureScaffold
 import com.mylibrary.core.ui.component.LoadingState
+import com.mylibrary.core.ui.component.SectionHeader
 import com.mylibrary.core.ui.format.bookMetaLine
 import com.mylibrary.core.ui.format.relativeTime
 import com.mylibrary.core.ui.mvi.ObserveEffects
+import com.mylibrary.core.ui.theme.Spacing
 
 @Composable
 fun BookDetailsRoute(
@@ -132,8 +137,13 @@ fun BookDetailsScreen(
 
             else -> LazyColumn(
                 modifier = Modifier.padding(padding).fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(
+                    start = Spacing.Large,
+                    end = Spacing.Large,
+                    top = Spacing.Large,
+                    bottom = Spacing.Huge,
+                ),
+                verticalArrangement = Arrangement.spacedBy(Spacing.Large),
             ) {
                 item { BookHeader(details = details, onIntent = onIntent) }
 
@@ -141,12 +151,7 @@ fun BookDetailsScreen(
                     HorizontalDivider()
                 }
 
-                item {
-                    Text(
-                        text = stringResource(R.string.lib_details_bookmarks),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                }
+                item { SectionHeader(stringResource(R.string.lib_details_bookmarks)) }
 
                 if (details.bookmarks.isEmpty()) {
                     item {
@@ -165,13 +170,37 @@ fun BookDetailsScreen(
                     }
                 }
 
-                item {
-                    OutlinedButton(
-                        onClick = { onIntent(BookDetailsIntent.Read) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.lib_details_read))
-                    }
+            }
+        }
+
+        // The one thing anyone opens this screen to do, pinned to the bottom rather than left at the
+        // end of the scroll: a primary action that has to be scrolled to is one most readers never
+        // see, and it was previously sitting below the bookmark list in an outlined — that is,
+        // secondary — style.
+        if (details != null) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                tonalElevation = 3.dp,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Button(
+                    onClick = { onIntent(BookDetailsIntent.Read) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = Spacing.Large,
+                            end = Spacing.Large,
+                            top = Spacing.Medium,
+                            bottom = Spacing.Medium,
+                        ),
+                ) {
+                    Text(
+                        text = if (details.position != null) {
+                            stringResource(R.string.lib_details_continue)
+                        } else {
+                            stringResource(R.string.lib_details_read)
+                        },
+                    )
                 }
             }
         }
@@ -183,13 +212,19 @@ fun BookDetailsScreen(
 private fun BookHeader(details: BookDetails, onIntent: (BookDetailsIntent) -> Unit) {
     val book = details.book
     val position = details.position
+    val compact = LocalConfiguration.current.screenWidthDp < 360
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            BookCover(book = book, modifier = Modifier.width(120.dp))
+            // Fixed on a phone, but not so wide that it squeezes the title column on a small one:
+            // 120dp of a 320dp screen leaves 152dp for the title, the author and the metadata line.
+            BookCover(
+                book = book,
+                modifier = Modifier.width(if (compact) 96.dp else 128.dp),
+            )
 
             Column(
                 modifier = Modifier.weight(1f),
@@ -206,6 +241,10 @@ private fun BookHeader(details: BookDetails, onIntent: (BookDetailsIntent) -> Un
                         ?: stringResource(R.string.lib_details_unknown_author),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // Bounded like the title above it: a list of contributors can be several lines
+                    // long, and the metadata and progress below it must stay on screen.
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = bookMetaLine(book),

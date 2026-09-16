@@ -1,6 +1,7 @@
 package com.mylibrary.feature.reader
 
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.SavedStateHandle
 import com.mylibrary.core.common.AppError
@@ -362,6 +363,34 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
+    /**
+     * The speech bubble or panel under a point on the page, for the reader's double-tap zoom.
+     *
+     * The pixels are read back out of the page that is *already on screen* rather than kept in a
+     * cache beside it. Holding a rendered page's raw `IntArray` alive would add up to 32 MB of
+     * resident memory for as long as the reader is open — precisely what [PageCache] exists to
+     * bound — and a pixel cache would also have to miss whenever the pager had pre-rendered a
+     * neighbouring page instead. Paying one `getPixels` copy per double-tap, off the main thread,
+     * costs nothing at all when the user is not zooming.
+     *
+     * Failing is a legitimate outcome, not an error: the caller falls back to the ordinary zoom, so
+     * a bitmap that cannot be read (or that is not backed by an Android bitmap at all) simply means
+     * this feature does not apply to it.
+     */
+    internal suspend fun bubbleRegionAt(image: ImageBitmap, xPx: Int, yPx: Int): BubbleRegion? {
+        if (xPx !in 0 until image.width || yPx !in 0 until image.height) return null
+
+        return withContext(dispatchers.default) {
+            runCatching {
+                val width = image.width
+                val height = image.height
+                val pixels = IntArray(width * height)
+                image.asAndroidBitmap().getPixels(pixels, 0, width, 0, 0, width, height)
+                findBubbleRegion(pixels, width, height, xPx, yPx)
+            }.getOrNull()
+        }
+    }
+
     /** The largest power of two that keeps the image at least [targetWidth] wide. */
     private fun sampleSizeFor(width: Int, targetWidth: Int): Int {
         var sampleSize = 1
@@ -421,6 +450,8 @@ class ReaderViewModel @Inject constructor(
             is ReaderIntent.SetKeepScreenOn -> launch { updateSettings.setKeepScreenOn(intent.enabled) }
             is ReaderIntent.SetReflowMode -> launch { updateSettings.setReflowMode(intent.mode) }
             is ReaderIntent.SetTapToTurnPages -> launch { updateSettings.setTapToTurnPages(intent.enabled) }
+            is ReaderIntent.SetPageTurnEffect -> launch { updateSettings.setPageTurnEffect(intent.effect) }
+            is ReaderIntent.SetBubbleZoom -> launch { updateSettings.setBubbleZoom(intent.enabled) }
 
             ReaderIntent.RequestResetSettings -> launch {
                 updateSettings.resetReaderDefaults()
