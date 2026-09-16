@@ -5,8 +5,11 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -16,6 +19,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +42,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -64,6 +69,14 @@ import kotlin.math.roundToInt
  * composed, so a 900-page PDF never holds 900 page composables — and it follows
  * `LocalLayoutDirection`, which means a right-to-left book pages right-to-left with no extra code
  * here at all.
+ *
+ * **Why the gestures live here and not on the page.** They used to be attached to each page, and on
+ * a device that turned out to be wrong in a way no unit test could see: a tap in the middle of the
+ * screen was delivered to a *neighbouring* page's node, so a double-tap zoomed a page that was not
+ * on screen — indistinguishable, to the reader, from the double-tap doing nothing at all. The
+ * reader therefore owns a single zoom, applies it to the page it is showing, and hangs one set of
+ * gesture handlers on the viewport. That is also the honest model: only the page in front of the
+ * reader can be zoomed, and turning the page puts the zoom back.
  */
 @Composable
 fun PagedReaderContent(
@@ -93,25 +106,282 @@ fun PagedReaderContent(
         }
     }
 
-    HorizontalPager(
-        state = pagerState,
-        modifier = modifier.fillMaxSize(),
-        pageSpacing = PAGE_SPACING,
-        beyondViewportPageCount = 1,
-    ) { pageIndex ->
-        ZoomablePage(
-            pageIndex = pageIndex,
-            // Read inside `graphicsLayer`, so a page's turn transform tracks the finger without
-            // recomposing the page on every frame of the drag.
-            pageOffset = { pagerState.offsetOf(pageIndex) },
-            fitMode = state.settings.pageFitMode,
-            tapToTurnPages = state.settings.tapToTurnPages,
-            bubbleZoom = state.settings.bubbleZoom,
-            pageTurnEffect = state.settings.pageTurnEffect,
-            viewModel = viewModel,
-            onIntent = onIntent,
-            modifier = Modifier.fillMaxSize(),
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val density = LocalDensity.current
+    val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val currentOnIntent by rememberUpdatedState(onIntent)
+    val currentTapToTurn by rememberUpdatedState(state.settings.tapToTurnPages)
+    val currentBubbleZoom by rememberUpdatedState(state.settings.bubbleZoom)
+    val currentFitMode by rememberUpdatedState(state.settings.pageFitMode)
+
+    // The zoom of the page on screen, in the reference-render space described on [PageTransform]:
+    // a magnification that does not change when the page is re-rendered more sharply.
+    var transform by remember { mutableStateOf(PageTransform.Identity) }
+    var referenceWhenSet by remember { mutableStateOf(Size.Zero) }
+
+    // The animation, as a clock from 0 to 1 plus the two transforms it moves between. The
+    // interpolated value is written into `transform` itself rather than into a separate layer, so a
+    // pinch that interrupts an animation takes over from exactly where it had got to.
+    val zoomClock = remember { Animatable(0f) }
+    var zoomFrom by remember { mutableStateOf(PageTransform.Identity) }
+    var zoomTo by remember { mutableStateOf(PageTransform.Identity) }
+    var zoomJob by remember { mutableStateOf<Job?>(null) }
+
+    // What the page on screen is and how big it is drawn, published by that page as it renders. The
+    // reader needs it to turn a tap into a page pixel and a page pixel back into a place on screen.
+    var geometry by remember { mutableStateOf(PageGeometry()) }
+
+    // Bucketed to whole steps so that a continuous pinch does not request a new render on every
+    // frame; only crossing 2x or 3x triggers a sharper render.
+    val resolutionStep = remember(transform.scale) {
+        transform.scale.coerceIn(1f, MAX_RENDER_SCALE).toInt().coerceAtLeast(1)
+    }
+
+    val layerTransform = PageTransform(
+        scale = layerScaleFor(transform.scale, geometry.drawn, geometry.reference),
+        offset = transform.offset,
+    )
+
+    // A change of the slot's own size — a rotation, a split screen — moves the ground the pan was
+    // measured against, so it is rebased once, here rather than in composition.
+    LaunchedEffect(geometry.reference) {
+        if (referenceWhenSet.width > 0f && geometry.reference.width > 0f &&
+            referenceWhenSet != geometry.reference
+        ) {
+            transform = rebaseTransform(
+                transform,
+                referenceWhenSet,
+                geometry.reference,
+                geometry.container,
+            )
+        }
+        referenceWhenSet = geometry.reference
+    }
+
+    // Turning the page puts the zoom back: the page that was framed is no longer on screen, and a
+    // magnification carried into the next page would be a magnification of a page nobody chose.
+    LaunchedEffect(pagerState.currentPage) {
+        zoomJob?.cancel()
+        transform = PageTransform.Identity
+        referenceWhenSet = Size.Zero
+    }
+
+    /** Animates to [target], cancelling any zoom already in flight. */
+    fun zoomTo(target: ZoomTarget) {
+        val bitmap = geometry.bitmap ?: return
+        val container = geometry.container
+        val drawn = geometry.drawn
+        if (container.width <= 0 || container.height <= 0 || drawn.width <= 0f) return
+
+        // The destination is worked out in the scale the layout sees — a region framed to 85% of the
+        // viewport is a statement about pixels on screen — and stored in the scale that survives a
+        // re-render.
+        val endOnScreen = transformFor(target, container, drawn, bitmap.width, bitmap.height)
+        val end = PageTransform(
+            scale = referenceScaleFor(endOnScreen.scale, drawn, geometry.reference),
+            offset = endOnScreen.offset,
         )
+
+        zoomJob?.cancel()
+        zoomFrom = transform
+        zoomTo = end
+        zoomJob = scope.launch {
+            zoomClock.snapTo(0f)
+            zoomClock.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = ZOOM_TWEEN_MS, easing = FastOutSlowInEasing),
+            ) {
+                transform = lerpTransform(zoomFrom, zoomTo, value)
+                referenceWhenSet = geometry.reference
+            }
+        }
+    }
+
+    /**
+     * Zooms into whatever is under [position]: a speech bubble or panel if one is there, and a fixed
+     * magnification about the tapped point if not.
+     */
+    fun zoomIntoPage(position: Offset) {
+        val bitmap = geometry.bitmap
+        val container = geometry.container
+        val drawn = geometry.drawn
+
+        scope.launch {
+            val framed = if (bitmap != null && currentBubbleZoom) {
+                viewPointToPixel(
+                    viewPoint = position,
+                    container = container,
+                    drawn = drawn,
+                    transform = layerTransform,
+                    bitmapWidth = bitmap.width,
+                    bitmapHeight = bitmap.height,
+                )
+                    ?.let { point ->
+                        viewModel.bubbleRegionAt(bitmap, point.x.toInt(), point.y.toInt())
+                    }
+                    ?.let { region ->
+                        zoomTargetForRegion(
+                            region = region.bounds,
+                            container = container,
+                            drawn = drawn,
+                            bitmapWidth = bitmap.width,
+                            bitmapHeight = bitmap.height,
+                        )
+                    }
+                    // A region covering nearly the whole page is not worth framing: the plain zoom
+                    // is both smaller and more useful.
+                    ?.takeIf { it.scale >= MIN_USEFUL_ZOOM }
+            } else {
+                null
+            }
+
+            if (framed != null) {
+                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                zoomTo(framed)
+                return@launch
+            }
+
+            // Nothing to frame: the whole page, or a tap that landed on a drawing. Zoom about the
+            // point that was tapped — the reader aimed there, and a zoom that lands somewhere else
+            // is the one thing a double-tap must not do.
+            val pixel = viewPointToPixel(
+                viewPoint = position,
+                container = container,
+                drawn = drawn,
+                transform = layerTransform,
+                bitmapWidth = bitmap?.width ?: 0,
+                bitmapHeight = bitmap?.height ?: 0,
+            )
+            val fraction = pixel?.let {
+                pixelToPageFraction(it, bitmap?.width ?: 0, bitmap?.height ?: 0)
+            } ?: Offset(0.5f, 0.5f)
+            zoomTo(
+                ZoomTarget(
+                    anchorFraction = fraction,
+                    anchorView = position,
+                    scale = DOUBLE_TAP_SCALE,
+                ),
+            )
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            // **The drag is claimed only when the page needs it.** `detectTransformGestures` would
+            // be the obvious thing to write here and it was, for two releases: it consumes every
+            // drag it sees, and a `HorizontalPager` can only turn a page from a drag that reaches
+            // it — which made a reader whose pages could be turned by tapping the edges but not by
+            // swiping. So this loop takes a drag only when it is a pinch (two fingers) or when the
+            // page is already zoomed, where panning is the whole point. A single finger on a page at
+            // 1× is left alone, and the pager scrolls it.
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent()
+                        val pressed = event.changes.count { it.pressed }
+                        if (pressed < 2 && transform.scale <= ZOOMED_THRESHOLD) continue
+
+                        val zoomChange = event.calculateZoom()
+                        val panChange = event.calculatePan()
+                        if (zoomChange == 1f && panChange == Offset.Zero) continue
+
+                        zoomJob?.cancel()
+                        val nextScale = (transform.scale * zoomChange).coerceIn(MIN_SCALE, MAX_SCALE)
+                        val nextLayerScale = layerScaleFor(
+                            nextScale,
+                            geometry.drawn,
+                            geometry.reference,
+                        )
+                        val nextOffset =
+                            if (overflows(geometry.drawn, geometry.container, nextLayerScale)) {
+                                clampPan(
+                                    layerTransform.offset + panChange,
+                                    geometry.drawn,
+                                    geometry.container,
+                                    nextLayerScale,
+                                )
+                            } else {
+                                Offset.Zero
+                            }
+                        transform = PageTransform(nextScale, nextOffset)
+                        referenceWhenSet = geometry.reference
+
+                        // Claimed only now, having decided this gesture is ours, so the pager never
+                        // sees a drag it should have handled.
+                        event.changes.forEach { change ->
+                            if (change.positionChanged()) change.consume()
+                        }
+                    } while (event.changes.any { it.pressed })
+                }
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { position ->
+                        // A zoomed page is being inspected, not read, so a tap only reveals the
+                        // toolbar; turning the page under the reader's fingers would lose the place
+                        // they zoomed in to look at.
+                        if (transform.scale > 1f || !currentTapToTurn) {
+                            currentOnIntent(ReaderIntent.ToggleChrome)
+                            return@detectTapGestures
+                        }
+                        when (tapZoneFor(position.x, size.width.toFloat(), isRtl)) {
+                            TapZone.PREVIOUS -> {
+                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                currentOnIntent(ReaderIntent.PreviousUnit)
+                            }
+
+                            TapZone.NEXT -> {
+                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                currentOnIntent(ReaderIntent.NextUnit)
+                            }
+
+                            TapZone.CENTER -> currentOnIntent(ReaderIntent.ToggleChrome)
+                        }
+                    },
+                    onDoubleTap = { position ->
+                        // A double-tap never reaches `onTap`, so the page-turn zones are untouched
+                        // by sharing the surface with this.
+                        if (transform.scale > 1.02f) {
+                            zoomTo(
+                                identityTarget(
+                                    bitmapWidth = geometry.bitmap?.width ?: 0,
+                                    bitmapHeight = geometry.bitmap?.height ?: 0,
+                                    container = geometry.container,
+                                ),
+                            )
+                        } else {
+                            zoomIntoPage(position)
+                        }
+                    },
+                )
+            },
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            pageSpacing = PAGE_SPACING,
+            beyondViewportPageCount = 1,
+        ) { pageIndex ->
+            ReaderPage(
+                pageIndex = pageIndex,
+                // Read inside `graphicsLayer`, so a page's turn transform tracks the finger without
+                // recomposing the page on every frame of the drag.
+                pageOffset = { pagerState.offsetOf(pageIndex) },
+                isCurrentPage = pageIndex == pagerState.currentPage,
+                layerTransform = layerTransform,
+                resolutionStep = resolutionStep,
+                fitMode = state.settings.pageFitMode,
+                pageTurnEffect = state.settings.pageTurnEffect,
+                viewModel = viewModel,
+                onIntent = onIntent,
+                onGeometry = { page ->
+                    if (pageIndex == pagerState.currentPage) geometry = page
+                },
+            )
+        }
     }
 }
 
@@ -124,66 +394,43 @@ fun PagedReaderContent(
 private fun PagerState.offsetOf(pageIndex: Int): Float = getOffsetDistanceInPages(pageIndex)
 
 /**
- * One page: its turn transform, pinch-to-zoom, pan, double-tap zoom and the page-turn tap zones.
+ * Where the page on screen is drawn, and what it is.
  *
- * **Zoom, in two representations.** The *state* is a [PageTransform] in view pixels, which is what
- * the gesture handlers write. The *destination* of a programmatic zoom is a [ZoomTarget] in page
- * pixels, because the reader re-renders a page at a higher resolution once the user zooms past a
- * whole step — and for an actual-size page that makes the drawn page bigger, moving the ground
- * under a pixel-based target. A target expressed against the page survives it.
+ * Published by the page as it renders, because only the page knows the bitmap it was handed and the
+ * size it is drawn at — and the reader's gestures need both to turn a tap into a page pixel. Immutable
+ * and compared by value, so a page that republishes the same geometry costs nothing.
+ */
+@Immutable
+private data class PageGeometry(
+    val bitmap: ImageBitmap? = null,
+    val drawn: Size = Size.Zero,
+    val reference: Size = Size.Zero,
+    val container: IntSize = IntSize.Zero,
+)
+
+/**
+ * One page: the turn transform, the zoom it is drawn with, and the pixels.
  *
- * **Double-tap.** A double-tap on a comic's speech bubble or panel zooms to frame it, using the
- * page's own pixels to work out what is under the finger ([findBubbleRegion]). Where there is
- * nothing to frame — a drawing, a page of text, a tap on the letterbox margin — it falls back to a
- * fixed zoom about the tapped point, which is the behaviour the reader always had, improved by
- * zooming where the user aimed rather than at the centre of the page.
+ * Deliberately without gestures — see the note on [PagedReaderContent]. This composable renders what
+ * it is told to render and reports what it measured.
  */
 @Composable
-private fun ZoomablePage(
+private fun ReaderPage(
     pageIndex: Int,
     pageOffset: () -> Float,
+    isCurrentPage: Boolean,
+    layerTransform: PageTransform,
+    resolutionStep: Int,
     fitMode: PageFitMode,
-    tapToTurnPages: Boolean,
-    bubbleZoom: Boolean,
     pageTurnEffect: PageTurnEffect,
     viewModel: ReaderViewModel,
     onIntent: (ReaderIntent) -> Unit,
-    modifier: Modifier = Modifier,
+    onGeometry: (PageGeometry) -> Unit,
 ) {
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
-
-    // The zoom, in the reference-render space described on [PageTransform]: a magnification that does
-    // not change when the page is re-rendered more sharply. `referenceWhenSet` is the page's
-    // reference size at the moment the translation was measured, so a change of the *slot* can rebase
-    // it while a change of resolution deliberately cannot.
-    var transform by remember { mutableStateOf(PageTransform.Identity) }
-    var referenceWhenSet by remember { mutableStateOf(Size.Zero) }
-
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val density = LocalDensity.current
     val currentOnIntent by rememberUpdatedState(onIntent)
-    val haptics = LocalHapticFeedback.current
-    val scope = rememberCoroutineScope()
-
-    // The zoom animation, as a clock from 0 to 1 plus the two transforms it moves between. The
-    // interpolated value is written into `transform` itself rather than into a separate layer, so a
-    // pinch that interrupts an animation takes over from exactly where it had got to.
-    val zoomClock = remember { Animatable(0f) }
-    var zoomFrom by remember { mutableStateOf(PageTransform.Identity) }
-    var zoomTo by remember { mutableStateOf(PageTransform.Identity) }
-    var zoomJob by remember { mutableStateOf<Job?>(null) }
-
-    // A page turn is felt as well as seen. It is the cheapest confirmation a touch interface has,
-    // and it is what tells the reader the tap registered during the fraction of a second before the
-    // page has finished moving.
-    val currentTapToTurn by rememberUpdatedState(tapToTurnPages)
-    val currentBubbleZoom by rememberUpdatedState(bubbleZoom)
-
-    // Bucketed to whole steps so that a continuous pinch does not request a new render on every
-    // frame; only crossing 2x or 3x triggers a sharper render.
-    val resolutionStep = remember(transform.scale) {
-        transform.scale.coerceIn(1f, MAX_RENDER_SCALE).toInt().coerceAtLeast(1)
-    }
 
     // What the document says its page looks like. Needed before the pixels are: a width-fitted
     // render is as tall as the page's own proportions make it, and an actual-size render is the
@@ -228,9 +475,7 @@ private fun ZoomablePage(
     // What the page would be drawn at if it were rendered at the reader's base resolution. For page
     // fit and width fit this equals `drawnSize`, because those sizes come from the viewport rather
     // than from the bitmap; for actual size it is the size the page is drawn at *per unit of zoom*,
-    // which is what the stored transform is measured against. The ratio of the two is what the layer
-    // scale has to undo — without it, crossing a resolution step while pinching would double the
-    // magnification of an actual-size page instead of sharpening it.
+    // which is what the stored transform is measured against.
     val referenceDrawnSize = remember(drawnSize, resolutionStep, containerSize, fitMode, bitmap) {
         bitmap?.let {
             val baseWidth = (it.width / resolutionStep).coerceAtLeast(1)
@@ -239,159 +484,16 @@ private fun ZoomablePage(
         } ?: Size.Zero
     }
 
-    // What the layout draws with: the stored magnification converted into the scale this render
-    // needs in order to look the same size.
-    val layerTransform = PageTransform(
-        scale = layerScaleFor(transform.scale, drawnSize, referenceDrawnSize),
-        offset = transform.offset,
-    )
-
-    // A change of the slot's own size — a rotation, a split screen — moves the ground the pan was
-    // measured against, so it is rebased once, here rather than in composition.
-    LaunchedEffect(referenceDrawnSize) {
-        if (referenceWhenSet.width > 0f && referenceDrawnSize.width > 0f &&
-            referenceWhenSet != referenceDrawnSize
-        ) {
-            transform = rebaseTransform(transform, referenceWhenSet, referenceDrawnSize, containerSize)
-        }
-        referenceWhenSet = referenceDrawnSize
+    LaunchedEffect(bitmap, drawnSize, referenceDrawnSize, containerSize) {
+        onGeometry(PageGeometry(bitmap, drawnSize, referenceDrawnSize, containerSize))
     }
 
-    // The gesture handlers are installed once and never restarted, so they have to read the
-    // *current* geometry rather than the geometry of the composition that created them. `drawnSize`
-    // is [Size.Zero] until the first page arrives, and a captured copy of it would leave panning
-    // permanently disabled and every tap landing in the middle zone.
-    val currentDrawnSize by rememberUpdatedState(drawnSize)
-    val currentContainer by rememberUpdatedState(containerSize)
-    val currentLayerTransform by rememberUpdatedState(layerTransform)
-    val currentReference by rememberUpdatedState(referenceDrawnSize)
-    val currentBitmap by rememberUpdatedState(bitmap)
-
-    /** Animates to [target], cancelling any zoom already in flight. */
-    fun zoomTo(target: ZoomTarget) {
-        val bitmap = currentBitmap ?: return
-        val container = currentContainer
-        val drawn = currentDrawnSize
-        val reference = currentReference
-        if (container.width <= 0 || container.height <= 0 || drawn.width <= 0f) return
-
-        // The destination is worked out in the scale the layout sees — a region framed to 85% of the
-        // viewport is a statement about pixels on screen — and stored in the scale that survives a
-        // re-render.
-        val endOnScreen = transformFor(target, container, drawn, bitmap.width, bitmap.height)
-        val end = PageTransform(
-            scale = referenceScaleFor(endOnScreen.scale, drawn, reference),
-            offset = endOnScreen.offset,
-        )
-
-        zoomJob?.cancel()
-        zoomFrom = transform
-        zoomTo = end
-        zoomJob = scope.launch {
-            zoomClock.snapTo(0f)
-            zoomClock.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = ZOOM_TWEEN_MS, easing = FastOutSlowInEasing),
-            ) {
-                transform = lerpTransform(zoomFrom, zoomTo, value)
-                // Recorded every frame, so a rebase caused by the slot changing size is measured
-                // against the size this interpolation was computed for.
-                referenceWhenSet = currentReference
-            }
-        }
-    }
-
-    /**
-     * Zooms into whatever is under [position]: a speech bubble or panel if one is there, and a fixed
-     * magnification about the tapped point if not.
-     */
-    fun zoomIntoPage(position: Offset) {
-        val bitmap = currentBitmap
-        val container = currentContainer
-        val drawn = currentDrawnSize
-        val wantsBubble = currentBubbleZoom
-
-        scope.launch {
-            val framed = if (bitmap != null && wantsBubble) {
-                val pixel = viewPointToPixel(
-                    viewPoint = position,
-                    container = container,
-                    drawn = drawn,
-                    transform = currentLayerTransform,
-                    bitmapWidth = bitmap.width,
-                    bitmapHeight = bitmap.height,
-                )
-                pixel
-                    ?.let { point ->
-                        viewModel.bubbleRegionAt(bitmap, point.x.toInt(), point.y.toInt())
-                    }
-                    ?.let { region ->
-                        zoomTargetForRegion(
-                            region = region.bounds,
-                            container = container,
-                            drawn = drawn,
-                            bitmapWidth = bitmap.width,
-                            bitmapHeight = bitmap.height,
-                        )
-                    }
-                    // A region covering nearly the whole page is not worth framing: the plain zoom
-                    // is both smaller and more useful.
-                    ?.takeIf { it.scale >= MIN_USEFUL_ZOOM }
-            } else {
-                null
-            }
-
-            if (framed != null) {
-                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                zoomTo(framed)
-                return@launch
-            }
-
-            // Nothing to frame: the whole page, or a tap that landed on a drawing. Zoom about the
-            // point that was tapped — the reader aimed there, and a zoom that lands somewhere else
-            // is the one thing a double-tap must not do.
-            val pixel = viewPointToPixel(
-                viewPoint = position,
-                container = container,
-                drawn = drawn,
-                transform = currentLayerTransform,
-                bitmapWidth = bitmap?.width ?: 0,
-                bitmapHeight = bitmap?.height ?: 0,
-            )
-            val fraction = pixel?.let {
-                pixelToPageFraction(it, bitmap?.width ?: 0, bitmap?.height ?: 0)
-            } ?: Offset(0.5f, 0.5f)
-            zoomTo(
-                ZoomTarget(
-                    anchorFraction = fraction,
-                    anchorView = position,
-                    scale = DOUBLE_TAP_SCALE,
-                ),
-            )
-        }
-    }
-
-    // A change of fit mode re-frames the page. A zoom or a pan carried over from the previous mode
-    // would leave the page off-centre in a frame it no longer fits.
-    LaunchedEffect(fitMode) {
-        zoomJob?.cancel()
-        transform = PageTransform.Identity
-        referenceWhenSet = Size.Zero
-    }
-
+    // A change of fit mode re-frames the page; the reader's own zoom is reset by the page change
+    // that a re-frame usually comes with, and by the fit-mode effect in the reader.
     val currentPageOffset = pageOffset
-    val shadeBrush = { size: Size, pivot: Float, alpha: Float ->
-        // Shaded from the hinge outwards: a turning page is lit by the room and shadowed by the
-        // block it is coming off, so the darkest part of it is the part still attached.
-        Brush.horizontalGradient(
-            colors = listOf(Color.Black.copy(alpha = alpha), Color.Transparent),
-            startX = if (pivot < 0.5f) 0f else size.width,
-            endX = if (pivot < 0.5f) size.width else 0f,
-        )
-    }
 
     Box(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             // The turn transform wraps the page rather than sharing a modifier chain with the zoom:
             // the page must be free to swing past its own slot, while the *zoom* stays clipped to it.
@@ -421,79 +523,10 @@ private fun ZoomablePage(
             modifier = Modifier
                 .fillMaxSize()
                 .background(PAGE_BACKGROUND)
-                // The page is drawn inside its own slot; without this a page wider than the
-                // viewport — which is exactly what actual size produces — would paint over its
-                // neighbours.
+                // The page is drawn inside its own slot; without this a page wider than the viewport
+                // — which is exactly what actual size produces — would paint over its neighbours.
                 .clipToBounds()
-                .onSizeChanged { size -> containerSize = size }
-                .pointerInput(Unit) {
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        // A pinch takes over from an animation in flight, from wherever it had got
-                        // to: the animation writes into the same state this reads.
-                        zoomJob?.cancel()
-                        // The rebased transform, not the stored one: for an actual-size page a
-                        // sharper render changes how large the page is drawn, and a gesture applied
-                        // to the pre-render numbers would jump the page on the next frame.
-                        // The zoom multiplies the *stored* magnification, which is the one that
-                        // survives a change of render resolution; the pan is clamped against the
-                        // scale the layout is actually using.
-                        val nextScale = (transform.scale * zoom).coerceIn(MIN_SCALE, MAX_SCALE)
-                        val nextLayerScale = layerScaleFor(nextScale, currentDrawnSize, currentReference)
-                        val nextOffset = if (overflows(currentDrawnSize, currentContainer, nextLayerScale)) {
-                            clampPan(
-                                currentLayerTransform.offset + pan,
-                                currentDrawnSize,
-                                currentContainer,
-                                nextLayerScale,
-                            )
-                        } else {
-                            Offset.Zero
-                        }
-                        transform = PageTransform(nextScale, nextOffset)
-                        referenceWhenSet = currentReference
-                    }
-                }
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onTap = { position ->
-                            // A zoomed page is being inspected, not read, so a tap only reveals the
-                            // toolbar; turning the page under the reader's fingers would lose the
-                            // place they zoomed in to look at.
-                            if (transform.scale > 1f || !currentTapToTurn) {
-                                currentOnIntent(ReaderIntent.ToggleChrome)
-                                return@detectTapGestures
-                            }
-                            when (tapZoneFor(position.x, size.width.toFloat(), isRtl)) {
-                                TapZone.PREVIOUS -> {
-                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                                    currentOnIntent(ReaderIntent.PreviousUnit)
-                                }
-
-                                TapZone.NEXT -> {
-                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                                    currentOnIntent(ReaderIntent.NextUnit)
-                                }
-
-                                TapZone.CENTER -> currentOnIntent(ReaderIntent.ToggleChrome)
-                            }
-                        },
-                        onDoubleTap = { position ->
-                            // A double-tap never reaches `onTap`, so the page-turn zones are
-                            // untouched by sharing the surface with this.
-                            if (transform.scale > 1.02f) {
-                                zoomTo(
-                                    identityTarget(
-                                        bitmapWidth = currentBitmap?.width ?: 0,
-                                        bitmapHeight = currentBitmap?.height ?: 0,
-                                        container = currentContainer,
-                                    ),
-                                )
-                            } else {
-                                zoomIntoPage(position)
-                            }
-                        },
-                    )
-                },
+                .onSizeChanged { size -> containerSize = size },
             contentAlignment = Alignment.Center,
         ) {
             when (val render = renderState) {
@@ -504,10 +537,12 @@ private fun ZoomablePage(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer(
-                            scaleX = layerTransform.scale,
-                            scaleY = layerTransform.scale,
-                            translationX = layerTransform.offset.x,
-                            translationY = layerTransform.offset.y,
+                            // Only the page in front of the reader carries the zoom; a neighbour
+                            // drawn with it would arrive on screen already magnified.
+                            scaleX = if (isCurrentPage) layerTransform.scale else 1f,
+                            scaleY = if (isCurrentPage) layerTransform.scale else 1f,
+                            translationX = if (isCurrentPage) layerTransform.offset.x else 0f,
+                            translationY = if (isCurrentPage) layerTransform.offset.y else 0f,
                         ),
                 )
 
@@ -524,6 +559,14 @@ private fun ZoomablePage(
         }
     }
 }
+
+/** The shadow a lifting page casts on itself, from its hinge outwards. */
+private fun shadeBrush(size: Size, pivot: Float, alpha: Float): Brush =
+    Brush.horizontalGradient(
+        colors = listOf(Color.Black.copy(alpha = alpha), Color.Transparent),
+        startX = if (pivot < 0.5f) 0f else size.width,
+        endX = if (pivot < 0.5f) size.width else 0f,
+    )
 
 /**
  * The pixel box a page is rendered into.
@@ -704,6 +747,14 @@ private const val ZOOM_TWEEN_MS = 280
 
 private const val MAX_RENDER_SCALE = 3f
 private const val DOUBLE_TAP_SCALE = 2.5f
+
+/**
+ * How far past 1× a page must be before a one-finger drag belongs to it rather than to the pager.
+ *
+ * A hair above 1 rather than exactly 1, because a pinch that has just started leaves the scale at
+ * 1.0000001 and a drag at that magnification is still a page turn.
+ */
+private const val ZOOMED_THRESHOLD = 1.01f
 
 /** 32 MB of ARGB — several screens' worth, and far short of an out-of-memory on a mid-range phone. */
 private const val MAX_RENDER_PIXELS = 8_000_000L

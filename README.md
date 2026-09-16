@@ -74,7 +74,7 @@ Every hard constraint from the specification, and where it is satisfied:
 
 A signed, installable build is attached to the latest release:
 
-**→ [MyLibrary-v1.3.0.apk](https://github.com/ammar-alfifi/MyLibrary/releases/download/v1.3.0/MyLibrary-v1.3.0.apk)** (~33 MB)
+**→ [MyLibrary-v1.3.1.apk](https://github.com/ammar-alfifi/MyLibrary/releases/download/v1.3.1/MyLibrary-v1.3.1.apk)** (~33 MB)
 
 Android 8.0 (API 26) and above. Signed with APK Signature Scheme v2 + v3. The app requests **no
 storage permission** — books are added through the system file picker, which grants access to the
@@ -286,11 +286,12 @@ ABIs with the pdfium native libraries, `Stored`/uncompressed and `extractNativeL
 launch `MainActivity` through its true lifecycle under Robolectric, which is what caught the launch
 crash in [§7](#7-engineering-findings-worth-knowing).
 
-What is **not** covered is everything past startup: rendering, gestures, the reader, the file
-picker. No AVD completes its boot in the environment this was built in — the emulator process dies
-at RenderThread initialisation under both hardware acceleration and software emulation, across five
-attempts and two system images — so those paths are inferred from the code and the unit tests, not
-observed. They are the most likely place for the next bug to be.
+**And since 1.3.1 the app runs on an emulator.** `tools/start-emulator.sh` boots an API 35 AVD with
+the one GPU backend that works on this host (`-gpu angle`; every other backend segfaults the
+emulator process, and the headless build dies regardless of backend). That made the parts this
+document had always listed as unverified — the reader's gestures, the bubble detector, the folder
+import, the upgrade path — testable, and the first thing it found was that swiping did not turn
+pages. See [§7](#7-engineering-findings-worth-knowing).
 
 ## 7. Engineering findings worth knowing
 
@@ -365,6 +366,25 @@ merely miss the encoding; it confidently returns the wrong one, and a whole Arab
 mojibake. `:format:format-text` therefore runs a byte-distribution fingerprint for Windows-1256
 *before* consulting the detector, but only overrules a single-byte-character-set verdict — a
 multi-byte detection is never second-guessed.
+
+**A gesture detector on pager content costs you the pager's own drag — and on a device it cost the
+page turn.** The reader's pages were turned by tapping the edges and *not* by swiping, for two
+releases, because `detectTransformGestures` on a page consumes every drag it sees and a
+`HorizontalPager` can only turn a page from a drag that reaches it. Every unit test passed: the
+geometry is pure and tested, the tap-zone arithmetic is pure and tested, and whether a Compose
+gesture detector eats a scroll is neither. The emulator settled it in one swipe. The page's detector
+now claims a drag only when it is a pinch or when the page is already zoomed, and leaves a
+one-finger drag at 1× to the pager. **The lesson is about what tests can cover**: this class of bug
+is invisible to pure-function tests and to a compiler, and only a running app answers it.
+
+**The reader owns the zoom, not the page.** Related, and found the same afternoon: with the zoom
+state and the gesture handlers living inside each page's composable, a double-tap in the middle of
+the screen was delivered to a *neighbouring* page's node — a real, fully-composed page, but one that
+was not on screen — so the zoom applied to a page nobody could see. Diagnosing it took logging the
+composition identity of the node that received the touch: it reported a different page from the one
+being drawn. The fix was structural rather than a patch: `PagedReaderContent` keeps one zoom for the
+page on screen, hangs one set of handlers on the viewport, and each page is a renderer that reports
+what it drew. Turning the page resets the zoom, which is also what a reader expects.
 
 **A foreign key on `books.folderId` would have deleted the library's reading positions.** The
 obvious schema for "a book belongs to a folder" is a foreign key with `ON DELETE SET NULL`. SQLite
