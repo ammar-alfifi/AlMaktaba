@@ -14,7 +14,7 @@ import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
-import com.mylibrary.core.domain.model.ReflowMode
+import com.mylibrary.core.domain.model.ReaderLayout
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.ViewMode
 import kotlinx.coroutines.flow.Flow
@@ -76,8 +76,7 @@ class SettingsDataStore @Inject constructor(
         this[Keys.READING_DIRECTION] = settings.readingDirection.name
         this[Keys.KEEP_SCREEN_ON] = settings.keepScreenOn
         this[Keys.SHOW_PROGRESS_INDICATOR] = settings.showProgressIndicator
-        this[Keys.PAGE_SNAPPING] = settings.pageSnapping
-        this[Keys.REFLOW_MODE] = settings.reflowMode.name
+        this[Keys.LAYOUT] = settings.layout.name
         this[Keys.TAP_TO_TURN_PAGES] = settings.tapToTurnPages
         this[Keys.PAGE_TURN_EFFECT] = settings.pageTurnEffect.name
         this[Keys.BUBBLE_ZOOM] = settings.bubbleZoom
@@ -106,8 +105,10 @@ private object Keys {
     val READING_DIRECTION = stringPreferencesKey("reading_direction")
     val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
     val SHOW_PROGRESS_INDICATOR = booleanPreferencesKey("show_progress_indicator")
-    val PAGE_SNAPPING = booleanPreferencesKey("page_snapping")
-    val REFLOW_MODE = stringPreferencesKey("reflow_mode")
+    // Named "reflow_mode" when only text could scroll. The layout setting inherited this key
+    // rather than taking a new one, so a value written by an older build is still read: there is
+    // no migration mechanism here, and orphaning the key would silently reset every reader.
+    val LAYOUT = stringPreferencesKey("reflow_mode")
     val TAP_TO_TURN_PAGES = booleanPreferencesKey("tap_to_turn_pages")
     val PAGE_TURN_EFFECT = stringPreferencesKey("page_turn_effect")
     val BUBBLE_ZOOM = booleanPreferencesKey("bubble_zoom")
@@ -136,8 +137,7 @@ private fun ReaderSettings.Companion.fromPreferences(preferences: Preferences): 
         keepScreenOn = preferences[Keys.KEEP_SCREEN_ON] ?: defaults.keepScreenOn,
         showProgressIndicator = preferences[Keys.SHOW_PROGRESS_INDICATOR]
             ?: defaults.showProgressIndicator,
-        pageSnapping = preferences[Keys.PAGE_SNAPPING] ?: defaults.pageSnapping,
-        reflowMode = preferences[Keys.REFLOW_MODE].toEnum(defaults.reflowMode),
+        layout = preferences[Keys.LAYOUT].toEnum(defaults.layout),
         tapToTurnPages = preferences[Keys.TAP_TO_TURN_PAGES] ?: defaults.tapToTurnPages,
         pageTurnEffect = preferences[Keys.PAGE_TURN_EFFECT].toEnum(defaults.pageTurnEffect),
         bubbleZoom = preferences[Keys.BUBBLE_ZOOM] ?: defaults.bubbleZoom,

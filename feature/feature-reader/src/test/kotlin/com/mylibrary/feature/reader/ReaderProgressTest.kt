@@ -15,10 +15,10 @@ import org.junit.Test
 class ReaderProgressTest {
 
     private fun paged(current: Int, total: Int) =
-        ReaderUiState(isPaged = true, currentUnit = current, totalUnits = total).progress
+        ReaderUiState(isPageImages = true, currentUnit = current, totalUnits = total).progress
 
     private fun reflowable(current: Int, total: Int) =
-        ReaderUiState(isPaged = false, currentUnit = current, totalUnits = total).progress
+        ReaderUiState(isPageImages = false, currentUnit = current, totalUnits = total).progress
 
     @Test
     fun `a paged document counts the page being read as finished`() {

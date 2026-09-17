@@ -3,7 +3,7 @@ package com.mylibrary.feature.reader
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -43,7 +44,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -113,7 +113,6 @@ fun PagedReaderContent(
     val currentOnIntent by rememberUpdatedState(onIntent)
     val currentTapToTurn by rememberUpdatedState(state.settings.tapToTurnPages)
     val currentBubbleZoom by rememberUpdatedState(state.settings.bubbleZoom)
-    val currentFitMode by rememberUpdatedState(state.settings.pageFitMode)
 
     // The zoom of the page on screen, in the reference-render space described on [PageTransform]:
     // a magnification that does not change when the page is re-rendered more sharply.
@@ -401,7 +400,7 @@ private fun PagerState.offsetOf(pageIndex: Int): Float = getOffsetDistanceInPage
  * and compared by value, so a page that republishes the same geometry costs nothing.
  */
 @Immutable
-private data class PageGeometry(
+internal data class PageGeometry(
     val bitmap: ImageBitmap? = null,
     val drawn: Size = Size.Zero,
     val reference: Size = Size.Zero,
@@ -415,7 +414,7 @@ private data class PageGeometry(
  * it is told to render and reports what it measured.
  */
 @Composable
-private fun ReaderPage(
+internal fun ReaderPage(
     pageIndex: Int,
     pageOffset: () -> Float,
     isCurrentPage: Boolean,
@@ -498,7 +497,16 @@ private fun ReaderPage(
             // The turn transform wraps the page rather than sharing a modifier chain with the zoom:
             // the page must be free to swing past its own slot, while the *zoom* stays clipped to it.
             .graphicsLayer {
-                val turn = pageTurnTransform(currentPageOffset(), pageTurnEffect, isRtl)
+                // A curl is the page bending, and the page draws that itself — see [drawPaperPage].
+                // Rotating the slot as well would bend it twice, and painting the slot's shadow
+                // would put a second one over the bend's own. The slot is handed the identity
+                // instead, which is continuous with the rotation it replaces: both go to nothing as
+                // the page settles, so nothing jumps at the moment a gesture starts.
+                val turn = if (paperCurlOwns(pageTurnEffect, currentPageOffset())) {
+                    PageTurnTransform.Identity
+                } else {
+                    pageTurnTransform(currentPageOffset(), pageTurnEffect, isRtl)
+                }
                 scaleX = turn.scale
                 scaleY = turn.scale
                 alpha = turn.alpha
@@ -511,10 +519,12 @@ private fun ReaderPage(
             }
             .drawWithContent {
                 drawContent()
-                val alpha = pageTurnTransform(currentPageOffset(), pageTurnEffect, isRtl).shadeAlpha
-                if (alpha > 0f) {
-                    val pivot = pageTurnPivotX(currentPageOffset(), isRtl)
-                    drawRect(brush = shadeBrush(size, pivot, alpha))
+                if (!paperCurlOwns(pageTurnEffect, currentPageOffset())) {
+                    val alpha = pageTurnTransform(currentPageOffset(), pageTurnEffect, isRtl).shadeAlpha
+                    if (alpha > 0f) {
+                        val pivot = pageTurnPivotX(currentPageOffset(), isRtl)
+                        drawRect(brush = shadeBrush(size, pivot, alpha))
+                    }
                 }
             },
         contentAlignment = Alignment.Center,
@@ -530,10 +540,11 @@ private fun ReaderPage(
             contentAlignment = Alignment.Center,
         ) {
             when (val render = renderState) {
-                is PageRenderState.Ready -> Image(
-                    bitmap = render.image,
-                    contentDescription = null,
-                    contentScale = fitMode.contentScale(),
+                // Drawn by hand rather than by `Image`, because a curl has to re-draw the page's
+                // pixels column by column and `Image` can only place the whole of it. The flat case
+                // is the single `drawImage` call `Image` was making anyway, so a page nobody is
+                // turning is drawn exactly as it was.
+                is PageRenderState.Ready -> Canvas(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer(
@@ -544,7 +555,35 @@ private fun ReaderPage(
                             translationX = if (isCurrentPage) layerTransform.offset.x else 0f,
                             translationY = if (isCurrentPage) layerTransform.offset.y else 0f,
                         ),
-                )
+                ) {
+                    // Read here, in the draw phase, and never while composing: the offset changes on
+                    // every frame of a drag, and a value read during composition would recompose
+                    // the page — bitmap decode, geometry and all — for each one of them.
+                    val page = render.image
+                    val frame = pageFrame(
+                        container = size,
+                        drawn = drawnPageSize(
+                            bitmapWidth = page.width,
+                            bitmapHeight = page.height,
+                            container = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+                            fitMode = fitMode,
+                        ),
+                    )
+                    if (paperCurlOwns(pageTurnEffect, currentPageOffset())) {
+                        val roll = paperCurlRoll(currentPageOffset())
+                        drawPaperCurl(
+                            page = page,
+                            frame = frame,
+                            curl = paperCurl(
+                                roll = roll,
+                                frame = frame,
+                                hingeAtLeft = pageTurnPivotX(currentPageOffset(), isRtl) < 0.5f,
+                            ),
+                        )
+                    } else {
+                        drawSettledPage(page, frame)
+                    }
+                }
 
                 is PageRenderState.Failed -> ErrorState(
                     error = render.error,
@@ -713,21 +752,27 @@ internal fun capRenderBox(width: Int, height: Int): IntSize {
 }
 
 /**
+ * Where a page of [drawn] size sits inside its [container]: centred, letterboxed by the grey ground.
+ *
+ * The page is drawn against this rectangle rather than being handed to a `ContentScale`, because the
+ * three fit modes are already resolved by the time [drawnPageSize] returns — it produces exactly the
+ * rectangle each scale would have produced — and a curl has to know where the sheet's edges are to
+ * bend it, which a scale factor cannot tell it.
+ */
+internal fun pageFrame(container: Size, drawn: Size): Rect {
+    val left = (container.width - drawn.width) / 2f
+    val top = (container.height - drawn.height) / 2f
+    return Rect(left, top, left + drawn.width, top + drawn.height)
+}
+
+/**
  * Whether the page, at [scale], is bigger than the frame it is in.
  *
  * Panning only means something when it is: dragging a contained page around would slide it off the
  * screen for no reason.
  */
-private fun overflows(drawn: Size, container: IntSize, scale: Float): Boolean =
+internal fun overflows(drawn: Size, container: IntSize, scale: Float): Boolean =
     drawn.width * scale > container.width || drawn.height * scale > container.height
-
-/** How the rendered bitmap is laid out inside the page slot. */
-private fun PageFitMode.contentScale(): ContentScale = when (this) {
-    PageFitMode.PAGE -> ContentScale.Fit
-    PageFitMode.WIDTH -> ContentScale.FillWidth
-    // Drawn at its own pixel dimensions: one document pixel to one device pixel, no resampling.
-    PageFitMode.ACTUAL_SIZE -> ContentScale.None
-}
 
 private val PAGE_SPACING = 8.dp
 
@@ -743,10 +788,7 @@ private val PAGE_BACKGROUND = Color(0xFF2B2B2B)
 private const val CAMERA_DISTANCE_DP = 14f
 
 /** Long enough to be read as movement, short enough not to be waited for. */
-private const val ZOOM_TWEEN_MS = 280
 
-private const val MAX_RENDER_SCALE = 3f
-private const val DOUBLE_TAP_SCALE = 2.5f
 
 /**
  * How far past 1× a page must be before a one-finger drag belongs to it rather than to the pager.
@@ -754,7 +796,6 @@ private const val DOUBLE_TAP_SCALE = 2.5f
  * A hair above 1 rather than exactly 1, because a pinch that has just started leaves the scale at
  * 1.0000001 and a drag at that magnification is still a page turn.
  */
-private const val ZOOMED_THRESHOLD = 1.01f
 
 /** 32 MB of ARGB — several screens' worth, and far short of an out-of-memory on a mid-range phone. */
 private const val MAX_RENDER_PIXELS = 8_000_000L

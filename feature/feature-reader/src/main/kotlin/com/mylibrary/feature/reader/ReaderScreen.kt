@@ -37,7 +37,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mylibrary.core.domain.model.ReadingDirection
-import com.mylibrary.core.domain.model.ReflowMode
 import com.mylibrary.core.ui.component.ErrorState
 import com.mylibrary.core.ui.component.LoadingState
 import com.mylibrary.core.ui.mvi.ObserveEffects
@@ -141,8 +140,26 @@ fun ReaderScreen(
             state.totalUnits == 0 -> LoadingState()
 
             else -> ProvideLayoutDirection(contentDirection) {
+                // Two questions, asked in that order: what the file is made of, and how the reader
+                // asked to see it. Four presentations, one for each answer, and each pair is the
+                // same two presentations the other family has — pages to turn, or a column to
+                // scroll. The layout setting is the reader's, so it decides for both.
                 when {
-                    state.isPaged -> PagedReaderContent(
+                    !state.hasPages -> if (state.isPageImages) {
+                        PagedScrollReaderContent(
+                            state = state,
+                            viewModel = viewModel,
+                            onIntent = onIntent,
+                        )
+                    } else {
+                        ReflowableReaderContent(
+                            state = state,
+                            viewModel = viewModel,
+                            onIntent = onIntent,
+                        )
+                    }
+
+                    state.isPageImages -> PagedReaderContent(
                         state = state,
                         viewModel = viewModel,
                         onIntent = onIntent,
@@ -151,13 +168,7 @@ fun ReaderScreen(
                     // Same document, two answers to "how much text is a screenful". The paged view
                     // measures the chapter and turns it in pages; the scrolling one leaves the text
                     // in a single column and lets it move.
-                    state.settings.reflowMode == ReflowMode.PAGED -> ReflowablePagedContent(
-                        state = state,
-                        viewModel = viewModel,
-                        onIntent = onIntent,
-                    )
-
-                    else -> ReflowableReaderContent(
+                    else -> ReflowablePagedContent(
                         state = state,
                         viewModel = viewModel,
                         onIntent = onIntent,

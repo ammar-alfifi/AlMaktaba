@@ -60,7 +60,7 @@ import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
-import com.mylibrary.core.domain.model.ReflowMode
+import com.mylibrary.core.domain.model.ReaderLayout
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.ViewMode
 import com.mylibrary.core.domain.usecase.UpdateSettingsUseCase
@@ -275,10 +275,25 @@ private fun LibrarySection(settings: ReaderSettings, onIntent: (SettingsIntent) 
     }
 }
 
-/** The defaults every document opens with. */
+/**
+ * The reading defaults, in three groups rather than one list.
+ *
+ * The list used to be flat, which offered the reading font to someone who only reads comics and
+ * page fit to someone who only reads novels, with nothing saying which was which. The groups are
+ * the reader's own rule — a control belongs where it is honoured — so the same three questions are
+ * answered in the same order here as in the reader's settings sheet.
+ */
 @Composable
 private fun ReadingSection(settings: ReaderSettings, onIntent: (SettingsIntent) -> Unit) {
-    SettingsSection(title = stringResource(R.string.settings_section_reading)) {
+    TextReadingSection(settings, onIntent)
+    PageReadingSection(settings, onIntent)
+    SharedReadingSection(settings, onIntent)
+}
+
+/** Settings that only mean something for reflowable text. */
+@Composable
+private fun TextReadingSection(settings: ReaderSettings, onIntent: (SettingsIntent) -> Unit) {
+    SettingsSection(title = stringResource(R.string.settings_section_reading_text)) {
         DropdownSettingRow(
             title = stringResource(R.string.settings_reader_font),
             options = ReaderFont.entries,
@@ -300,57 +315,19 @@ private fun ReadingSection(settings: ReaderSettings, onIntent: (SettingsIntent) 
             valueRange = UpdateSettingsUseCase.MIN_LINE_HEIGHT..UpdateSettingsUseCase.MAX_LINE_HEIGHT,
             onValueChange = { onIntent(SettingsIntent.LineHeightChanged(it)) },
         )
-        SectionDivider()
-        ChoiceSettingRow(
-            title = stringResource(R.string.settings_reflow_mode),
-            options = ReflowMode.entries,
-            selected = settings.reflowMode,
-            labelRes = ReflowMode::labelRes,
-            onSelect = { onIntent(SettingsIntent.ReflowModeChanged(it)) },
-        )
-        SectionDivider()
-        SwitchRow(
-            title = stringResource(R.string.settings_tap_to_turn),
-            summary = stringResource(R.string.settings_tap_to_turn_summary),
-            checked = settings.tapToTurnPages,
-            onCheckedChange = { onIntent(SettingsIntent.TapToTurnToggled(it)) },
-        )
-        SectionDivider()
+    }
+}
+
+/** Settings that only mean something for a document made of page images. */
+@Composable
+private fun PageReadingSection(settings: ReaderSettings, onIntent: (SettingsIntent) -> Unit) {
+    SettingsSection(title = stringResource(R.string.settings_section_reading_pages)) {
         ChoiceSettingRow(
             title = stringResource(R.string.settings_page_fit),
             options = PageFitMode.entries,
             selected = settings.pageFitMode,
             labelRes = PageFitMode::labelRes,
             onSelect = { onIntent(SettingsIntent.PageFitChanged(it)) },
-        )
-        SectionDivider()
-        ChoiceSettingRow(
-            title = stringResource(R.string.settings_reading_direction),
-            options = ReadingDirection.entries,
-            selected = settings.readingDirection,
-            labelRes = ReadingDirection::labelRes,
-            onSelect = { onIntent(SettingsIntent.ReadingDirectionChanged(it)) },
-        )
-        SectionDivider()
-        SwitchRow(
-            title = stringResource(R.string.settings_keep_screen_on),
-            summary = stringResource(R.string.settings_keep_screen_on_summary),
-            checked = settings.keepScreenOn,
-            onCheckedChange = { onIntent(SettingsIntent.KeepScreenOnToggled(it)) },
-        )
-        SectionDivider()
-        SwitchRow(
-            title = stringResource(R.string.settings_show_progress),
-            summary = stringResource(R.string.settings_show_progress_summary),
-            checked = settings.showProgressIndicator,
-            onCheckedChange = { onIntent(SettingsIntent.ShowProgressToggled(it)) },
-        )
-        SectionDivider()
-        SwitchRow(
-            title = stringResource(R.string.settings_page_snapping),
-            summary = stringResource(R.string.settings_page_snapping_summary),
-            checked = settings.pageSnapping,
-            onCheckedChange = { onIntent(SettingsIntent.PageSnappingToggled(it)) },
         )
         SectionDivider()
         // Three options, so this renders as a scrolling chip row rather than a segmented one: the
@@ -369,6 +346,49 @@ private fun ReadingSection(settings: ReaderSettings, onIntent: (SettingsIntent) 
             summary = stringResource(R.string.settings_bubble_zoom_summary),
             checked = settings.bubbleZoom,
             onCheckedChange = { onIntent(SettingsIntent.BubbleZoomToggled(it)) },
+        )
+    }
+}
+
+/** Settings every document obeys, whichever format it is in. */
+@Composable
+private fun SharedReadingSection(settings: ReaderSettings, onIntent: (SettingsIntent) -> Unit) {
+    SettingsSection(title = stringResource(R.string.settings_section_reading_all)) {
+        ChoiceSettingRow(
+            title = stringResource(R.string.settings_layout),
+            options = ReaderLayout.entries,
+            selected = settings.layout,
+            labelRes = ReaderLayout::labelRes,
+            onSelect = { onIntent(SettingsIntent.LayoutChanged(it)) },
+        )
+        SectionDivider()
+        ChoiceSettingRow(
+            title = stringResource(R.string.settings_reading_direction),
+            options = ReadingDirection.entries,
+            selected = settings.readingDirection,
+            labelRes = ReadingDirection::labelRes,
+            onSelect = { onIntent(SettingsIntent.ReadingDirectionChanged(it)) },
+        )
+        SectionDivider()
+        SwitchRow(
+            title = stringResource(R.string.settings_tap_to_turn),
+            summary = stringResource(R.string.settings_tap_to_turn_summary),
+            checked = settings.tapToTurnPages,
+            onCheckedChange = { onIntent(SettingsIntent.TapToTurnToggled(it)) },
+        )
+        SectionDivider()
+        SwitchRow(
+            title = stringResource(R.string.settings_keep_screen_on),
+            summary = stringResource(R.string.settings_keep_screen_on_summary),
+            checked = settings.keepScreenOn,
+            onCheckedChange = { onIntent(SettingsIntent.KeepScreenOnToggled(it)) },
+        )
+        SectionDivider()
+        SwitchRow(
+            title = stringResource(R.string.settings_show_progress),
+            summary = stringResource(R.string.settings_show_progress_summary),
+            checked = settings.showProgressIndicator,
+            onCheckedChange = { onIntent(SettingsIntent.ShowProgressToggled(it)) },
         )
     }
 }
@@ -743,9 +763,9 @@ private fun PageFitMode.labelRes(): Int = when (this) {
 }
 
 @StringRes
-private fun ReflowMode.labelRes(): Int = when (this) {
-    ReflowMode.SCROLL -> R.string.settings_reflow_scroll
-    ReflowMode.PAGED -> R.string.settings_reflow_paged
+private fun ReaderLayout.labelRes(): Int = when (this) {
+    ReaderLayout.SCROLL -> R.string.settings_layout_scroll
+    ReaderLayout.PAGED -> R.string.settings_layout_paged
 }
 
 @StringRes

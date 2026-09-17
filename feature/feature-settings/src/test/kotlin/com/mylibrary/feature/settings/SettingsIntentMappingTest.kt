@@ -7,7 +7,7 @@ import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
-import com.mylibrary.core.domain.model.ReflowMode
+import com.mylibrary.core.domain.model.ReaderLayout
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.ViewMode
 import com.mylibrary.core.domain.repository.SettingsRepository
@@ -99,7 +99,6 @@ class SettingsIntentMappingTest {
             readingDirection = ReadingDirection.LEFT_TO_RIGHT,
             keepScreenOn = false,
             showProgressIndicator = false,
-            pageSnapping = false,
         )
 
         assertEquals(
@@ -232,8 +231,8 @@ class SettingsIntentMappingTest {
             Case(
                 name = "page snapping",
                 startFrom = Defaults,
-                intent = SettingsIntent.PageSnappingToggled(false),
-                expected = Defaults.copy(pageSnapping = false),
+                intent = SettingsIntent.LayoutChanged(ReaderLayout.SCROLL),
+                expected = Defaults.copy(layout = ReaderLayout.SCROLL),
             ),
             Case(
                 name = "reset",
@@ -299,8 +298,7 @@ class ResetReaderDefaultsTest {
         readingDirection = ReadingDirection.LEFT_TO_RIGHT,
         keepScreenOn = false,
         showProgressIndicator = false,
-        pageSnapping = false,
-        reflowMode = ReflowMode.PAGED,
+        layout = ReaderLayout.SCROLL,
         tapToTurnPages = false,
         pageTurnEffect = PageTurnEffect.FADE,
         bubbleZoom = false,
@@ -324,8 +322,7 @@ class ResetReaderDefaultsTest {
         assertEquals(defaults.readingDirection, reset.readingDirection)
         assertEquals(defaults.keepScreenOn, reset.keepScreenOn)
         assertEquals(defaults.showProgressIndicator, reset.showProgressIndicator)
-        assertEquals(defaults.pageSnapping, reset.pageSnapping)
-        assertEquals(defaults.reflowMode, reset.reflowMode)
+        assertEquals(defaults.layout, reset.layout)
         assertEquals(defaults.tapToTurnPages, reset.tapToTurnPages)
         assertEquals("the turn effect is a reading setting", defaults.pageTurnEffect, reset.pageTurnEffect)
         assertEquals("bubble zoom is a reading setting", defaults.bubbleZoom, reset.bubbleZoom)

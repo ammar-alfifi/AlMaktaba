@@ -21,9 +21,9 @@
 
     <!-- Settings -->
     <string name="reader_settings_theme">المظهر</string>
-    <string name="reader_settings_reflow">طريقة العرض</string>
-    <string name="reader_reflow_scroll">تمرير</string>
-    <string name="reader_reflow_paged">صفحات</string>
+    <string name="reader_settings_layout">طريقة العرض</string>
+    <string name="reader_layout_scroll">تمرير متصل</string>
+    <string name="reader_layout_paged">صفحات</string>
     <string name="reader_settings_tap_to_turn">النقر على الجانبين لقلب الصفحات</string>
     <string name="reader_settings_reset">إعادة ضبط إعدادات القراءة</string>
     <string name="reader_settings_reset_message">سيُعاد ضبط الخط وحجمه وتباعد الأسطر وطريقة العرض وملاءمة الصفحة واتجاه القراءة. لن يتغيّر مظهر التطبيق ولا لغته ولا ترتيب مكتبتك.</string>
@@ -36,7 +36,7 @@
     <string name="reader_settings_font">الخط</string>
     <string name="reader_settings_font_summary">يُطبَّق على الكتب النصية مثل EPUB و TXT.</string>
     <string name="reader_settings_page_turn">انتقال قلب الصفحة</string>
-    <string name="reader_settings_page_turn_summary">يُطبَّق على الملفات ذات الصفحات: PDF والقصص المصورة والنصوص المقسمة إلى صفحات.</string>
+    <string name="reader_settings_page_turn_summary">يُطبَّق عندما تكون الصفحات معروضة واحدة تلو الأخرى — أي في وضع «صفحات»، لأي ملف.</string>
     <string name="reader_page_turn_curl">تقليب الورقة</string>
     <string name="reader_page_turn_slide">انزلاق</string>
     <string name="reader_page_turn_fade">تلاشٍ</string>

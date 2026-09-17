@@ -211,7 +211,7 @@ internal fun ReaderTopBar(
  */
 @Composable
 internal fun ReaderUiState.positionDescription(): String = when {
-    isPaged -> stringResource(
+    isPageImages -> stringResource(
         com.mylibrary.core.ui.R.string.ui_page_of,
         (currentUnit + 1).coerceAtMost(totalUnits),
         totalUnits,
@@ -232,7 +232,7 @@ internal fun ReaderUiState.positionDescription(): String = when {
  */
 @Composable
 internal fun ReaderUiState.progressDescription(): String =
-    if (!isPaged && reflowPageCount > 0) {
+    if (!isPageImages && reflowPageCount > 0) {
         stringResource(
             R.string.reader_page_of_chapter,
             (reflowPage + 1).coerceAtMost(reflowPageCount),

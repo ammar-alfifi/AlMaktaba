@@ -73,7 +73,24 @@ enum class AppFont { SYSTEM, AMIRI, PLEX_ARABIC, REEM_KUFI }
  * rotation, a new chapter — and it buys two things scrolling cannot: a page is a unit the reader can
  * hold in mind, and its position is a character offset that survives being reopened.
  */
-enum class ReflowMode { SCROLL, PAGED }
+/**
+ * How a document is presented: as discrete pages, or as a continuous scroll.
+ *
+ * One setting for both families of file, because it is one question. A comic and a novel may
+ * genuinely want different answers, but they want them from the *same* control in the same place —
+ * two settings meaning "pages or scrolling" gave the reader two places to look for one decision and
+ * let one of them be wired to nothing.
+ *
+ * The entry names are load-bearing: the settings store resolves a stored value by name
+ * (`SettingsDataStore`), so renaming the enum is safe and renaming `SCROLL` or `PAGED` is not.
+ */
+enum class ReaderLayout {
+    /** One page at a time, turned by a swipe or a tap. */
+    PAGED,
+
+    /** Pages one below the other, scrolled through continuously. */
+    SCROLL,
+}
 
 /** How a paged document is scaled into the viewport. */
 enum class PageFitMode {
@@ -159,17 +176,20 @@ data class ReaderSettings(
     val keepScreenOn: Boolean = true,
     /** Show the page number / progress indicator while reading. */
     val showProgressIndicator: Boolean = true,
-    /** Snap paged documents to one page at a time instead of continuous scrolling. */
-    val pageSnapping: Boolean = true,
 
     /**
-     * Whether a reflowable document scrolls or is split into pages.
+     * Whether a document is read as pages or as a continuous scroll.
      *
-     * [ReflowMode.SCROLL] by default: the reader has to work on a phone nobody has put this build on
-     * yet, and a scrolling column cannot produce a blank page or a cut-off line, whatever the
-     * measurement does. Paging is one tap away in the reader's own settings.
+     * One setting for every format. It used to be two — a reflow mode for text and a snapping switch
+     * for page images — which meant the same decision had two homes, and the one belonging to page
+     * images was wired to nothing at all.
+     *
+     * [ReaderLayout.PAGED] by default, so a new reader meets the app as a book: pages, turned. The
+     * earlier default of a scrolling column was chosen when only text could scroll and the worry was
+     * that pagination might cut a line; pages are now the presentation both families share, and the
+     * scroll is one tap away for anyone who wants it.
      */
-    val reflowMode: ReflowMode = ReflowMode.SCROLL,
+    val layout: ReaderLayout = ReaderLayout.PAGED,
 
     /**
      * Whether tapping the sides of the page turns it.

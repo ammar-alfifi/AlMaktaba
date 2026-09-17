@@ -11,6 +11,9 @@
     <string name="settings_section_language">Language</string>
     <string name="settings_section_library">Library</string>
     <string name="settings_section_reading">Reading</string>
+    <string name="settings_section_reading_text">Reading text</string>
+    <string name="settings_section_reading_pages">Reading page images</string>
+    <string name="settings_section_reading_all">All documents</string>
     <string name="settings_section_about">About</string>
 
     <!-- Appearance -->
@@ -61,17 +64,15 @@
     <string name="settings_keep_screen_on_summary">Stop the screen from sleeping while reading.</string>
     <string name="settings_show_progress">Show progress</string>
     <string name="settings_show_progress_summary">Show the page number or percentage while reading.</string>
-    <string name="settings_page_snapping">Snap to pages</string>
-    <string name="settings_page_snapping_summary">Advance one page at a time instead of scrolling continuously.</string>
     <string name="settings_page_turn_effect">Page turn effect</string>
     <string name="settings_page_turn_curl">Page curl</string>
     <string name="settings_page_turn_slide">Slide</string>
     <string name="settings_page_turn_fade">Fade</string>
     <string name="settings_bubble_zoom">Zoom into speech bubbles</string>
     <string name="settings_bubble_zoom_summary">A double-tap on a speech bubble or panel in a comic zooms into it.</string>
-    <string name="settings_reflow_mode">Text layout</string>
-    <string name="settings_reflow_scroll">Scroll</string>
-    <string name="settings_reflow_paged">Pages</string>
+    <string name="settings_layout">Layout</string>
+    <string name="settings_layout_scroll">Continuous scroll</string>
+    <string name="settings_layout_paged">Pages</string>
     <string name="settings_tap_to_turn">Tap the sides to turn pages</string>
     <string name="settings_tap_to_turn_summary">The sides turn the page; the middle of the screen shows the toolbar.</string>
 

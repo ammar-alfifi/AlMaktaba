@@ -11,7 +11,7 @@ import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingLocator
-import com.mylibrary.core.domain.model.ReflowMode
+import com.mylibrary.core.domain.model.ReaderLayout
 import com.mylibrary.core.domain.model.SearchHit
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.TocEntry
@@ -24,9 +24,14 @@ enum class ReaderPanel { TABLE_OF_CONTENTS, BOOKMARKS, SETTINGS, SEARCH }
  *
  * The reader covers two very different document kinds, and rather than splitting into two screens
  * with two ViewModels — which would duplicate opening, progress, bookmarks, search and every
- * setting — the difference is reduced to three fields: [isPaged], [currentUnit] and [totalUnits],
- * where a "unit" is a page in one case and a chapter in the other. Everything else is shared, which
- * is why the toolbar, the sheets and the bookmark logic are written once.
+ * setting — the difference is reduced to three fields: [isPageImages], [currentUnit] and
+ * [totalUnits], where a "unit" is a page in one case and a chapter in the other. Everything else is
+ * shared, which is why the toolbar, the sheets and the bookmark logic are written once.
+ *
+ * **[isPageImages] is about the file; [hasPages] is about the reader.** They are different questions
+ * and conflating them is what hid the page-turn control from a paged EPUB: the file decides whether
+ * there are pixels to render and text to search, while the *layout* setting decides whether the
+ * reader is turning pages at all.
  */
 @Immutable
 data class ReaderUiState(
@@ -45,11 +50,14 @@ data class ReaderUiState(
      * The reader serves five formats through four engines, and they do not offer the same things: a
      * comic has no text layer to search and no outline to navigate, a plain-text file has no outline
      * either, and only a PDF or a comic has pages to render. The toolbar reads this rather than
-     * guessing from [isPaged], so an action that cannot work is absent instead of present and inert.
+     * guessing from [isPageImages], so an action that cannot work is absent instead of present and
+     * inert.
      */
     val capabilities: EngineCapabilities = EngineCapabilities(),
 
-    val isPaged: Boolean = false,
+    /** Whether the document is made of page images — a PDF or a comic — rather than reflowed text. */
+    val isPageImages: Boolean = false,
+
     val totalUnits: Int = 0,
     val currentUnit: Int = 0,
 
@@ -132,6 +140,16 @@ data class ReaderUiState(
     val documentFont: FontFamily? = null,
 ) {
     /**
+     * Whether the reader is showing discrete pages right now, whatever the document is made of.
+     *
+     * The layout setting, not the format: a PDF laid out as a continuous scroll has no pages to turn
+     * and no page-turn effect to choose, and an EPUB laid out as pages has both. Every control that
+     * only means something with pages in front of the reader asks this rather than asking what kind
+     * of file is open.
+     */
+    val hasPages: Boolean get() = settings.layout == ReaderLayout.PAGED
+
+    /**
      * How far through the document the reader is, in 0f..1f.
      *
      * Deliberately the same arithmetic as `ReadingProgressUseCase`, which is what the library card
@@ -144,7 +162,7 @@ data class ReaderUiState(
     val progress: Float
         get() = when {
             totalUnits <= 0 -> 0f
-            isPaged -> (currentUnit + 1).toFloat() / totalUnits
+            isPageImages -> (currentUnit + 1).toFloat() / totalUnits
             else -> (currentUnit + chapterFraction) / totalUnits
         }
 
@@ -169,7 +187,7 @@ data class ReaderUiState(
     val currentLocator: ReadingLocator?
         get() = when {
             book == null -> null
-            isPaged -> ReadingLocator.Paged(currentUnit)
+            isPageImages -> ReadingLocator.Paged(currentUnit)
             else -> ReadingLocator.Reflowable(currentUnit, reflowOffset)
         }
 }
@@ -222,7 +240,7 @@ sealed interface ReaderIntent {
     data class SetLineHeight(val scale: Float) : ReaderIntent
     data class SetPageFit(val mode: PageFitMode) : ReaderIntent
     data class SetKeepScreenOn(val enabled: Boolean) : ReaderIntent
-    data class SetReflowMode(val mode: ReflowMode) : ReaderIntent
+    data class SetLayout(val layout: ReaderLayout) : ReaderIntent
     data class SetTapToTurnPages(val enabled: Boolean) : ReaderIntent
     data class SetPageTurnEffect(val effect: PageTurnEffect) : ReaderIntent
     data class SetBubbleZoom(val enabled: Boolean) : ReaderIntent

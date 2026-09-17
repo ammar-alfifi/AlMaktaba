@@ -6,9 +6,9 @@ import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ReaderFont
+import com.mylibrary.core.domain.model.ReaderLayout
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
-import com.mylibrary.core.domain.model.ReflowMode
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.ViewMode
 import com.mylibrary.core.domain.repository.SettingsRepository
@@ -60,9 +60,7 @@ class UpdateSettingsUseCase @Inject constructor(
     suspend fun setShowProgressIndicator(enabled: Boolean) =
         settingsRepository.update { it.copy(showProgressIndicator = enabled) }
 
-    suspend fun setPageSnapping(enabled: Boolean) = settingsRepository.update { it.copy(pageSnapping = enabled) }
-
-    suspend fun setReflowMode(mode: ReflowMode) = settingsRepository.update { it.copy(reflowMode = mode) }
+    suspend fun setLayout(layout: ReaderLayout) = settingsRepository.update { it.copy(layout = layout) }
 
     suspend fun setTapToTurnPages(enabled: Boolean) =
         settingsRepository.update { it.copy(tapToTurnPages = enabled) }
@@ -100,8 +98,7 @@ class UpdateSettingsUseCase @Inject constructor(
             readingDirection = ReaderSettings.Default.readingDirection,
             keepScreenOn = ReaderSettings.Default.keepScreenOn,
             showProgressIndicator = ReaderSettings.Default.showProgressIndicator,
-            pageSnapping = ReaderSettings.Default.pageSnapping,
-            reflowMode = ReaderSettings.Default.reflowMode,
+            layout = ReaderSettings.Default.layout,
             tapToTurnPages = ReaderSettings.Default.tapToTurnPages,
             // Both of these decide what happens when a page is turned, so they belong to reading
             // rather than to appearance — unlike `uiFont`, which the reader's panel does not offer.

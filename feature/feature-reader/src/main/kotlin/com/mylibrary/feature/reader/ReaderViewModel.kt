@@ -184,7 +184,7 @@ class ReaderViewModel @Inject constructor(
                         isAwaitingPassword = false,
                         lastPasswordWasWrong = false,
                         capabilities = opened.capabilities,
-                        isPaged = opened is PagedDocument,
+                        isPageImages = opened is PagedDocument,
                         totalUnits = unitCountOf(opened),
                         currentUnit = restored,
                         reflowOffset = restoredOffset,
@@ -448,7 +448,7 @@ class ReaderViewModel @Inject constructor(
             is ReaderIntent.SetLineHeight -> launch { updateSettings.setLineHeightScale(intent.scale) }
             is ReaderIntent.SetPageFit -> launch { updateSettings.setPageFitMode(intent.mode) }
             is ReaderIntent.SetKeepScreenOn -> launch { updateSettings.setKeepScreenOn(intent.enabled) }
-            is ReaderIntent.SetReflowMode -> launch { updateSettings.setReflowMode(intent.mode) }
+            is ReaderIntent.SetLayout -> launch { updateSettings.setLayout(intent.layout) }
             is ReaderIntent.SetTapToTurnPages -> launch { updateSettings.setTapToTurnPages(intent.enabled) }
             is ReaderIntent.SetPageTurnEffect -> launch { updateSettings.setPageTurnEffect(intent.effect) }
             is ReaderIntent.SetBubbleZoom -> launch { updateSettings.setBubbleZoom(intent.enabled) }

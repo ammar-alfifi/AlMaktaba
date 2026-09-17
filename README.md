@@ -34,7 +34,7 @@ Jetpack Compose و Material 3، ومعمارية نظيفة متعددة الو�
 | **Languages** | Arabic by default, English as a complete second locale, switchable in-app without a restart |
 | **Direction** | Full RTL for Arabic, LTR for English — and a document's own direction is honoured *independently* of the UI, so an English TXT reads left-to-right inside the Arabic interface |
 | **Library** | Import through the Storage Access Framework — single files **or a whole device folder**, which keeps a series together as one shelf and can be re-scanned for new volumes later; grid/list layouts, five sort orders, favourite, format and folder filters, automatic cover extraction, moving a book between folders |
-| **Reader** | One toolbar across all five formats, adapting to what the open file can do; paged and reflowable modes; **EPUB and TXT can be split into pages** as well as scrolled; tap zones that turn the page (mirrored for Arabic) or scroll a screenful, with a haptic tick on every turn and a switch to turn them off; pinch-zoom, double-tap and a clamped pan; **double-tap a speech bubble or panel in a comic to zoom into it**; page turns animated by a page-curl, a slide or a fade; three page-fit modes; per-document search, outlines, bookmarks; font/theme/line-height controls that apply live, three bundled Arabic typefaces plus an interface font of their own, and one button that puts them all back |
+| **Reader** | One toolbar across all five formats, adapting to what the open file can do; **every format has both a pages layout and a continuous-scroll one**, chosen by one setting that both families obey; tap zones that turn the page (mirrored for Arabic) or scroll a screenful, with a haptic tick on every turn and a switch to turn them off; pinch-zoom, double-tap and a clamped pan; **double-tap a speech bubble or panel in a comic to zoom into it**; page turns animated by a page-curl, a slide or a fade — and in PDF, CBZ and CBR the curl lifts a corner on a diagonal fold and rolls the sheet over; three page-fit modes; per-document search, outlines, bookmarks; font/theme/line-height controls that apply live, three bundled Arabic typefaces plus an interface font of their own, and one button that puts them all back |
 | **Storage** | No storage permission at all — only scoped `content://` access to files and folders the user picked |
 
 ## 2. Requirements compliance
@@ -210,6 +210,50 @@ proportions require, and actual size for the page's own dimensions — and the t
 from the file are then capped, because a PDF page tree may declare any MediaBox it likes. What the
 file controls gets bounded; what the screen controls does not.
 
+**The page curl lifts a corner, and the fold runs diagonally.** Every other turn effect is a
+transform of the page — a scale, a fade, a rotation about its binding edge — and an earlier curl was
+one too: a 70° `rotationY` with a gradient rectangle standing in for the shadow. It reads as a card
+turning, because that is what it is. A plane cannot bend, and a page lifted at its corner bends along
+a line running from one edge to another *across* that corner, not along a line parallel to the spine.
+What sells it is that the sheet past the fold wraps until it is standing edge-on and then turns its
+back to the reader; a page rolled up like a poster has neither the diagonal nor the back, and reads as
+neither. A comic or a PDF page is a bitmap, so it can be cut into bands parallel to the fold, and each
+band is one `drawImage` under an affine transform clipped to the strip of screen it occupies. The
+whole wrap is one-dimensional — a point's journey depends on nothing but its distance from the fold —
+which is why the bands are exact rather than an approximation of some mesh: the spacing of a comic's
+own hatching across the bend tracks `R·sin(d/R)` to within a pixel of where the arithmetic says it
+should be. Bands past a quarter turn come out mirrored on their own, because the cosine that
+foreshortens them has gone negative by then, and that mirror image *is* the sheet's back. The radius
+is a share of the page's shorter side rather than a length in pixels, so the sheet keeps its shape on
+a tablet.
+
+Two dozen `drawImage` calls and one gradient, with nothing per-pixel on the main thread — and a page
+nobody is turning still takes the single draw call it always took. What the effect cannot do is bend
+*live text*: EPUB and TXT draw their pages as composables rather than bitmaps, so bending one would
+mean rasterising the text on every frame of the drag. Text pages keep the rotation, and the reader
+decides between the two in one place.
+
+**A setting appears where it is honoured, not where its format happens to be.** The in-reader
+settings sheet used to branch on whether the *file* was made of page images, and that is a different
+question from what the reader is doing with it. An EPUB laid out as pages turns its pages and reads
+the page-turn setting to animate them — and was never offered the control, because it is not a PDF.
+The two questions are now asked separately: `isPageImages` is about the file (are there pixels to
+render and text to search), and `hasPages` is about the reader (`layout == PAGED`). A control's
+visibility follows from those, in one pure function that four tests pin rather than four branches in
+a composable — which is how the second bug in this area was caught: page fit and speech-bubble zoom
+look like a pair and are not, because a page in a scrolling column has no frame to be fitted into and
+still has bubbles too small to read.
+
+**Pages or scrolling is one setting, not two.** It used to be two — a reflow mode for text and a
+"snap to pages" switch for page images — which gave one decision two homes, and the one belonging to
+page images was wired to nothing at all: declared, persisted, surfaced in Settings, covered by tests,
+and read by no reader. It also meant a PDF could not be scrolled at all. There is now one `layout`
+setting, `PAGED` by default, and both families obey it: four presentations, one for each pairing of
+what the file is made of and how the reader asked to see it. The image scroll is a `LazyColumn` over
+the same render pipeline the pager uses, so it is a second way of *arranging* pages rather than a
+second renderer, and it reports position through the same intent — which is why progress, bookmarks
+and restore work there without knowing it exists.
+
 **Progress for a paged document is exact; for a reflowable one it is per-chapter.** Page *n* of *N*
 is honest. A chapter index is not — chapters range from one page to a hundred — so reflowable
 progress counts the chapters *behind* the reader, and the reader's own progress bar reads the same
@@ -244,7 +288,7 @@ with the reader's series inside it.
 | Module | Tests | Covers |
 |---|---:|---|
 | `format-epub` | 84 | container/OPF parsing, nav + NCX, sanitiser, path resolution, traversal refusal, embedded fonts, links |
-| `feature-reader` | 145 | HTML → block parsing, chapter text offsets and link anchors, which toolbar actions a document supports, tap-zone mirroring, page-fit geometry, **page-breaking arithmetic** (line boundaries, spacing, atomic blocks, degenerate pages), progress agreement with the library, **the speech-bubble detector** (enclosed regions, leaks, specks, slivers, resolution independence), **the tap-to-page geometry** and the page-turn effects |
+| `feature-reader` | 167 | HTML → block parsing, chapter text offsets and link anchors, which toolbar actions a document supports, tap-zone mirroring, page-fit geometry, **page-breaking arithmetic** (line boundaries, spacing, atomic blocks, degenerate pages), progress agreement with the library, **the speech-bubble detector** (enclosed regions, leaks, specks, slivers, resolution independence), **the tap-to-page geometry**, the page-turn effects, **the curl** (that the fold runs diagonally rather than along an edge, that it sweeps the whole page over a turn, that every band is foreshortened and placed on the chord its angle subtends, that it never wraps past half a turn, and that it rolls far enough for the sheet to show its back), and **which settings a reader is offered** (the four document-and-layout combinations, and that page fit and bubble zoom do not gate on the same thing) |
 | `format-text` | 47 | Windows-1256/UTF-16/BOM decoding, chapter splitting, escaping, search offsets |
 | `core-domain` | 46 | format resolution, progress arithmetic, library join, import rules, **folder import and re-scan** (adoption, missing files, revoked grants, deleting with or without contents) |
 | `core-common` | 30 | natural sort key, file-name parsing, byte formatting, result combinators |

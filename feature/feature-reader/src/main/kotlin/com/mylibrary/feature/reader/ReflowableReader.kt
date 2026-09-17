@@ -578,7 +578,6 @@ private const val LINE_HEIGHT_RATIO = 1.5f
  * a page boundary, and it is why the gesture stays useful when the text is being skimmed rather than
  * read closely.
  */
-private const val SCROLL_PAGE_FRACTION = 0.85f
 
 private val READING_MARGIN = 20.dp
 private const val IMAGE_TARGET_WIDTH_PX = 1080

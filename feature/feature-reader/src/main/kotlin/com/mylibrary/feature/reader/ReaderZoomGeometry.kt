@@ -303,5 +303,21 @@ internal const val FOCUS_FILL = 0.85f
 internal const val MIN_USEFUL_ZOOM = 1.15f
 
 /** The scale range the reader allows. */
+/**
+ * Above this a page counts as magnified, and a gesture on it counts as the reader's rather than the
+ * pager's or the column's. A hair over 1 rather than exactly 1, because a pinch that has just
+ * started leaves the scale at 1.0000001 and a drag at that magnification is still a page turn.
+ */
+internal const val ZOOMED_THRESHOLD = 1.01f
+
+/** Long enough to read as movement, short enough not to be waited for. */
+internal const val ZOOM_TWEEN_MS = 280
+
+/** The magnification a double-tap opens at, when there is no speech bubble to frame instead. */
+internal const val DOUBLE_TAP_SCALE = 2.5f
+
+/** The sharpest a page is ever re-rendered at. Bucketed, so a pinch does not re-render per frame. */
+internal const val MAX_RENDER_SCALE = 3f
+
 internal const val MIN_SCALE = 1f
 internal const val MAX_SCALE = 6f

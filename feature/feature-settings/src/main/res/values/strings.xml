@@ -16,6 +16,9 @@
     <string name="settings_section_language">اللغة</string>
     <string name="settings_section_library">المكتبة</string>
     <string name="settings_section_reading">القراءة</string>
+    <string name="settings_section_reading_text">قراءة النصوص</string>
+    <string name="settings_section_reading_pages">قراءة الصور والصفحات</string>
+    <string name="settings_section_reading_all">كل الملفات</string>
     <string name="settings_section_about">عن التطبيق</string>
 
     <!-- Appearance -->
@@ -66,17 +69,15 @@
     <string name="settings_keep_screen_on_summary">منع إطفاء الشاشة تلقائيًا أثناء القراءة.</string>
     <string name="settings_show_progress">إظهار مؤشر التقدم</string>
     <string name="settings_show_progress_summary">عرض رقم الصفحة أو نسبة التقدم أثناء القراءة.</string>
-    <string name="settings_page_snapping">محاذاة الصفحة</string>
-    <string name="settings_page_snapping_summary">الانتقال صفحة واحدة في كل مرة بدل التمرير المتصل.</string>
     <string name="settings_page_turn_effect">تأثير قلب الصفحة</string>
     <string name="settings_page_turn_curl">تقليب الورقة</string>
     <string name="settings_page_turn_slide">انزلاق</string>
     <string name="settings_page_turn_fade">تلاشٍ</string>
     <string name="settings_bubble_zoom">التكبير إلى فقاعة الحوار</string>
     <string name="settings_bubble_zoom_summary">النقر المزدوج على فقاعة كلام أو إطار في القصص المصورة يكبّر إليه.</string>
-    <string name="settings_reflow_mode">طريقة عرض الكتب النصية</string>
-    <string name="settings_reflow_scroll">تمرير</string>
-    <string name="settings_reflow_paged">صفحات</string>
+    <string name="settings_layout">طريقة العرض</string>
+    <string name="settings_layout_scroll">تمرير متصل</string>
+    <string name="settings_layout_paged">صفحات</string>
     <string name="settings_tap_to_turn">النقر على الجانبين لقلب الصفحات</string>
     <string name="settings_tap_to_turn_summary">يقلّب الجانبان الصفحة، ويُظهر وسط الشاشة شريط الأدوات.</string>
 

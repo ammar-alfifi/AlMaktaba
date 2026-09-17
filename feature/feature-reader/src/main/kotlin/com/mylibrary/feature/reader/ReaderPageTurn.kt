@@ -60,6 +60,10 @@ internal fun pageTurnTransform(
     val travel = kotlin.math.abs(distance)
 
     return when (effect) {
+        // **Only a page drawn as a composable turns this way.** A reflowable page is live text with
+        // no pixels to bend, so [PageTurnEffect.CURL] is a rotation for it. A page that *is* a bitmap
+        // — PDF, CBZ, CBR — bends its sheet instead, and the reader hands those pages an identity
+        // transform here so that the two bends do not stack. See `PaperCurl.kt`.
         PageTurnEffect.CURL -> PageTurnTransform(
             // A page being turned swells very slightly as it comes off the block — enough to
             // separate it from the page beneath, not enough to look like a zoom.

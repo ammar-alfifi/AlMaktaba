@@ -49,7 +49,7 @@ import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReadingLocator
-import com.mylibrary.core.domain.model.ReflowMode
+import com.mylibrary.core.domain.model.ReaderLayout
 import com.mylibrary.core.domain.model.SearchHit
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.TocEntry
@@ -200,10 +200,54 @@ private fun BookmarksPanel(
 }
 
 /**
+ * Which blocks of reading settings the current presentation actually honours.
+ *
+ * The sheet used to branch on `state.isPaged` — whether the *file* is made of page images — and that
+ * is the wrong question. What decides whether a control means anything is what the reader is doing
+ * with the document: a paged EPUB turns its pages and has a turn effect to choose, and a PDF laid
+ * out as a continuous scroll has no pages to turn and no page fit to apply. The four combinations
+ * are pinned by a test rather than by reading four branches.
+ */
+internal data class ReaderSettingsScope(
+    /** Reflowed text: the reading font, its size, and the leading. */
+    val text: Boolean,
+    /** Discrete pages in front of the reader: the page-turn effect. */
+    val pages: Boolean,
+    /**
+     * How a page is scaled into the frame it is shown in.
+     *
+     * Paged page images only. A page in a scrolling column is simply as wide as the screen — there
+     * is no second frame for it to be fitted into — so the setting has nothing to say there.
+     */
+    val pageFit: Boolean,
+    /**
+     * Speech-bubble zoom.
+     *
+     * Any page-image document, in *either* layout: a bubble is unreadable at page width whether the
+     * page is turned or scrolled past, and both layouts answer a double-tap on one by opening it at
+     * full size. Gating this with [pageFit] would hide a control the scroll layout honours.
+     */
+    val panels: Boolean,
+)
+
+/** The scope for [state]'s current document and layout. */
+internal fun readerSettingsScope(state: ReaderUiState): ReaderSettingsScope = ReaderSettingsScope(
+    text = !state.isPageImages,
+    pages = state.hasPages,
+    pageFit = state.isPageImages && state.hasPages,
+    panels = state.isPageImages,
+)
+
+/**
  * The reading settings panel.
  *
  * Every control writes straight through to the settings store, so a change is visible on the page
  * behind the sheet as it is made — the sheet is a live preview rather than a form to submit.
+ *
+ * The groups are ordered by how much of the document they apply to: the layout every document
+ * obeys, then the controls only reflowed text has, then the ones only page images have, and last
+ * the two that are true whatever is open. The same three questions, in the same order, are asked in
+ * the app's own settings screen, so neither surface can teach the reader a different mental model.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -211,6 +255,7 @@ private fun ReaderSettingsPanel(
     state: ReaderUiState,
     onIntent: (ReaderIntent) -> Unit,
 ) {
+    val scope = readerSettingsScope(state)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -227,18 +272,20 @@ private fun ReaderSettingsPanel(
             )
         }
 
-        if (!state.isPaged) {
-            HorizontalDivider()
+        HorizontalDivider()
 
-            SettingGroup(title = stringResource(R.string.reader_settings_reflow)) {
-                ChoiceRow(
-                    options = ReflowMode.entries,
-                    selected = state.settings.reflowMode,
-                    onSelect = { onIntent(ReaderIntent.SetReflowMode(it)) },
-                    label = { mode -> Text(reflowModeLabel(mode)) },
-                )
-            }
+        // For every document, because every document has a layout — a PDF can be scrolled and an
+        // EPUB can be paged, and this is the one control that says which.
+        SettingGroup(title = stringResource(R.string.reader_settings_layout)) {
+            ChoiceRow(
+                options = ReaderLayout.entries,
+                selected = state.settings.layout,
+                onSelect = { onIntent(ReaderIntent.SetLayout(it)) },
+                label = { layout -> Text(layoutLabel(layout)) },
+            )
+        }
 
+        if (scope.text) {
             HorizontalDivider()
 
             SettingGroup(
@@ -277,18 +324,9 @@ private fun ReaderSettingsPanel(
                 onValueChange = { onIntent(ReaderIntent.SetLineHeight(it)) },
                 valueLabel = String.format(java.util.Locale.ROOT, "%.2f", state.settings.lineHeightScale),
             )
-        } else {
-            HorizontalDivider()
+        }
 
-            SettingGroup(title = stringResource(R.string.reader_settings_page_fit)) {
-                ChoiceRow(
-                    options = PageFitMode.entries,
-                    selected = state.settings.pageFitMode,
-                    onSelect = { onIntent(ReaderIntent.SetPageFit(it)) },
-                    label = { mode -> Text(pageFitLabel(mode)) },
-                )
-            }
-
+        if (scope.pages) {
             HorizontalDivider()
 
             SettingGroup(
@@ -302,8 +340,23 @@ private fun ReaderSettingsPanel(
                     label = { effect -> Text(pageTurnEffectLabel(effect)) },
                 )
             }
+        }
 
+        if (scope.pageFit || scope.panels) {
             HorizontalDivider()
+
+            if (scope.pageFit) {
+                SettingGroup(title = stringResource(R.string.reader_settings_page_fit)) {
+                    ChoiceRow(
+                        options = PageFitMode.entries,
+                        selected = state.settings.pageFitMode,
+                        onSelect = { onIntent(ReaderIntent.SetPageFit(it)) },
+                        label = { mode -> Text(pageFitLabel(mode)) },
+                    )
+                }
+
+                HorizontalDivider()
+            }
 
             SettingGroup(
                 title = stringResource(R.string.reader_settings_bubble_zoom),
@@ -431,10 +484,10 @@ private fun ResetReaderSettingsButton(onClick: () -> Unit) {
 }
 
 @Composable
-private fun reflowModeLabel(mode: ReflowMode): String = stringResource(
-    when (mode) {
-        ReflowMode.SCROLL -> R.string.reader_reflow_scroll
-        ReflowMode.PAGED -> R.string.reader_reflow_paged
+private fun layoutLabel(layout: ReaderLayout): String = stringResource(
+    when (layout) {
+        ReaderLayout.SCROLL -> R.string.reader_layout_scroll
+        ReaderLayout.PAGED -> R.string.reader_layout_paged
     },
 )
 

@@ -51,3 +51,12 @@ private fun TapZone.mirrored(): TapZone = when (this) {
  * without aiming, narrow enough that the page-turn zones stay reachable with a thumb at either edge.
  */
 private const val EDGE_FRACTION = 0.3f
+
+/**
+ * How much of a screenful a side tap moves a scrolling layout, as a fraction of the viewport.
+ *
+ * Short of a whole screen on purpose: a sliver of the text just read stays in view, which is what
+ * makes the jump legible as movement rather than as a new page appearing. Shared by both scroll
+ * layouts so a tapped side moves the same distance whether the column is text or pages.
+ */
+internal const val SCROLL_PAGE_FRACTION = 0.85f
