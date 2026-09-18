@@ -114,6 +114,7 @@ fun PagedReaderContent(
     val currentTapToTurn by rememberUpdatedState(state.settings.tapToTurnPages)
     val currentReverseTapZones by rememberUpdatedState(state.settings.reverseTapZones)
     val currentBubbleZoom by rememberUpdatedState(state.settings.bubbleZoom)
+    val currentHapticsEnabled by rememberUpdatedState(state.settings.hapticsEnabled)
     // Through `rememberUpdatedState` like the settings above, and for the same reason: the gesture
     // loop is not restarted when the direction changes, so a plain `val` read inside it is whatever
     // the direction was when the book was opened. That made the setting look inert — the pages
@@ -244,7 +245,9 @@ fun PagedReaderContent(
             }
 
             if (framed != null) {
-                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                if (currentHapticsEnabled) {
+                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                }
                 zoomTo(framed)
                 return@launch
             }
@@ -342,12 +345,16 @@ fun PagedReaderContent(
                         )
                         when (zone) {
                             TapZone.PREVIOUS -> {
-                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                if (currentHapticsEnabled) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                }
                                 currentOnIntent(ReaderIntent.PreviousUnit)
                             }
 
                             TapZone.NEXT -> {
-                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                if (currentHapticsEnabled) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                }
                                 currentOnIntent(ReaderIntent.NextUnit)
                             }
 

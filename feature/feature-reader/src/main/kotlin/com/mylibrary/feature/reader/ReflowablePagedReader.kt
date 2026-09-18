@@ -34,8 +34,13 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -55,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import com.mylibrary.core.domain.model.PageTurnEffect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** Only reached if a font size is set beyond the settings' own ceiling, so it is a backstop. */
 private const val MAX_MEASURED_LINES = 400
@@ -85,6 +91,7 @@ fun ReflowablePagedContent(
     val scope = rememberCoroutineScope()
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val currentOnIntent by rememberUpdatedState(onIntent)
+    val currentHapticsEnabled by rememberUpdatedState(state.settings.hapticsEnabled)
     val linkColor = MaterialTheme.colorScheme.primary
 
     val content by produceState<ChapterContent>(ChapterContent.Empty, state.currentUnit, linkColor) {
@@ -209,7 +216,9 @@ fun ReflowablePagedContent(
 
                             TapZone.NEXT -> {
                                 val next = pagerState.currentPage + 1
-                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                if (currentHapticsEnabled) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                }
                                 if (next < pageCount) {
                                     scope.launch { pagerState.animateScrollToPage(next) }
                                 } else {
@@ -221,7 +230,9 @@ fun ReflowablePagedContent(
 
                             TapZone.PREVIOUS -> {
                                 val previous = pagerState.currentPage - 1
-                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                if (currentHapticsEnabled) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                }
                                 if (previous >= 0) {
                                     scope.launch { pagerState.animateScrollToPage(previous) }
                                 } else {
@@ -264,12 +275,10 @@ fun ReflowablePagedContent(
  * **How a page of live text gets a paper curl.** Every other format's page is a bitmap, so bending
  * it means re-drawing its pixels band by band. Text has no pixels: it is a tree of composables that
  * draws itself into whatever canvas the composition hands it. So the page is drawn once into a
- * [GraphicsLayer] — an offscreen display list, not a bitmap — and *that* is what the bend re-draws,
- * many times, under the same transforms a comic's page goes through.
- *
- * Recording costs a display list per frame of the drag, and the bands then replay it. What it avoids
- * is the alternative every other reader reaches for: rasterising the page to a bitmap on each frame,
- * which is a GPU readback per frame and is what makes a text curl stutter on a cheap phone.
+ * [GraphicsLayer] — an offscreen display list — and the layer *is* rasterised, once, into the pixels
+ * the bend then re-draws under the same transforms a comic's page goes through. From the first frame
+ * of a turn to the last, the bend's own work is identical to a comic's, because the sheet is the same
+ * kind of thing — the one frame that pays more is the first, which also rasterises. See [Sheet].
  *
  * A settled page takes none of this. It is drawn straight to the canvas exactly as it was before any
  * of it existed, which is the property that matters most — a page nobody is touching cannot have
@@ -294,6 +303,10 @@ private fun PageContent(
     // fold. It is painted the colour the page is already drawn on — the reader's own background — so
     // a settled page is unchanged to the pixel, and only a page in the act of turning has a sheet.
     val paper = MaterialTheme.colorScheme.background
+
+    // Keyed on the page and on the paper, so that anything that changes how the page looks — a new
+    // pagination, a colour scheme — throws the old pixels away rather than bending them.
+    val sheet = remember(pageIndex, page, paper) { Sheet() }
 
     Box(
         modifier = Modifier
@@ -326,26 +339,27 @@ private fun PageContent(
                 .drawWithContent {
                     val offset = pagerState.getOffsetDistanceInPages(pageIndex)
                     if (!paperCurlOwns(pageTurnEffect, offset) || size.width <= 0f || size.height <= 0f) {
+                        // A settled page gives its pixels back and goes on being drawn straight to the
+                        // canvas — the one code path that has always drawn it.
+                        sheet.drop()
                         drawContent()
                         return@drawWithContent
                     }
 
                     val frame = Rect(Offset.Zero, size)
-                    // The page draws itself once into the layer, and the bend below re-draws *that*
-                    // band by band. `drawContent` is called through the outer scope deliberately:
-                    // recording swaps the canvas the draw context points at, so the content lands in
-                    // the layer rather than on the screen it was about to be drawn to.
-                    layer.record(frame.size.toIntSize()) { this@drawWithContent.drawContent() }
-                    drawPaperCurlSheet(
+                    val image = sheet.image ?: rasterise(layer) {
+                        this@drawWithContent.drawContent()
+                    }.also { sheet.image = it }
+
+                    drawPaperCurl(
+                        page = image,
                         frame = frame,
                         curl = paperCurl(
                             roll = paperCurlRoll(offset),
                             frame = frame,
                             hingeAtLeft = pageTurnPivotX(offset, isRtl) < 0.5f,
                         ),
-                    ) {
-                        drawLayer(layer)
-                    }
+                    )
                 }
                 .background(paper)
                 // A safety valve rather than a feature: an image taller than the page is placed
@@ -370,6 +384,66 @@ private fun PageContent(
             }
         }
     }
+}
+
+/**
+ * The sheet a turn bends, as pixels.
+ *
+ * **Why pixels, and why once.** The bend re-draws the sheet once per band — some fifty draws a
+ * frame — and for a comic each of those is a `drawImage` and costs nothing. Handing it the page's
+ * live display list instead, which is what 1.5.0 did, makes each of those fifty draws a replay of a
+ * page's worth of glyph runs. Measured on the API 35 emulator with the reader's own frame stats,
+ * that was 150 ms for the median frame against 16 ms for the same page slid, with 85% of frames
+ * janky against 6% — a stutter on every turn of every text file, which is what the reader reported.
+ * Pixels cost the same whatever the page is made of, so the page is rasterised on the frame the turn
+ * begins and the bend from then on takes the path a PDF page takes.
+ *
+ * The cost is moved rather than removed — one rasterisation a turn instead of one recording a frame
+ * — and it is paid once, as the finger starts to move, rather than on every frame of the drag. What
+ * is held between turns is nothing: a page that settles gives its pixels back, so a page nobody is
+ * touching is the page it always was, drawn straight to the canvas, holding no memory.
+ *
+ * A turn in flight bends the pixels it was rasterised from, not the page's live composition: the
+ * keys on [remember] — the pagination and the paper colour — are what throw a sheet away. Anything
+ * else that changes how a page looks mid-turn (a late image landing, the chapter footer appearing)
+ * shows up when the page settles, within a turn's duration.
+ */
+private class Sheet {
+    var image: ImageBitmap? = null
+
+    fun drop() {
+        image = null
+    }
+}
+
+/**
+ * Records the page's content into [layer] and hands back what it looks like, as pixels.
+ *
+ * Two steps, both of them synchronous and both of them in the draw pass that asked for them.
+ * `GraphicsLayer.toImageBitmap` would be the obvious one call, but it is `suspend`, and a draw pass
+ * has nowhere to suspend. It also does exactly this underneath — a software canvas over an
+ * `ARGB_8888` bitmap with the layer drawn into it — so doing it by hand costs nothing and keeps the
+ * whole turn inside a single frame.
+ */
+private fun DrawScope.rasterise(
+    layer: GraphicsLayer,
+    content: DrawScope.() -> Unit,
+): ImageBitmap {
+    // `drawContent` is called through the outer scope deliberately: recording swaps the canvas the
+    // draw context points at, so the content lands in the layer rather than on the screen it was
+    // about to be drawn to.
+    layer.record(size.toIntSize()) { content() }
+
+    val pixels = ImageBitmap(size.width.roundToInt(), size.height.roundToInt(), hasAlpha = false)
+    CanvasDrawScope().draw(
+        density = this,
+        layoutDirection = layoutDirection,
+        canvas = Canvas(pixels),
+        size = size,
+    ) {
+        drawLayer(layer)
+    }
+    return pixels
 }
 
 /**

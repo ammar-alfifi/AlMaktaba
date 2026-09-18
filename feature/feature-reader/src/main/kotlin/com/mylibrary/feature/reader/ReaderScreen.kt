@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mylibrary.core.common.AppError
 import com.mylibrary.core.domain.model.ReadingDirection
 import com.mylibrary.core.ui.component.ErrorState
 import com.mylibrary.core.ui.component.LoadingState
@@ -84,12 +87,28 @@ fun ReaderRoute(
         }
     }
 
-    val messageText = pendingMessage?.let { message -> readerMessageText(message) }
-    LaunchedEffect(messageText) {
-        if (messageText != null) {
-            snackbarHostState.showSnackbar(messageText)
-            pendingMessage = null
+    val message = pendingMessage
+    val messageText = message?.let { message -> readerMessageText(message) }
+    val undoLabel = stringResource(com.mylibrary.core.ui.R.string.ui_undo)
+    LaunchedEffect(message) {
+        when {
+            // Deletion is the only message with an undo action, so it is the only one shown as a
+            // snackbar that stays long enough to be read — the panel it was deleted from closes
+            // over the bottom of the screen, where snackbars appear.
+            message is ReaderMessage.BookmarkDeleted -> {
+                val result = snackbarHostState.showSnackbar(
+                    message = messageText.orEmpty(),
+                    actionLabel = undoLabel,
+                    duration = SnackbarDuration.Long,
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    viewModel.onIntent(ReaderIntent.UndoDeleteBookmark(message.bookmark))
+                }
+            }
+
+            messageText != null -> snackbarHostState.showSnackbar(messageText)
         }
+        pendingMessage = null
     }
 
     BackHandler(enabled = state.openPanel != null || state.isChromeVisible) {
@@ -137,7 +156,13 @@ fun ReaderScreen(
                 onRetry = { onIntent(ReaderIntent.Retry) },
             )
 
-            state.totalUnits == 0 -> LoadingState()
+            // Not loading — open and genuinely empty. A document that opens to zero units would
+            // otherwise sit on the spinner forever; an error state at least says so and offers a
+            // way out.
+            state.totalUnits == 0 -> ErrorState(
+                error = AppError.EmptyDocument,
+                onRetry = { onIntent(ReaderIntent.Retry) },
+            )
 
             else -> ProvideLayoutDirection(contentDirection) {
                 // Two questions, asked in that order: what the file is made of, and how the reader
@@ -295,6 +320,7 @@ private fun readerMessageText(message: ReaderMessage): String = stringResource(
     when (message) {
         ReaderMessage.BookmarkAdded -> R.string.reader_bookmark_added
         ReaderMessage.BookmarkRemoved -> R.string.reader_bookmark_removed
+        is ReaderMessage.BookmarkDeleted -> R.string.reader_bookmark_deleted
         ReaderMessage.NoSearchResults -> R.string.reader_no_results
         ReaderMessage.SearchUnavailable -> R.string.reader_search_unavailable
         ReaderMessage.SettingsReset -> R.string.reader_settings_reset_done

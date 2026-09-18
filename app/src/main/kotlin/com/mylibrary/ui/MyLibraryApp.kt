@@ -17,10 +17,13 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -41,6 +44,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.mylibrary.AppEffect
+import com.mylibrary.AppIntent
 import com.mylibrary.AppUiState
 import com.mylibrary.AppViewModel
 import com.mylibrary.R
@@ -99,7 +104,10 @@ fun MyLibraryApp(viewModel: AppViewModel = hiltViewModel()) {
                 // The screen records its own answer through the settings store, which is what makes
                 // this branch flip without anything here having to know that it did.
                 if (state.settings.setupComplete) {
-                    MyLibraryNavHost()
+                    MyLibraryNavHost(
+                        viewModel = viewModel,
+                        externalBookId = state.externalBookId,
+                    )
                 } else {
                     ColorSetupRoute(onDone = {})
                 }
@@ -142,15 +150,44 @@ private fun MyLibraryLocalized(language: AppLanguage, content: @Composable () ->
 }
 
 @Composable
-private fun MyLibraryNavHost(navController: NavHostController = rememberNavController()) {
+private fun MyLibraryNavHost(
+    viewModel: AppViewModel,
+    externalBookId: Long?,
+    navController: NavHostController = rememberNavController(),
+) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+
+    // A file handed over by another app has been imported; now it is opened. Handled here rather
+    // than in [MyLibraryApp] because only the host owns the NavController — and inside the setup
+    // branch a pending book simply waits, because there is no back stack to open it onto yet.
+    LaunchedEffect(externalBookId) {
+        if (externalBookId != null) {
+            navController.navigate(Routes.reader(externalBookId)) {
+                launchSingleTop = true
+            }
+            viewModel.onIntent(AppIntent.ExternalBookConsumed)
+        }
+    }
+
+    // The failure side of the same road: the file the system sent could not be added. Shown at
+    // the shell level because there is no screen to own it — the intent may have landed anywhere.
+    val snackbarHostState = remember { SnackbarHostState() }
+    val openFailedMessage = stringResource(R.string.app_open_file_failed)
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            if (effect is AppEffect.ExternalImportFailed) {
+                snackbarHostState.showSnackbar(openFailedMessage)
+            }
+        }
+    }
 
     MyLibraryScaffold(
         // An empty list on non-top-level routes is what removes the navigation bar for the reader.
         destinations = if (Routes.isTopLevel(currentRoute)) TopLevelDestinations else emptyList(),
         currentRoute = currentRoute,
         onNavigate = { route -> navController.navigateTopLevel(route) },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         // The rail is the only place the app's name appears on a wide window: a bottom bar names
         // itself by being at the bottom of a phone, where a rail is a column of three icons with
         // nothing saying whose they are.
@@ -178,6 +215,12 @@ private fun MyLibraryNavHost(navController: NavHostController = rememberNavContr
             composable(Routes.SEARCH) {
                 SearchRoute(
                     onOpenBook = { bookId -> navController.navigate(Routes.reader(bookId)) },
+                    // A search hit is not "open the book wherever I left it" — the reader tapped a
+                    // specific result. Without this the route falls back to the plain open above,
+                    // which is the bug this argument exists to fix.
+                    onOpenLocation = { bookId, locator ->
+                        navController.navigate(Routes.reader(bookId, locator))
+                    },
                 )
             }
 
@@ -206,7 +249,14 @@ private fun MyLibraryNavHost(navController: NavHostController = rememberNavContr
 
             composable(
                 route = Routes.READER,
-                arguments = listOf(navArgument(Routes.BOOK_ID_ARG) { type = NavType.LongType }),
+                arguments = listOf(
+                    navArgument(Routes.BOOK_ID_ARG) { type = NavType.LongType },
+                    navArgument(Routes.LOCATOR_ARG) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
                 // Opening a book rises into it rather than cutting to it: a page arriving at its
                 // final size from slightly smaller is what makes the transition read as the book
                 // opening rather than as a screen replacing another. Short, and deliberately not a

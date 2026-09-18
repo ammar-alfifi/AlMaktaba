@@ -9,7 +9,6 @@
     <string name="settings_title">Settings</string>
     <string name="settings_section_appearance">Appearance</string>
     <string name="settings_section_language">Language</string>
-    <string name="settings_section_library">Library</string>
     <string name="settings_section_reading">Reading</string>
     <string name="settings_section_reading_text">Reading text</string>
     <string name="settings_section_reading_pages">Reading page images</string>
@@ -28,17 +27,6 @@
     <string name="settings_language_arabic">Arabic</string>
     <string name="settings_language_english">English</string>
     <string name="settings_language_system">System language</string>
-
-    <!-- Library -->
-    <string name="settings_view_mode">View mode</string>
-    <string name="settings_view_grid">Grid</string>
-    <string name="settings_view_list">List</string>
-    <string name="settings_sort">Sort by</string>
-    <string name="settings_sort_recently_read">Recently read</string>
-    <string name="settings_sort_recently_added">Recently added</string>
-    <string name="settings_sort_title_asc">Title (A - Z)</string>
-    <string name="settings_sort_title_desc">Title (Z - A)</string>
-    <string name="settings_sort_author">Author</string>
 
     <!-- Reading -->
     <string name="settings_reader_font">Reading font</string>

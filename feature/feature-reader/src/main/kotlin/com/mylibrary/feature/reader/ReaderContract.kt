@@ -222,6 +222,9 @@ sealed interface ReaderIntent {
     data object ToggleBookmark : ReaderIntent
     data class DeleteBookmark(val bookmarkId: Long) : ReaderIntent
 
+    /** Puts back a bookmark this session deleted, from the undo action on the snackbar. */
+    data class UndoDeleteBookmark(val bookmark: Bookmark) : ReaderIntent
+
     /** A link inside the document was tapped. The engine decides where it goes. */
     data class FollowLink(val href: String) : ReaderIntent
 
@@ -233,7 +236,6 @@ sealed interface ReaderIntent {
 
     data class SearchQueryChanged(val query: String) : ReaderIntent
     data object SubmitSearch : ReaderIntent
-    data object ClearSearch : ReaderIntent
 
     data class SetThemeMode(val mode: ThemeMode) : ReaderIntent
     data class SetFont(val font: ReaderFont) : ReaderIntent
@@ -241,11 +243,13 @@ sealed interface ReaderIntent {
     data class SetLineHeight(val scale: Float) : ReaderIntent
     data class SetPageFit(val mode: PageFitMode) : ReaderIntent
     data class SetKeepScreenOn(val enabled: Boolean) : ReaderIntent
+    data class SetShowProgressIndicator(val enabled: Boolean) : ReaderIntent
     data class SetLayout(val layout: ReaderLayout) : ReaderIntent
     data class SetTapToTurnPages(val enabled: Boolean) : ReaderIntent
     data class SetReadingDirection(val direction: ReadingDirection) : ReaderIntent
     data class SetReverseTapZones(val enabled: Boolean) : ReaderIntent
     data class SetPageTurnEffect(val effect: PageTurnEffect) : ReaderIntent
+    data class SetHapticsEnabled(val enabled: Boolean) : ReaderIntent
     data class SetBubbleZoom(val enabled: Boolean) : ReaderIntent
 
     /** Put the reading settings back to their defaults, after the reader has confirmed it. */
@@ -271,6 +275,13 @@ sealed interface ReaderEffect {
 sealed interface ReaderMessage {
     data object BookmarkAdded : ReaderMessage
     data object BookmarkRemoved : ReaderMessage
+
+    /**
+     * A bookmark was deleted from the list. Carries the bookmark itself so the screen can offer
+     * undo — re-adding needs the whole object, not just the id it was deleted by.
+     */
+    data class BookmarkDeleted(val bookmark: Bookmark) : ReaderMessage
+
     data object NoSearchResults : ReaderMessage
     data object SearchUnavailable : ReaderMessage
 

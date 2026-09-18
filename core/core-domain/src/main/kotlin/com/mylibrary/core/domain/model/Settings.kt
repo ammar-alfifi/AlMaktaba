@@ -264,6 +264,15 @@ data class ReaderSettings(
     val pageTurnEffect: PageTurnEffect = PageTurnEffect.CURL,
 
     /**
+     * Whether turning a page or tapping a control in the reader ticks.
+     *
+     * On by default because a tick is what tells the reader the tap registered — the page-turn
+     * effects are driven by the finger, and a gesture with no acknowledgment reads as dropped. Off
+     * for anyone reading in bed beside someone asleep, or who simply finds the ticking noisy.
+     */
+    val hapticsEnabled: Boolean = true,
+
+    /**
      * Whether a double-tap zooms into the speech bubble or panel under the finger.
      *
      * On by default, and only meaningful for documents made of page images — a comic, a manga, a

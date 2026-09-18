@@ -107,6 +107,17 @@ class ReaderViewModel @Inject constructor(
         "ReaderViewModel requires a '$ARG_BOOK_ID' navigation argument"
     }
 
+    /**
+     * A place to open at, when the caller named one — a search hit, a bookmark tap.
+     *
+     * When present it wins over the saved reading position: the reader asked for *this* spot, and
+     * landing where they last were would make the request a lie. Absent, the ordinary case, means
+     * the saved position decides. Parsed once here rather than in [openDocument] so a malformed
+     * argument fails the same way every launch does — to `null` — and the saved position takes over.
+     */
+    private val startLocator: ReadingLocator? =
+        savedStateHandle.get<String>(ARG_LOCATOR)?.let(ReadingLocator::parse)
+
     private val documentMutex = Mutex()
     private var document: OpenDocument? = null
 
@@ -209,8 +220,8 @@ class ReaderViewModel @Inject constructor(
     }
 
     /**
-     * The saved position — chapter and, for a reflowable book, the character offset within it —
-     * clamped to what the document actually contains.
+     * The position to open at — an explicit jump target when one was passed in, the saved position
+     * otherwise — clamped to what the document actually contains.
      *
      * Clamping matters when a book is re-imported at a different revision: a saved page 900 in a
      * document that now has 200 pages must open at page 200, not crash or show a blank page. The
@@ -219,7 +230,7 @@ class ReaderViewModel @Inject constructor(
      * the page inside it is not.
      */
     private suspend fun restoredPosition(opened: OpenDocument): Pair<Int, Int> {
-        val locator = restorePosition(bookId)?.locator ?: return 0 to 0
+        val locator = startLocator ?: restorePosition(bookId)?.locator ?: return 0 to 0
         val total = unitCountOf(opened)
         val index = when (locator) {
             is ReadingLocator.Paged -> locator.pageIndex
@@ -430,7 +441,18 @@ class ReaderViewModel @Inject constructor(
             ReaderIntent.PreviousUnit -> moveTo(currentState.currentUnit - 1)
 
             ReaderIntent.ToggleBookmark -> toggleBookmarkAtCurrentPosition()
-            is ReaderIntent.DeleteBookmark -> launch { deleteBookmark(intent.bookmarkId) }
+            is ReaderIntent.DeleteBookmark -> launch {
+                // The whole bookmark is captured before deleting, because undo re-adds it — an id
+                // alone cannot bring back a label, a colour or an excerpt.
+                val bookmark = currentState.bookmarks.firstOrNull { it.id == intent.bookmarkId }
+                    ?: return@launch
+                deleteBookmark(bookmark.id)
+                sendEffect(ReaderEffect.ShowMessage(ReaderMessage.BookmarkDeleted(bookmark)))
+            }
+
+            is ReaderIntent.UndoDeleteBookmark -> launch {
+                bookmarkRepository.addBookmark(intent.bookmark)
+            }
 
             is ReaderIntent.FollowLink -> followLink(intent.href)
             ReaderIntent.ReturnFromLink -> returnFromLink()
@@ -438,9 +460,6 @@ class ReaderViewModel @Inject constructor(
 
             is ReaderIntent.SearchQueryChanged -> setState { copy(searchQuery = intent.query) }
             ReaderIntent.SubmitSearch -> runSearch()
-            ReaderIntent.ClearSearch -> setState {
-                copy(searchQuery = "", searchResults = emptyList(), isSearching = false)
-            }
 
             is ReaderIntent.SetThemeMode -> launch { updateSettings.setThemeMode(intent.mode) }
             is ReaderIntent.SetFont -> launch { updateSettings.setReaderFont(intent.font) }
@@ -448,6 +467,9 @@ class ReaderViewModel @Inject constructor(
             is ReaderIntent.SetLineHeight -> launch { updateSettings.setLineHeightScale(intent.scale) }
             is ReaderIntent.SetPageFit -> launch { updateSettings.setPageFitMode(intent.mode) }
             is ReaderIntent.SetKeepScreenOn -> launch { updateSettings.setKeepScreenOn(intent.enabled) }
+            is ReaderIntent.SetShowProgressIndicator -> launch {
+                updateSettings.setShowProgressIndicator(intent.enabled)
+            }
             is ReaderIntent.SetLayout -> launch { updateSettings.setLayout(intent.layout) }
             is ReaderIntent.SetTapToTurnPages -> launch { updateSettings.setTapToTurnPages(intent.enabled) }
             is ReaderIntent.SetReadingDirection -> launch {
@@ -457,6 +479,7 @@ class ReaderViewModel @Inject constructor(
                 updateSettings.setReverseTapZones(intent.enabled)
             }
             is ReaderIntent.SetPageTurnEffect -> launch { updateSettings.setPageTurnEffect(intent.effect) }
+            is ReaderIntent.SetHapticsEnabled -> launch { updateSettings.setHapticsEnabled(intent.enabled) }
             is ReaderIntent.SetBubbleZoom -> launch { updateSettings.setBubbleZoom(intent.enabled) }
 
             ReaderIntent.RequestResetSettings -> launch {
@@ -712,6 +735,9 @@ class ReaderViewModel @Inject constructor(
 
     companion object {
         const val ARG_BOOK_ID = "bookId"
+
+        /** Optional start position, encoded by [ReadingLocator.encoded]. Matches `Routes.LOCATOR_ARG`. */
+        const val ARG_LOCATOR = "locator"
 
         /** 64 MB: enough for several comic pages at phone resolution, far short of an OOM. */
         private const val PAGE_CACHE_BYTES = 64 * 1024 * 1024

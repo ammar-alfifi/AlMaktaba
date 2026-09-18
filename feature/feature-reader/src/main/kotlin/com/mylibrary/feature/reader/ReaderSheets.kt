@@ -323,7 +323,7 @@ private fun ReaderSettingsPanel(
                 value = state.settings.fontScale,
                 valueRange = FONT_SCALE_RANGE,
                 onValueChange = { onIntent(ReaderIntent.SetFontScale(it)) },
-                valueLabel = "${(state.settings.fontScale * 100).toInt()}%",
+                valueLabel = "${(state.settings.fontScale * 100).toInt()}٪",
             )
 
             LabelledSlider(
@@ -415,6 +415,18 @@ private fun ReaderSettingsPanel(
             title = stringResource(R.string.reader_settings_keep_awake),
             checked = state.settings.keepScreenOn,
             onCheckedChange = { onIntent(ReaderIntent.SetKeepScreenOn(it)) },
+        )
+
+        SwitchSetting(
+            title = stringResource(R.string.reader_settings_show_progress),
+            checked = state.settings.showProgressIndicator,
+            onCheckedChange = { onIntent(ReaderIntent.SetShowProgressIndicator(it)) },
+        )
+
+        SwitchSetting(
+            title = stringResource(R.string.reader_settings_haptics),
+            checked = state.settings.hapticsEnabled,
+            onCheckedChange = { onIntent(ReaderIntent.SetHapticsEnabled(it)) },
         )
 
         HorizontalDivider()

@@ -28,11 +28,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -41,6 +47,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
 import com.mylibrary.core.domain.model.Bookmark
 import com.mylibrary.core.domain.model.ReadingLocator
 import com.mylibrary.core.domain.usecase.BookDetails
@@ -62,20 +70,43 @@ fun BookDetailsRoute(
 ) {
     val viewModel: BookDetailsViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val undoLabel = stringResource(com.mylibrary.core.ui.R.string.ui_undo)
+    val bookmarkDeletedText = stringResource(R.string.lib_bookmark_deleted)
 
+    var pendingUndo by remember { mutableStateOf<Bookmark?>(null) }
     ObserveEffects(viewModel.effects) { effect ->
         when (effect) {
             is BookDetailsEffect.OpenReader -> onOpenReader(effect.bookId)
             BookDetailsEffect.Deleted,
             BookDetailsEffect.NavigateBack,
             -> onBack()
+
+            is BookDetailsEffect.BookmarkDeleted -> pendingUndo = effect.bookmark
         }
+    }
+
+    // Deletion is undoable for as long as the snackbar is up, which is what turns a destructive
+    // tap into a reversible one — the row vanishes, the reader decides, and the list either stays
+    // or comes back.
+    LaunchedEffect(pendingUndo) {
+        val bookmark = pendingUndo ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = bookmarkDeletedText,
+            actionLabel = undoLabel,
+            duration = SnackbarDuration.Long,
+        )
+        if (result == SnackbarResult.ActionPerformed) {
+            viewModel.onIntent(BookDetailsIntent.UndoDeleteBookmark(bookmark))
+        }
+        pendingUndo = null
     }
 
     BookDetailsScreen(
         state = state,
         onIntent = viewModel::onIntent,
         onBack = onBack,
+        snackbarHostState = snackbarHostState,
         modifier = modifier,
     )
 }
@@ -86,10 +117,12 @@ fun BookDetailsScreen(
     state: BookDetailsUiState,
     onIntent: (BookDetailsIntent) -> Unit,
     onBack: () -> Unit,
+    snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
     FeatureScaffold(
         modifier = modifier,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.lib_details_title)) },
@@ -130,8 +163,8 @@ fun BookDetailsScreen(
 
             details == null -> EmptyState(
                 icon = Icons.AutoMirrored.Filled.MenuBook,
-                title = stringResource(R.string.lib_no_matches_title),
-                message = stringResource(R.string.lib_empty_message),
+                title = stringResource(R.string.lib_details_not_found_title),
+                message = stringResource(R.string.lib_details_not_found_message),
                 modifier = Modifier.padding(padding),
             )
 

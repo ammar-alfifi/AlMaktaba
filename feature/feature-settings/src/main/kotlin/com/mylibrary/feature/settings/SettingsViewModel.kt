@@ -131,8 +131,6 @@ internal fun ReaderSettings.updatedBy(intent: SettingsIntent): ReaderSettings = 
     is SettingsIntent.ColorSourceChanged -> copy(colorSource = intent.source)
     SettingsIntent.SetupCompleted -> copy(setupComplete = true)
     is SettingsIntent.LanguageChanged -> copy(language = intent.language)
-    is SettingsIntent.ViewModeChanged -> copy(viewMode = intent.mode)
-    is SettingsIntent.SortChanged -> copy(librarySort = intent.sort)
     is SettingsIntent.ReaderFontChanged -> copy(readerFont = intent.font)
     is SettingsIntent.FontScaleChanged -> copy(
         fontScale = intent.scale.coerceIn(
@@ -171,8 +169,6 @@ internal suspend fun UpdateSettingsUseCase.persist(intent: SettingsIntent): Unit
     is SettingsIntent.ColorSourceChanged -> setColorSource(intent.source)
     SettingsIntent.SetupCompleted -> setSetupComplete(true)
     is SettingsIntent.LanguageChanged -> setLanguage(intent.language)
-    is SettingsIntent.ViewModeChanged -> setViewMode(intent.mode)
-    is SettingsIntent.SortChanged -> setLibrarySort(intent.sort)
     is SettingsIntent.ReaderFontChanged -> setReaderFont(intent.font)
     is SettingsIntent.FontScaleChanged -> setFontScale(intent.scale)
     is SettingsIntent.LineHeightChanged -> setLineHeightScale(intent.scale)

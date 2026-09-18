@@ -82,6 +82,7 @@ class SettingsDataStore @Inject constructor(
         this[Keys.TAP_TO_TURN_PAGES] = settings.tapToTurnPages
         this[Keys.REVERSE_TAP_ZONES] = settings.reverseTapZones
         this[Keys.PAGE_TURN_EFFECT] = settings.pageTurnEffect.name
+        this[Keys.HAPTICS_ENABLED] = settings.hapticsEnabled
         this[Keys.BUBBLE_ZOOM] = settings.bubbleZoom
     }
 
@@ -122,6 +123,7 @@ private object Keys {
     val TAP_TO_TURN_PAGES = booleanPreferencesKey("tap_to_turn_pages")
     val REVERSE_TAP_ZONES = booleanPreferencesKey("reverse_tap_zones")
     val PAGE_TURN_EFFECT = stringPreferencesKey("page_turn_effect")
+    val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
     val BUBBLE_ZOOM = booleanPreferencesKey("bubble_zoom")
 }
 
@@ -168,6 +170,7 @@ private fun ReaderSettings.Companion.fromPreferences(preferences: Preferences): 
         tapToTurnPages = preferences[Keys.TAP_TO_TURN_PAGES] ?: defaults.tapToTurnPages,
         reverseTapZones = preferences[Keys.REVERSE_TAP_ZONES] ?: defaults.reverseTapZones,
         pageTurnEffect = preferences[Keys.PAGE_TURN_EFFECT].toEnum(defaults.pageTurnEffect),
+        hapticsEnabled = preferences[Keys.HAPTICS_ENABLED] ?: defaults.hapticsEnabled,
         bubbleZoom = preferences[Keys.BUBBLE_ZOOM] ?: defaults.bubbleZoom,
     )
 }

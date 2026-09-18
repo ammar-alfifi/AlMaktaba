@@ -9,6 +9,7 @@
     <string name="reader_settings">Reading settings</string>
     <string name="reader_bookmark_added">Bookmark added</string>
     <string name="reader_bookmark_removed">Bookmark removed</string>
+    <string name="reader_bookmark_deleted">Bookmark deleted</string>
 
     <!-- Table of contents -->
     <string name="reader_no_toc_title">No table of contents</string>
@@ -58,6 +59,8 @@
     <string name="reader_fit_page">Whole page</string>
     <string name="reader_fit_actual">Actual size</string>
     <string name="reader_settings_keep_awake">Keep screen awake</string>
+    <string name="reader_settings_show_progress">Show progress indicator</string>
+    <string name="reader_settings_haptics">Vibrate on page turn</string>
 
     <!-- Search -->
     <string name="reader_search_action">Search</string>

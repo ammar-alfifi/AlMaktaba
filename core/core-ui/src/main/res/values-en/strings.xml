@@ -5,6 +5,7 @@
     <string name="ui_cancel">Cancel</string>
     <string name="ui_ok">OK</string>
     <string name="ui_delete">Delete</string>
+    <string name="ui_undo">Undo</string>
     <string name="ui_close">Close</string>
     <string name="ui_more">More</string>
 

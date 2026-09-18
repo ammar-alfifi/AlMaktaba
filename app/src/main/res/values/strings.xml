@@ -40,6 +40,9 @@
     <string name="action_more">المزيد</string>
     <string name="action_back">رجوع</string>
 
+    <!-- Opening a book sent by another app -->
+    <string name="app_open_file_failed">تعذّر إضافة هذا الملف إلى المكتبة. الصيغة غير مدعومة أو الملف غير متاح.</string>
+
     <!-- Content descriptions -->
     <string name="cd_book_cover">غلاف الكتاب</string>
     <string name="cd_more_options">خيارات إضافية</string>

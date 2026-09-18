@@ -34,6 +34,7 @@ Jetpack Compose و Material 3، ومعمارية نظيفة متعددة الو�
 | **Languages** | Arabic by default, English as a complete second locale, switchable in-app without a restart |
 | **Direction** | Full RTL for Arabic, LTR for English — and a document's own direction is honoured *independently* of the UI, so an English TXT reads left-to-right inside the Arabic interface |
 | **Library** | Import through the Storage Access Framework — single files **or a whole device folder**, which keeps a series together as one shelf and can be re-scanned for new volumes later; grid/list layouts, five sort orders, favourite, format and folder filters, automatic cover extraction, moving a book between folders |
+| **Opening from elsewhere** | The app registers as a viewer for every format it reads, so opening a file from a file manager — or sharing one into it — adds the book to the library and opens it in the reader. A search hit opens the reader *at the hit*, not at the last position |
 | **Reader** | One toolbar across all five formats, adapting to what the open file can do; **every format has both a pages layout and a continuous-scroll one**, chosen by one setting that both families obey; tap zones that turn the page (mirrored for Arabic, and independently reversible) or scroll a screenful, with a haptic tick on every turn and a switch to turn them off; **which side the first page is on** is a setting of its own; pinch-zoom, double-tap and a clamped pan; **double-tap a speech bubble or panel in a comic to zoom into it** — the balloon is found by reading the page's pixels, and a break in its outline is sealed rather than allowed to hand back the panel; page turns animated by a page-curl, a slide or a fade — **the curl lifts a corner on a diagonal fold and rolls the sheet over in every format, reflowed text included**; three page-fit modes; per-document search, outlines, bookmarks; font/theme/line-height controls that apply live, three bundled Arabic typefaces plus an interface font of their own, and one button that puts them all back |
 | **Appearance** | Six Material 3 colour schemes — five generated from seeds by `tools/material_palette.py`, one the app's own hand-authored teal — plus the wallpaper palette on Android 12+; a first launch asks which, and the same screen reopens from Settings with the whole interface repainting live; light/dark/system; four interface typefaces |
 | **Storage** | No storage permission at all — only scoped `content://` access to files and folders the user picked |
@@ -75,7 +76,7 @@ Every hard constraint from the specification, and where it is satisfied:
 
 A signed, installable build is attached to the latest release:
 
-**→ [MyLibrary-v1.5.0.apk](https://github.com/ammar-alfifi/MyLibrary/releases/download/v1.5.0/MyLibrary-v1.5.0.apk)** (~33 MB)
+**→ [MyLibrary-v1.6.0.apk](https://github.com/ammar-alfifi/MyLibrary/releases/download/v1.6.0/MyLibrary-v1.6.0.apk)** (~33 MB)
 
 Android 8.0 (API 26) and above. Signed with APK Signature Scheme v2 + v3. The app requests **no
 storage permission** — books are added through the system file picker, which grants access to the
@@ -503,9 +504,13 @@ Stated rather than hidden:
 - **R8/minification is disabled** for the release build, which is why the APK is ~33 MB. Turning it
   on needs keep rules for pdfium's JNI entry points and the Room/Hilt generated code; the proguard
   files are already wired up for it.
-- **`getRelativeTimeSpanString` follows the system locale**, not the in-app language, so relative
-  dates can disagree with the rest of the UI when the two differ. The fix is to pass the
-  locale-scoped context, which is a one-line change once the API level allows it.
+- **Relative dates used to follow the system locale** rather than the in-app language. Fixed:
+  `DisplayFormatters` resolves them through a locale-scoped context, so they agree with the rest
+  of the UI.
+- **A book opened from a file manager may fail to reopen later.** The VIEW/SEND road imports the
+  URI like the picker does and tries to take a persistable read grant, but many providers hand
+  VIEW intents only a transient one. The book opens this session; a later open can fail with a
+  file-access error, and the honest fixes are copying the file in or re-adding it from the picker.
 - **CBR has no automated success-path test** — see [§6](#6-testing).
 - **The app has not been run on a device** in the environment it was built in; see §6.
 

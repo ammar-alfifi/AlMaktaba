@@ -2,10 +2,12 @@ package com.mylibrary.feature.library
 
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.SavedStateHandle
+import com.mylibrary.core.domain.model.Bookmark
 import com.mylibrary.core.domain.usecase.BookDetails
 import com.mylibrary.core.domain.usecase.DeleteBookmarkUseCase
 import com.mylibrary.core.domain.usecase.ObserveBookUseCase
 import com.mylibrary.core.domain.usecase.ToggleFavoriteUseCase
+import com.mylibrary.core.domain.repository.BookmarkRepository
 import com.mylibrary.core.ui.mvi.MviViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -26,6 +28,9 @@ sealed interface BookDetailsIntent {
     data object Read : BookDetailsIntent
     data object ToggleFavorite : BookDetailsIntent
     data class DeleteBookmark(val bookmarkId: Long) : BookDetailsIntent
+
+    /** Puts back a bookmark deleted here, from the undo action on the snackbar. */
+    data class UndoDeleteBookmark(val bookmark: Bookmark) : BookDetailsIntent
     data object Deleted : BookDetailsIntent
 }
 
@@ -33,6 +38,12 @@ sealed interface BookDetailsEffect {
     data class OpenReader(val bookId: Long) : BookDetailsEffect
     data object NavigateBack : BookDetailsEffect
     data object Deleted : BookDetailsEffect
+
+    /**
+     * A bookmark was deleted. Carries the bookmark so the screen can offer undo — re-adding needs
+     * the whole object, not the id it was deleted by.
+     */
+    data class BookmarkDeleted(val bookmark: Bookmark) : BookDetailsEffect
 }
 
 /**
@@ -48,6 +59,7 @@ class BookDetailsViewModel @Inject constructor(
     observeBook: ObserveBookUseCase,
     private val toggleFavorite: ToggleFavoriteUseCase,
     private val deleteBookmark: DeleteBookmarkUseCase,
+    private val bookmarkRepository: BookmarkRepository,
 ) : MviViewModel<BookDetailsUiState, BookDetailsIntent, BookDetailsEffect>(BookDetailsUiState()) {
 
     private val bookId: Long = checkNotNull(savedStateHandle.get<Long>(ARG_BOOK_ID)) {
@@ -74,7 +86,19 @@ class BookDetailsViewModel @Inject constructor(
                 launch { toggleFavorite(book.id, !book.isFavorite) }
             }
 
-            is BookDetailsIntent.DeleteBookmark -> launch { deleteBookmark(intent.bookmarkId) }
+            is BookDetailsIntent.DeleteBookmark -> launch {
+                // The whole bookmark is captured before deleting, because undo re-adds it — an id
+                // alone cannot bring back a label, a colour or an excerpt.
+                val bookmark = currentState.details?.bookmarks
+                    ?.firstOrNull { it.id == intent.bookmarkId }
+                    ?: return@launch
+                deleteBookmark(bookmark.id)
+                emit(BookDetailsEffect.BookmarkDeleted(bookmark))
+            }
+
+            is BookDetailsIntent.UndoDeleteBookmark -> launch {
+                bookmarkRepository.addBookmark(intent.bookmark)
+            }
             BookDetailsIntent.Deleted -> emit(BookDetailsEffect.Deleted)
         }
     }

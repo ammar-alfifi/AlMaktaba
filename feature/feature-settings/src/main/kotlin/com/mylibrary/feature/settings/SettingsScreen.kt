@@ -55,7 +55,6 @@ import com.mylibrary.core.domain.model.AppFont
 import com.mylibrary.core.domain.model.AppLanguage
 import com.mylibrary.core.domain.model.BookFormat
 import com.mylibrary.core.domain.model.ColorSource
-import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ReaderFont
@@ -63,7 +62,6 @@ import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
 import com.mylibrary.core.domain.model.ReaderLayout
 import com.mylibrary.core.domain.model.ThemeMode
-import com.mylibrary.core.domain.model.ViewMode
 import com.mylibrary.core.domain.usecase.UpdateSettingsUseCase
 import com.mylibrary.core.ui.component.ChoiceRow
 import com.mylibrary.core.ui.component.FeatureScaffold
@@ -189,7 +187,6 @@ private fun SettingsContent(
         ) {
             item { AppearanceSection(state.settings, onIntent, onOpenColorSetup) }
             item { LanguageSection(state.settings, onIntent) }
-            item { LibrarySection(state.settings, onIntent) }
             item { ReadingSection(state.settings, onIntent) }
             item { AboutSection(state.appVersionName) }
             item { ResetSection(onClick = { confirmingReset = true }) }
@@ -274,30 +271,6 @@ private fun LanguageSection(settings: ReaderSettings, onIntent: (SettingsIntent)
             selected = settings.language,
             labelRes = AppLanguage::labelRes,
             onSelect = { onIntent(SettingsIntent.LanguageChanged(it)) },
-        )
-    }
-}
-
-/** How the book list is laid out and ordered. */
-@Composable
-private fun LibrarySection(settings: ReaderSettings, onIntent: (SettingsIntent) -> Unit) {
-    SettingsSection(title = stringResource(R.string.settings_section_library)) {
-        ChoiceSettingRow(
-            title = stringResource(R.string.settings_view_mode),
-            options = ViewMode.entries,
-            selected = settings.viewMode,
-            labelRes = ViewMode::labelRes,
-            onSelect = { onIntent(SettingsIntent.ViewModeChanged(it)) },
-        )
-        SectionDivider()
-        // A dropdown rather than a segmented row: five sort orders do not fit a phone's width side
-        // by side, and squeezing them into a scrollable row would hide options behind a gesture.
-        DropdownSettingRow(
-            title = stringResource(R.string.settings_sort),
-            options = LibrarySort.entries,
-            selected = settings.librarySort,
-            labelRes = LibrarySort::labelRes,
-            onSelect = { onIntent(SettingsIntent.SortChanged(it)) },
         )
     }
 }
@@ -745,21 +718,6 @@ private fun AppLanguage.labelRes(): Int = when (this) {
     AppLanguage.ARABIC -> R.string.settings_language_arabic
     AppLanguage.ENGLISH -> R.string.settings_language_english
     AppLanguage.SYSTEM -> R.string.settings_language_system
-}
-
-@StringRes
-private fun ViewMode.labelRes(): Int = when (this) {
-    ViewMode.GRID -> R.string.settings_view_grid
-    ViewMode.LIST -> R.string.settings_view_list
-}
-
-@StringRes
-private fun LibrarySort.labelRes(): Int = when (this) {
-    LibrarySort.RECENTLY_READ -> R.string.settings_sort_recently_read
-    LibrarySort.RECENTLY_ADDED -> R.string.settings_sort_recently_added
-    LibrarySort.TITLE_ASC -> R.string.settings_sort_title_asc
-    LibrarySort.TITLE_DESC -> R.string.settings_sort_title_desc
-    LibrarySort.AUTHOR -> R.string.settings_sort_author
 }
 
 @StringRes

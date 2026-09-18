@@ -48,10 +48,13 @@
 
     <!-- Details screen -->
     <string name="lib_details_title">Book details</string>
+    <string name="lib_details_not_found_title">Book not found</string>
+    <string name="lib_details_not_found_message">This book may have been removed from the library.</string>
     <string name="lib_details_read">Read</string>
     <string name="lib_details_continue">Continue reading</string>
     <string name="lib_details_progress">Progress</string>
     <string name="lib_details_bookmarks">Bookmarks</string>
+    <string name="lib_bookmark_deleted">Bookmark deleted</string>
     <string name="lib_details_no_bookmarks">No bookmarks in this book yet.</string>
     <string name="lib_details_added_on">Added %1$s</string>
     <string name="lib_details_last_read">Last read %1$s</string>
@@ -61,6 +64,7 @@
     <string name="lib_chapter_number">Chapter %1$d</string>
 
     <!-- Folders: a device directory the user granted access to, so a series stays together -->
+    <string name="lib_import_add">Add</string>
     <string name="lib_import_files">Add files</string>
     <string name="lib_import_folder">Add a folder</string>
     <string name="lib_folder_all">All books</string>

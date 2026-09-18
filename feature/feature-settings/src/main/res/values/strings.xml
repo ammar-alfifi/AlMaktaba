@@ -14,7 +14,6 @@
     <string name="settings_title">الإعدادات</string>
     <string name="settings_section_appearance">المظهر</string>
     <string name="settings_section_language">اللغة</string>
-    <string name="settings_section_library">المكتبة</string>
     <string name="settings_section_reading">القراءة</string>
     <string name="settings_section_reading_text">قراءة النصوص</string>
     <string name="settings_section_reading_pages">قراءة الصور والصفحات</string>
@@ -33,17 +32,6 @@
     <string name="settings_language_arabic">العربية</string>
     <string name="settings_language_english">الإنجليزية</string>
     <string name="settings_language_system">لغة النظام</string>
-
-    <!-- Library -->
-    <string name="settings_view_mode">طريقة العرض</string>
-    <string name="settings_view_grid">شبكة</string>
-    <string name="settings_view_list">قائمة</string>
-    <string name="settings_sort">الترتيب</string>
-    <string name="settings_sort_recently_read">الأحدث قراءةً</string>
-    <string name="settings_sort_recently_added">الأحدث إضافة</string>
-    <string name="settings_sort_title_asc">العنوان (أ - ي)</string>
-    <string name="settings_sort_title_desc">العنوان (ي - أ)</string>
-    <string name="settings_sort_author">المؤلف</string>
 
     <!-- Reading -->
     <string name="settings_reader_font">خط القراءة</string>

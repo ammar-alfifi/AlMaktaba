@@ -66,7 +66,7 @@ internal fun pageTurnTransform(
         // rotation and no fade can express; a transform can move a page, and the whole point of a
         // curl is that the page is no longer a plane. So the reader draws the bend ([drawPaperCurl])
         // and hands this function an identity for it, in every layout and for every format — a
-        // reflowable page is drawn into a layer and bent exactly like a comic's.
+        // reflowable page is rasterised and then bent exactly like a comic's.
         //
         // What used to be here was a 70° rotation with a gradient rectangle standing in for the
         // shadow. It read as a card pivoting, because that is what it was.

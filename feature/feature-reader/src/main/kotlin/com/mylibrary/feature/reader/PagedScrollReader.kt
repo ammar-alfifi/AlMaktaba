@@ -87,6 +87,7 @@ internal fun PagedScrollReaderContent(
     // changes, so a plain read inside it would keep the direction the book was opened in.
     val currentIsRtl by rememberUpdatedState(isRtl)
     val currentBubbleZoom by rememberUpdatedState(state.settings.bubbleZoom)
+    val currentHapticsEnabled by rememberUpdatedState(state.settings.hapticsEnabled)
 
     // Column -> state. `distinctUntilChanged` keeps the effect below from ping-ponging with it.
     LaunchedEffect(listState) {
@@ -143,14 +144,18 @@ internal fun PagedScrollReaderContent(
                             TapZone.CENTER -> currentOnIntent(ReaderIntent.ToggleChrome)
 
                             TapZone.NEXT -> {
-                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                if (currentHapticsEnabled) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                }
                                 scope.launch {
                                     listState.animateScrollBy(viewport * SCROLL_PAGE_FRACTION)
                                 }
                             }
 
                             TapZone.PREVIOUS -> {
-                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                if (currentHapticsEnabled) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                }
                                 scope.launch {
                                     listState.animateScrollBy(-viewport * SCROLL_PAGE_FRACTION)
                                 }
@@ -186,6 +191,7 @@ internal fun PagedScrollReaderContent(
                 inspection = inspection,
                 scope = scope,
                 haptics = haptics,
+                hapticsEnabled = currentHapticsEnabled,
             )
         }
     }
@@ -347,6 +353,7 @@ private fun PageInspection(
     inspection: Inspection,
     scope: CoroutineScope,
     haptics: androidx.compose.ui.hapticfeedback.HapticFeedback,
+    hapticsEnabled: Boolean,
 ) {
     val geometry = inspection.geometry
 
@@ -406,7 +413,9 @@ private fun PageInspection(
             }
 
             if (framed != null) {
-                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                if (hapticsEnabled) {
+                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                }
                 zoomTo(framed)
                 return@launch
             }

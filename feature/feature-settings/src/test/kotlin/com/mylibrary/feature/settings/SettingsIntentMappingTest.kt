@@ -182,18 +182,6 @@ class SettingsIntentMappingTest {
                 expected = Defaults.copy(language = AppLanguage.ENGLISH),
             ),
             Case(
-                name = "view mode",
-                startFrom = Defaults,
-                intent = SettingsIntent.ViewModeChanged(ViewMode.LIST),
-                expected = Defaults.copy(viewMode = ViewMode.LIST),
-            ),
-            Case(
-                name = "sort order",
-                startFrom = Defaults,
-                intent = SettingsIntent.SortChanged(LibrarySort.AUTHOR),
-                expected = Defaults.copy(librarySort = LibrarySort.AUTHOR),
-            ),
-            Case(
                 name = "reader font",
                 startFrom = Defaults,
                 intent = SettingsIntent.ReaderFontChanged(ReaderFont.SERIF),

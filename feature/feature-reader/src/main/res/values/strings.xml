@@ -10,6 +10,7 @@
     <string name="reader_settings">إعدادات القراءة</string>
     <string name="reader_bookmark_added">أُضيفت إشارة مرجعية</string>
     <string name="reader_bookmark_removed">أُزيلت الإشارة المرجعية</string>
+    <string name="reader_bookmark_deleted">حُذفت الإشارة المرجعية</string>
 
     <!-- Table of contents -->
     <string name="reader_no_toc_title">لا يوجد جدول محتويات</string>
@@ -59,6 +60,8 @@
     <string name="reader_fit_page">الصفحة كاملة</string>
     <string name="reader_fit_actual">الحجم الأصلي</string>
     <string name="reader_settings_keep_awake">إبقاء الشاشة مضاءة</string>
+    <string name="reader_settings_show_progress">إظهار مؤشر التقدم</string>
+    <string name="reader_settings_haptics">الاهتزاز عند التقليب</string>
 
     <!-- Search -->
     <string name="reader_search_action">بحث</string>

@@ -520,7 +520,7 @@ private fun ImportFab(onPickFiles: () -> Unit, onPickFolder: () -> Unit) {
         ExtendedFloatingActionButton(
             onClick = { menuOpen = true },
             icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-            text = { Text(stringResource(R.string.lib_import_files)) },
+            text = { Text(stringResource(R.string.lib_import_add)) },
         )
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             DropdownMenuItem(

@@ -98,6 +98,7 @@ fun ReflowableReaderContent(
     val currentOnIntent by rememberUpdatedState(onIntent)
     val currentTapToTurn by rememberUpdatedState(state.settings.tapToTurnPages)
     val currentReverseTapZones by rememberUpdatedState(state.settings.reverseTapZones)
+    val currentHapticsEnabled by rememberUpdatedState(state.settings.hapticsEnabled)
     // Read through `rememberUpdatedState`: the gesture loop is not restarted when the direction
     // changes, so a plain read inside it would keep the direction the book was opened in.
     val currentIsRtl by rememberUpdatedState(isRtl)
@@ -127,12 +128,16 @@ fun ReflowableReaderContent(
                         TapZone.CENTER -> currentOnIntent(ReaderIntent.ToggleChrome)
 
                         TapZone.NEXT -> {
-                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                            if (currentHapticsEnabled) {
+                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                            }
                             scope.launch { listState.animateScrollBy(viewport * SCROLL_PAGE_FRACTION) }
                         }
 
                         TapZone.PREVIOUS -> {
-                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                            if (currentHapticsEnabled) {
+                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                            }
                             scope.launch { listState.animateScrollBy(-viewport * SCROLL_PAGE_FRACTION) }
                         }
                     }

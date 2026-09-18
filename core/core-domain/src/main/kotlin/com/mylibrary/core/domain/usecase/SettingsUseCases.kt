@@ -77,6 +77,9 @@ class UpdateSettingsUseCase @Inject constructor(
     suspend fun setPageTurnEffect(effect: PageTurnEffect) =
         settingsRepository.update { it.copy(pageTurnEffect = effect) }
 
+    suspend fun setHapticsEnabled(enabled: Boolean) =
+        settingsRepository.update { it.copy(hapticsEnabled = enabled) }
+
     suspend fun setBubbleZoom(enabled: Boolean) =
         settingsRepository.update { it.copy(bubbleZoom = enabled) }
 
@@ -119,9 +122,11 @@ class UpdateSettingsUseCase @Inject constructor(
             layout = ReaderSettings.Default.layout,
             tapToTurnPages = ReaderSettings.Default.tapToTurnPages,
             reverseTapZones = ReaderSettings.Default.reverseTapZones,
-            // Both of these decide what happens when a page is turned, so they belong to reading
-            // rather than to appearance — unlike `uiFont`, which the reader's panel does not offer.
+            // All three of these decide what happens when a page is turned, so they belong to
+            // reading rather than to appearance — unlike `uiFont`, which the reader's panel does not
+            // offer.
             pageTurnEffect = ReaderSettings.Default.pageTurnEffect,
+            hapticsEnabled = ReaderSettings.Default.hapticsEnabled,
             bubbleZoom = ReaderSettings.Default.bubbleZoom,
         )
     }

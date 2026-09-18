@@ -85,8 +85,13 @@ fun rememberFolderPicker(onPicked: (String) -> Unit): () -> Unit {
  *
  * Returns `null` only when the provider cannot even name the file, which means there is nothing
  * usable to record.
+ *
+ * Shared rather than private because the same conversion is needed on the other road in: a book
+ * the rest of the system hands over (a VIEW or SEND intent) is converted by `MainActivity` with
+ * exactly this logic, so a file opened from a file manager lands in the library the same way a
+ * file picked from the shelf does.
  */
-private fun Context.toImportCandidate(uri: Uri): ImportCandidate? {
+fun Context.toImportCandidate(uri: Uri): ImportCandidate? {
     runCatching {
         contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }

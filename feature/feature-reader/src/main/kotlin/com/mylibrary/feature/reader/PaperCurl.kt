@@ -42,11 +42,18 @@ import kotlin.math.sqrt
  * on their own, because the cosine that foreshortens them has gone negative by then, and that
  * mirror image is the sheet's back.
  *
- * **What it cannot do.** Bending the sheet means re-drawing its pixels at a different width, so this
- * needs a page that *has* pixels: a PDF or a comic. A reflowable page is live text in the
- * composition and has nothing to slice; bending it would mean rasterising the text on every frame of
- * the drag, which is the heavy operation this exists to avoid. Text pages keep the rotation — see
- * [pageTurnTransform] — and the reader decides between the two in one place.
+ * **What it needs, and why every sheet is a bitmap.** Bending the sheet means re-drawing its pixels
+ * at a different width, and the bend draws the sheet once per band — some fifty draws a frame. A
+ * page that costs anything to draw therefore costs fifty times that, and the only cheap thing to
+ * draw fifty times a frame is a bitmap. A PDF's page and a comic's are pixels already; a reflowable
+ * page is live text with no pixels to slice, so the paged reader gives it pixels before it gets here
+ * — rasterised once, as its turn begins, and dropped when it settles.
+ *
+ * That is a measurement rather than a preference. Bending the live display list, which is what 1.5.0
+ * did, put every one of those fifty draws through a page's worth of glyph runs: the reader's own
+ * frame stats on the API 35 emulator read 150 ms for the median frame against 16 ms for the same
+ * page slid, and 85% of frames janky against 6%. A text page turned that way in every text file,
+ * under the default turn effect, which is exactly the stutter this was reported as.
  */
 
 /** Roll of a page-turn, 0 (lying flat) to 1 (fully turned), from a page's distance in pages. */
@@ -197,33 +204,21 @@ internal fun DrawScope.drawSettledPage(page: ImageBitmap, frame: Rect) {
 /**
  * Draws [page] with its corner lifted into [curl].
  *
- * The bitmap case of [drawPaperCurlSheet], and the one every fixed-page format goes through.
- */
-internal fun DrawScope.drawPaperCurl(page: ImageBitmap, frame: Rect, curl: PaperCurl) =
-    drawPaperCurlSheet(frame, curl) { drawSettledPage(page, frame) }
-
-/**
- * Draws a *sheet* with its corner lifted into [curl], whatever the sheet is made of.
+ * Every format comes through here, and every one of them as a bitmap — see the note at the top of
+ * this file for why that is not a limitation but the whole of the design.
  *
- * **[sheet] is a lambda rather than an `ImageBitmap`, and that is the whole of the reflowable-text
- * support.** A PDF page or a comic is pixels, so drawing it is one call; an EPUB page is live text
- * in the composition and has no pixels to draw at all until something rasterises it. Taking the
- * drawing as a lambda lets both go through *this* bend — the same band walk, the same fold geometry,
- * the same shading — instead of text getting a second, worse page-turn that only looks similar.
- *
- * The sheet is drawn in three pieces that between them are the whole of it: the part still lying
+ * The page is drawn in three pieces that between them are the whole of it: the part still lying
  * flat, the bands it wraps through, and the shading each band turns away from the light. Every band
- * is the same drawing under a different affine transform, clipped to the strip of screen it
+ * is the same `drawImage` under a different affine transform, clipped to the strip of screen it
  * occupies — which is the entire renderer.
  *
- * The sheet must be drawn at the origin of [frame]: a bitmap sheet bakes [frame]'s position into its
- * own destination rect, but a recorded layer is drawn wherever the canvas already is, so a frame
- * that did not start at (0, 0) would place the two cases differently.
+ * The page is drawn at the origin of [frame]: [frame]'s position is baked into the destination rect
+ * the bitmap is drawn to.
  */
-internal fun DrawScope.drawPaperCurlSheet(frame: Rect, curl: PaperCurl, sheet: DrawScope.() -> Unit) {
+internal fun DrawScope.drawPaperCurl(page: ImageBitmap, frame: Rect, curl: PaperCurl) {
     if (frame.width <= 0f || frame.height <= 0f) return
     if (!curl.rolled) {
-        sheet()
+        drawSettledPage(page, frame)
         return
     }
 
@@ -236,7 +231,7 @@ internal fun DrawScope.drawPaperCurlSheet(frame: Rect, curl: PaperCurl, sheet: D
     // 1. the sheet still lying flat, on the far side of the fold. One draw call.
     stripTo(strip, curl, from = curl.nearEdge, to = 0f, reach = reach)
     clipPath(strip) {
-        sheet()
+        drawSettledPage(page, frame)
     }
 
     // 2. the sheet wrapping, a band at a time. Walked along the *sheet* rather than across the
@@ -269,7 +264,7 @@ internal fun DrawScope.drawPaperCurlSheet(frame: Rect, curl: PaperCurl, sheet: D
                 rotate(-foldDegrees, pivot = Offset.Zero)
                 translate(-curl.hinge.x, -curl.hinge.y)
             }) {
-                sheet()
+                drawSettledPage(page, frame)
             }
             // 3. the light this band of the sheet turns away from. Darkest where the sheet is
             //    edge-on, which is what draws the crease the eye reads as paper rather than paint.

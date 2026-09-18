@@ -5,7 +5,6 @@ import androidx.compose.runtime.Immutable
 import com.mylibrary.core.domain.model.AppFont
 import com.mylibrary.core.domain.model.AppLanguage
 import com.mylibrary.core.domain.model.ColorSource
-import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ReaderFont
@@ -13,7 +12,6 @@ import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
 import com.mylibrary.core.domain.model.ReaderLayout
 import com.mylibrary.core.domain.model.ThemeMode
-import com.mylibrary.core.domain.model.ViewMode
 
 /**
  * Everything the settings screen draws.
@@ -61,10 +59,6 @@ sealed interface SettingsIntent {
     data object SetupCompleted : SettingsIntent
 
     data class LanguageChanged(val language: AppLanguage) : SettingsIntent
-
-    data class ViewModeChanged(val mode: ViewMode) : SettingsIntent
-
-    data class SortChanged(val sort: LibrarySort) : SettingsIntent
 
     data class ReaderFontChanged(val font: ReaderFont) : SettingsIntent
 

@@ -10,6 +10,7 @@
     <string name="ui_cancel">إلغاء</string>
     <string name="ui_ok">موافق</string>
     <string name="ui_delete">حذف</string>
+    <string name="ui_undo">تراجع</string>
     <string name="ui_close">إغلاق</string>
     <string name="ui_more">المزيد</string>
 
