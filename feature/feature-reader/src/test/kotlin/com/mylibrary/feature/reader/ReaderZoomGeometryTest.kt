@@ -3,6 +3,7 @@ package com.mylibrary.feature.reader
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.IntSize
+import com.mylibrary.core.domain.model.PageFitMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -344,6 +345,92 @@ class ReaderZoomGeometryTest {
 
         assertEquals(1f, lerpTransform(from, to, -1f).scale, 0.001f)
         assertEquals(4f, lerpTransform(from, to, 2f).scale, 0.001f)
+    }
+
+    // endregion
+
+    // region the handover from the column
+
+    /**
+     * The bug this exists to fix. The column draws a page wide and the overlay draws the same page
+     * fitted to the screen — two different rectangles — so a pinch that carried its magnification
+     * over unchanged magnified whichever view the overlay happened to have, and the page changed size
+     * at the moment of the handover.
+     */
+    @Test
+    fun `a page the two fits size differently keeps its size across the handover`() {
+        // A short, wide page: the column draws it 1000 wide, the overlay only 900, because at this
+        // page's proportions the screen's height is what limits the fit.
+        val columnDrawn = Size(1000f, 500f)
+        val overlayDrawn = Size(900f, 450f)
+
+        val pinched = ColumnMagnify(
+            anchorFraction = Offset(0.5f, 0.5f),
+            anchorView = Offset(500f, 1000f),
+            zoom = 2f,
+            columnDrawn = columnDrawn,
+        )
+
+        // Twice what the column was showing, not twice the overlay's smaller idea of 1×.
+        val scale = continuityScale(columnDrawn, overlayDrawn)
+        assertEquals(1000f / 900f, scale, 0.0001f)
+        assertEquals(2f * 1000f / 900f, pinched.toTarget(overlayDrawn).scale, 0.0001f)
+    }
+
+    /** The common case: both fits agree, and the handover must then change nothing at all. */
+    @Test
+    fun `a page the two fits size the same has nothing to correct`() {
+        val drawn = Size(1000f, 1500f)
+        val pinched = ColumnMagnify(Offset(0.3f, 0.7f), Offset(300f, 900f), zoom = 1.5f, columnDrawn = drawn)
+
+        assertEquals(1f, continuityScale(drawn, drawn), 0.0001f)
+        assertEquals(1.5f, pinched.toTarget(drawn).scale, 0.0001f)
+    }
+
+    /** The pinch point is what must stay put; the scale is only what makes that possible. */
+    @Test
+    fun `the handover aims at the point under the fingers`() {
+        val fraction = Offset(0.2f, 0.8f)
+        val view = Offset(150f, 1750f)
+        val pinched = ColumnMagnify(fraction, view, zoom = 1.2f, columnDrawn = Size(1000f, 1500f))
+
+        val target = pinched.toTarget(Size(1000f, 1500f))
+
+        assertEquals(fraction, target.anchorFraction)
+        assertEquals(view, target.anchorView)
+    }
+
+    /** Before either page has been measured there is no ratio to apply, and 1 is the honest one. */
+    @Test
+    fun `a size that is not known yet is treated as no correction`() {
+        assertEquals(1f, continuityScale(Size.Zero, Size(900f, 450f)), 0.0001f)
+        assertEquals(1f, continuityScale(Size(1000f, 500f), Size.Zero), 0.0001f)
+    }
+
+    /**
+     * The property the reader actually sees: whatever the two fits were doing, the page occupies the
+     * same number of screen pixels before and after the handover.
+     */
+    @Test
+    fun `the handed-over page is drawn the size the column was drawing it`() {
+        val viewport = IntSize(1000, 2000)
+        val bitmapWidth = 800
+        val bitmapHeight = 1600
+
+        // Width fit in the column, page fit in the overlay — the two rectangles for one page.
+        val columnDrawn = drawnPageSize(bitmapWidth, bitmapHeight, viewport, PageFitMode.WIDTH)
+        val overlayDrawn = drawnPageSize(bitmapWidth, bitmapHeight, viewport, PageFitMode.PAGE)
+
+        val pinched = ColumnMagnify(Offset(0.5f, 0.5f), Offset(500f, 1000f), zoom = 1f, columnDrawn = columnDrawn)
+        val transform = transformFor(
+            target = pinched.toTarget(overlayDrawn),
+            container = viewport,
+            drawn = overlayDrawn,
+            bitmapWidth = bitmapWidth,
+            bitmapHeight = bitmapHeight,
+        )
+
+        assertEquals(columnDrawn.width, overlayDrawn.width * transform.scale, 0.01f)
     }
 
     // endregion

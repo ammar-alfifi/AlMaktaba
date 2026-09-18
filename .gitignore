@@ -36,5 +36,11 @@ keystore.properties
 # go stale the moment the generator changed.
 /test-books/
 
+# --- Python tools ---
+# `tools/material_palette.py` is run as a script, which leaves nothing behind, but it is also a
+# module worth importing when a colour needs calibrating against Material's own — and that leaves a
+# byte-code cache next to it.
+__pycache__/
+
 # --- Room schema exports are NOT ignored: they are deliberately committed, so that future
 #     migrations can be verified against the real previous schema. See core/core-data/schemas/.

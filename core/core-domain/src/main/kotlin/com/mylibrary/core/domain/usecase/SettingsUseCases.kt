@@ -2,6 +2,7 @@ package com.mylibrary.core.domain.usecase
 
 import com.mylibrary.core.domain.model.AppFont
 import com.mylibrary.core.domain.model.AppLanguage
+import com.mylibrary.core.domain.model.ColorSource
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.PageTurnEffect
@@ -34,7 +35,12 @@ class UpdateSettingsUseCase @Inject constructor(
 ) {
     suspend fun setThemeMode(mode: ThemeMode) = settingsRepository.update { it.copy(themeMode = mode) }
 
-    suspend fun setDynamicColor(enabled: Boolean) = settingsRepository.update { it.copy(dynamicColor = enabled) }
+    suspend fun setColorSource(source: ColorSource) =
+        settingsRepository.update { it.copy(colorSource = source) }
+
+    /** Marks the first-run colour setup as answered, so it is not shown again. */
+    suspend fun setSetupComplete(complete: Boolean) =
+        settingsRepository.update { it.copy(setupComplete = complete) }
 
     suspend fun setLanguage(language: AppLanguage) = settingsRepository.update { it.copy(language = language) }
 
@@ -65,6 +71,9 @@ class UpdateSettingsUseCase @Inject constructor(
     suspend fun setTapToTurnPages(enabled: Boolean) =
         settingsRepository.update { it.copy(tapToTurnPages = enabled) }
 
+    suspend fun setReverseTapZones(enabled: Boolean) =
+        settingsRepository.update { it.copy(reverseTapZones = enabled) }
+
     suspend fun setPageTurnEffect(effect: PageTurnEffect) =
         settingsRepository.update { it.copy(pageTurnEffect = effect) }
 
@@ -74,7 +83,16 @@ class UpdateSettingsUseCase @Inject constructor(
     /** The face the app's own interface is set in. Part of appearance, not of reading. */
     suspend fun setUiFont(font: AppFont) = settingsRepository.update { it.copy(uiFont = font) }
 
-    suspend fun resetToDefaults() = settingsRepository.update { ReaderSettings.Default }
+    /**
+     * Everything back to its default, except the answer to the first-run setup.
+     *
+     * That one is kept deliberately. Resetting the app's appearance is something a reader does *to*
+     * the app, and being sent through a welcome screen the next time they open it would read as the
+     * reset having broken something.
+     */
+    suspend fun resetToDefaults() = settingsRepository.update { settings ->
+        ReaderSettings.Default.copy(setupComplete = settings.setupComplete)
+    }
 
     /**
      * Puts back everything that decides how a book is *read*, and nothing else.
@@ -100,6 +118,7 @@ class UpdateSettingsUseCase @Inject constructor(
             showProgressIndicator = ReaderSettings.Default.showProgressIndicator,
             layout = ReaderSettings.Default.layout,
             tapToTurnPages = ReaderSettings.Default.tapToTurnPages,
+            reverseTapZones = ReaderSettings.Default.reverseTapZones,
             // Both of these decide what happens when a page is turned, so they belong to reading
             // rather than to appearance — unlike `uiFont`, which the reader's panel does not offer.
             pageTurnEffect = ReaderSettings.Default.pageTurnEffect,

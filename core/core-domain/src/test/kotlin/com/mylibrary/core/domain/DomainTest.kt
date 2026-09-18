@@ -3,6 +3,7 @@ package com.mylibrary.core.domain
 import com.mylibrary.core.common.DefaultDispatcherProvider
 import com.mylibrary.core.domain.model.Book
 import com.mylibrary.core.domain.model.BookFormat
+import com.mylibrary.core.domain.model.ColorSource
 import com.mylibrary.core.domain.model.LibraryItem
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.ReadingLocator
@@ -19,6 +20,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -356,8 +358,18 @@ class ReaderSettingsTest {
     }
 
     @Test
-    fun `dynamic colour is on by default`() {
-        assertTrue(ReaderSettings.Default.dynamicColor)
+    fun `the app's own colour is the default, not the wallpaper's`() {
+        // The wallpaper palette is a choice, not a default: it varies with something the reader
+        // did not do in this app, and an interface that changes colour because a photograph
+        // changed is not what someone opening a new app expects to find.
+        assertEquals(ColorSource.TEAL, ReaderSettings.Default.colorSource)
+    }
+
+    @Test
+    fun `a fresh install has not answered the colour setup`() {
+        // Which is what makes a first launch show it. The store treats a settings file with
+        // anything in it as already answered, so this default only ever reaches a new install.
+        assertFalse(ReaderSettings.Default.setupComplete)
     }
 
     @Test

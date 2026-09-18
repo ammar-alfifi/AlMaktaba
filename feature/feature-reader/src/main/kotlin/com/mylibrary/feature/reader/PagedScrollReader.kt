@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -81,6 +82,10 @@ internal fun PagedScrollReaderContent(
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val currentOnIntent by rememberUpdatedState(onIntent)
     val currentTapToTurn by rememberUpdatedState(state.settings.tapToTurnPages)
+    val currentReverseTapZones by rememberUpdatedState(state.settings.reverseTapZones)
+    // Read through `rememberUpdatedState`: the gesture loop is not restarted when the direction
+    // changes, so a plain read inside it would keep the direction the book was opened in.
+    val currentIsRtl by rememberUpdatedState(isRtl)
     val currentBubbleZoom by rememberUpdatedState(state.settings.bubbleZoom)
 
     // Column -> state. `distinctUntilChanged` keeps the effect below from ping-ponging with it.
@@ -123,7 +128,12 @@ internal fun PagedScrollReaderContent(
                     onTap = { position ->
                         if (inspection.page != null) return@detectTapGestures
                         val zone = if (currentTapToTurn) {
-                            tapZoneFor(position.x, size.width.toFloat(), isRtl)
+                            tapZoneFor(
+                                x = position.x,
+                                width = size.width.toFloat(),
+                                isRtl = currentIsRtl,
+                                reversed = currentReverseTapZones,
+                            )
                         } else {
                             TapZone.CENTER
                         }
@@ -160,9 +170,10 @@ internal fun PagedScrollReaderContent(
             items(count = state.totalUnits, key = { index -> index }) { index ->
                 ScrollPage(
                     pageIndex = index,
+                    listState = listState,
                     viewModel = viewModel,
                     onIntent = onIntent,
-                    onMagnify = { zoom -> inspection.magnify(index, zoom) },
+                    onMagnify = { pinch -> inspection.magnify(index, pinch) },
                 )
             }
         }
@@ -213,9 +224,10 @@ private fun pageAt(position: Offset, listState: LazyListState): Pair<Int, Offset
 @Composable
 private fun ScrollPage(
     pageIndex: Int,
+    listState: LazyListState,
     viewModel: ReaderViewModel,
     onIntent: (ReaderIntent) -> Unit,
-    onMagnify: (Float) -> Unit,
+    onMagnify: (ColumnMagnify) -> Unit,
 ) {
     val pageSize by produceState<PageSize?>(initialValue = null, pageIndex) {
         value = viewModel.pageSize(pageIndex)
@@ -223,6 +235,11 @@ private fun ScrollPage(
     val ratio = pageSize
         ?.takeIf { it.width > 0 && it.height > 0 }
         ?.let { it.width.toFloat() / it.height.toFloat() }
+
+    // Where this page is drawn and how big, published by [ReaderPage] as it renders. The pinch below
+    // needs the *size*, because that is what the overlay has to match to take the gesture over
+    // without the page changing size as it does so.
+    var geometry by remember { mutableStateOf(PageGeometry()) }
 
     Box(
         modifier = Modifier
@@ -242,7 +259,7 @@ private fun ScrollPage(
             pageTurnEffect = PageTurnEffect.CURL,
             viewModel = viewModel,
             onIntent = onIntent,
-            onGeometry = {},
+            onGeometry = { measured -> geometry = measured },
         )
         Box(
             modifier = Modifier
@@ -254,11 +271,39 @@ private fun ScrollPage(
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
                         var zoom = 1f
+                        // Taken once, on the first movement, and kept for the rest of the gesture:
+                        // re-aiming at a moving centroid every frame would chase the fingers rather
+                        // than hold the page under them.
+                        var anchor: ColumnMagnify? = null
                         do {
                             val event = awaitPointerEvent()
                             if (event.changes.count { it.pressed } < 2) continue
-                            zoom *= event.calculateZoom()
-                            onMagnify(zoom)
+                            val zoomChange = event.calculateZoom()
+                            if (zoomChange == 1f) continue
+                            zoom *= zoomChange
+
+                            if (anchor == null) {
+                                val drawn = geometry.drawn
+                                if (drawn.width <= 0f || drawn.height <= 0f) continue
+                                val centroid = event.calculateCentroid(useCurrent = true)
+                                anchor = ColumnMagnify(
+                                    // The item's box *is* the page — width-fitted with the item's
+                                    // aspect ratio — so the tap's own position is already the page
+                                    // fraction it landed on.
+                                    anchorFraction = Offset(
+                                        (centroid.x / drawn.width).coerceIn(0f, 1f),
+                                        (centroid.y / drawn.height).coerceIn(0f, 1f),
+                                    ),
+                                    anchorView = Offset(
+                                        centroid.x,
+                                        centroid.y + viewportOffsetOf(pageIndex, listState),
+                                    ),
+                                    zoom = 1f,
+                                    columnDrawn = drawn,
+                                )
+                            }
+                            anchor?.let { onMagnify(it.copy(zoom = zoom)) }
+
                             if (zoom > ZOOMED_THRESHOLD) {
                                 event.changes.forEach { change ->
                                     if (change.positionChanged()) change.consume()
@@ -267,11 +312,25 @@ private fun ScrollPage(
                         } while (event.changes.any { it.pressed })
                         // Back to a single page-width and the page returns to the column, which is
                         // how a reader says they have finished with it.
-                        if (zoom <= ZOOMED_THRESHOLD) onMagnify(1f)
+                        if (zoom <= ZOOMED_THRESHOLD) anchor?.let { onMagnify(it.copy(zoom = zoom)) }
                     }
                 }
         )
     }
+}
+
+/**
+ * Where this page's own top edge sits in the reader's viewport.
+ *
+ * A gesture reports its position relative to the node it landed on, and the node here is the page —
+ * which is a whole screenful tall and scrolled to wherever the reader is. The overlay is positioned
+ * in the viewport's coordinates, so the two have to be reconciled before a pinch point can be handed
+ * from one to the other.
+ */
+private fun viewportOffsetOf(pageIndex: Int, listState: LazyListState): Float {
+    val layout = listState.layoutInfo
+    val item = layout.visibleItemsInfo.firstOrNull { info -> info.index == pageIndex } ?: return 0f
+    return (item.offset - layout.viewportStartOffset).toFloat()
 }
 
 /**
@@ -368,9 +427,12 @@ private fun PageInspection(
     }
 
 
-    // A double-tap in the column asked for something specific to be framed, and it can only be
-    // framed once this page has rendered and reported where it is drawn.
-    LaunchedEffect(inspection.pendingFrame, geometry.bitmap) {
+    // Both of the column's gestures have to wait for this page to render and report where it is
+    // drawn: a pinch cannot be carried on without knowing how big the overlay draws it, and a
+    // double-tap cannot be framed without knowing where the page is.
+    LaunchedEffect(inspection.pendingMagnify, inspection.pendingFrame, geometry) {
+        inspection.applyPendingMagnify()
+
         val fraction = inspection.pendingFrame ?: return@LaunchedEffect
         if (geometry.bitmap == null) return@LaunchedEffect
         inspection.pendingFrame = null
@@ -465,7 +527,7 @@ private fun PageInspection(
             pageTurnEffect = PageTurnEffect.CURL,
             viewModel = viewModel,
             onIntent = onIntent,
-            onGeometry = { inspection.geometry = it },
+            onGeometry = { measured: PageGeometry -> inspection.report(pageIndex, measured) },
         )
     }
 }
@@ -487,9 +549,40 @@ private class Inspection {
     var transform by mutableStateOf(PageTransform.Identity)
     var reference by mutableStateOf(Size.Zero)
     var geometry by mutableStateOf(PageGeometry())
+        private set
+
+    /**
+     * The page [geometry] describes.
+     *
+     * A second field rather than a comparison against [page], because the two are briefly different
+     * on purpose: opening a page sets [page] before the new page has drawn anything, and for those
+     * frames the geometry still belongs to whatever was open before. Aiming a zoom at it would aim
+     * at the wrong page's size.
+     */
+    private var geometryPage by mutableStateOf<Int?>(null)
 
     /** Whether a double-tap looks for a speech bubble first. Read from settings by the caller. */
     var bubbleZoom by mutableStateOf(true)
+
+    /** The opened page reporting where it is drawn and how big. */
+    fun report(pageIndex: Int, measured: PageGeometry) {
+        geometry = measured
+        geometryPage = pageIndex
+    }
+
+    /** Whether the opened page has said enough for a zoom to be aimed at it. */
+    fun isDrawn(): Boolean =
+        geometryPage == page && geometry.bitmap != null && geometry.drawn.width > 0f
+
+    /**
+     * A pinch that opened this page before it had drawn anything.
+     *
+     * Held rather than applied because the handover needs a number only the page can supply — the
+     * size the overlay draws it at — and until that arrives there is no honest way to keep the page
+     * the size it already was.
+     */
+    var pendingMagnify: ColumnMagnify? by mutableStateOf(null)
+        private set
 
     /**
      * A place in a page the column asked to have framed, as a fraction of the page.
@@ -508,18 +601,58 @@ private class Inspection {
     val resolutionStep: Int
         get() = transform.scale.coerceIn(1f, MAX_RENDER_SCALE).toInt().coerceAtLeast(1)
 
-    /** Opens [index] over the column, magnified by [zoom] — the pinch that asked for it, so far. */
-    fun magnify(index: Int, zoom: Float) {
+    /**
+     * Opens [index] over the column, carrying on from the pinch that asked for it.
+     *
+     * The page must not move or change size as it is handed over, which is why the transform is
+     * built from [ColumnMagnify] — what the column was showing — rather than from the pinch's own
+     * magnification applied to the overlay's quite different idea of "unzoomed".
+     */
+    fun magnify(index: Int, pinch: ColumnMagnify) {
         if (page != index) {
             page = index
             reference = Size.Zero
+            transform = PageTransform.Identity
+            pendingFrame = null
+            pendingMagnify = null
         }
-        if (zoom <= ZOOMED_THRESHOLD) {
+        // Back to a single page-width: the reader has finished with the page, not merely stopped
+        // moving their fingers.
+        if (pinch.zoom <= ZOOMED_THRESHOLD) {
             close()
             return
         }
         cancelAnimation()
-        transform = PageTransform(zoom.coerceIn(1f, MAX_SCALE), Offset.Zero)
+        pendingMagnify = pinch
+        applyPendingMagnify()
+    }
+
+    /**
+     * Turns a parked pinch into a transform, now that the page has said how big it draws.
+     *
+     * Does nothing until then, which is what makes it safe to call on every frame of a pinch: the
+     * first call that finds the geometry ready is the one that lands the page exactly where the
+     * column had it, and every call after that starts from that transform.
+     */
+    fun applyPendingMagnify() {
+        val pending = pendingMagnify ?: return
+        val bitmap = geometry.bitmap ?: return
+        if (!isDrawn()) return
+        if (geometry.container.width <= 0 || geometry.container.height <= 0) return
+
+        pendingMagnify = null
+        val onScreen = transformFor(
+            target = pending.toTarget(geometry.drawn),
+            container = geometry.container,
+            drawn = geometry.drawn,
+            bitmapWidth = bitmap.width,
+            bitmapHeight = bitmap.height,
+        )
+        transform = PageTransform(
+            scale = referenceScaleFor(onScreen.scale, geometry.drawn, geometry.reference),
+            offset = onScreen.offset,
+        )
+        reference = geometry.reference
     }
 
     /** Opens [index] over the column at fit, asking for [fraction] of it to be framed. */
@@ -528,6 +661,7 @@ private class Inspection {
             page = index
             reference = Size.Zero
             transform = PageTransform.Identity
+            pendingMagnify = null
         }
         pendingFrame = fraction
     }
@@ -535,6 +669,7 @@ private class Inspection {
     fun close() {
         cancelAnimation()
         pendingFrame = null
+        pendingMagnify = null
         page = null
         transform = PageTransform.Identity
         reference = Size.Zero

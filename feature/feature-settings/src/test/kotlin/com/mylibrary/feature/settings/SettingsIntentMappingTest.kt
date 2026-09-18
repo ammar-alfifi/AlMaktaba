@@ -1,6 +1,7 @@
 package com.mylibrary.feature.settings
 
 import com.mylibrary.core.domain.model.AppLanguage
+import com.mylibrary.core.domain.model.ColorSource
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.PageTurnEffect
@@ -88,7 +89,7 @@ class SettingsIntentMappingTest {
     fun `reset returns a settings object that had been changed in every section`() {
         val changed = ReaderSettings.Default.copy(
             themeMode = ThemeMode.DARK,
-            dynamicColor = false,
+            colorSource = ColorSource.ROSE,
             language = AppLanguage.ENGLISH,
             viewMode = ViewMode.LIST,
             librarySort = LibrarySort.AUTHOR,
@@ -163,10 +164,16 @@ class SettingsIntentMappingTest {
                 expected = Defaults.copy(themeMode = ThemeMode.DARK),
             ),
             Case(
-                name = "dynamic colour",
+                name = "colour source",
                 startFrom = Defaults,
-                intent = SettingsIntent.DynamicColorToggled(false),
-                expected = Defaults.copy(dynamicColor = false),
+                intent = SettingsIntent.ColorSourceChanged(ColorSource.BLUE),
+                expected = Defaults.copy(colorSource = ColorSource.BLUE),
+            ),
+            Case(
+                name = "finishing the colour setup",
+                startFrom = Defaults,
+                intent = SettingsIntent.SetupCompleted,
+                expected = Defaults.copy(setupComplete = true),
             ),
             Case(
                 name = "language",
@@ -229,6 +236,12 @@ class SettingsIntentMappingTest {
                 expected = Defaults.copy(showProgressIndicator = false),
             ),
             Case(
+                name = "reversed tap zones",
+                startFrom = Defaults,
+                intent = SettingsIntent.ReverseTapZonesToggled(true),
+                expected = Defaults.copy(reverseTapZones = true),
+            ),
+            Case(
                 name = "page snapping",
                 startFrom = Defaults,
                 intent = SettingsIntent.LayoutChanged(ReaderLayout.SCROLL),
@@ -287,7 +300,7 @@ class ResetReaderDefaultsTest {
     /** Every field set to something that is *not* its default, so a reset has to do work. */
     private val customised = ReaderSettings(
         themeMode = ThemeMode.DARK,
-        dynamicColor = false,
+        colorSource = ColorSource.ROSE,
         language = AppLanguage.ENGLISH,
         viewMode = ViewMode.LIST,
         librarySort = LibrarySort.TITLE_DESC,
@@ -300,6 +313,7 @@ class ResetReaderDefaultsTest {
         showProgressIndicator = false,
         layout = ReaderLayout.SCROLL,
         tapToTurnPages = false,
+        reverseTapZones = true,
         pageTurnEffect = PageTurnEffect.FADE,
         bubbleZoom = false,
     )
@@ -324,6 +338,7 @@ class ResetReaderDefaultsTest {
         assertEquals(defaults.showProgressIndicator, reset.showProgressIndicator)
         assertEquals(defaults.layout, reset.layout)
         assertEquals(defaults.tapToTurnPages, reset.tapToTurnPages)
+        assertEquals("the reversed tap zones are a reading setting", defaults.reverseTapZones, reset.reverseTapZones)
         assertEquals("the turn effect is a reading setting", defaults.pageTurnEffect, reset.pageTurnEffect)
         assertEquals("bubble zoom is a reading setting", defaults.bubbleZoom, reset.bubbleZoom)
     }
@@ -334,7 +349,7 @@ class ResetReaderDefaultsTest {
         val reset = afterReset()
 
         assertEquals(ThemeMode.DARK, reset.themeMode)
-        assertTrue("dynamic colour was switched back on", !reset.dynamicColor)
+        assertEquals("the colour is an appearance setting", ColorSource.ROSE, reset.colorSource)
         assertEquals(AppLanguage.ENGLISH, reset.language)
         assertEquals(ViewMode.LIST, reset.viewMode)
         assertEquals(LibrarySort.TITLE_DESC, reset.librarySort)

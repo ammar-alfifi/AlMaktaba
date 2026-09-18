@@ -112,7 +112,15 @@ fun PagedReaderContent(
     val scope = rememberCoroutineScope()
     val currentOnIntent by rememberUpdatedState(onIntent)
     val currentTapToTurn by rememberUpdatedState(state.settings.tapToTurnPages)
+    val currentReverseTapZones by rememberUpdatedState(state.settings.reverseTapZones)
     val currentBubbleZoom by rememberUpdatedState(state.settings.bubbleZoom)
+    // Through `rememberUpdatedState` like the settings above, and for the same reason: the gesture
+    // loop is not restarted when the direction changes, so a plain `val` read inside it is whatever
+    // the direction was when the book was opened. That made the setting look inert — the pages
+    // turned one way and the taps stayed the other — until the reader closed the book and reopened
+    // it, which is exactly the kind of bug that survives a review and dies the moment someone
+    // changes the setting while looking at the screen.
+    val currentIsRtl by rememberUpdatedState(isRtl)
 
     // The zoom of the page on screen, in the reference-render space described on [PageTransform]:
     // a magnification that does not change when the page is re-rendered more sharply.
@@ -326,7 +334,13 @@ fun PagedReaderContent(
                             currentOnIntent(ReaderIntent.ToggleChrome)
                             return@detectTapGestures
                         }
-                        when (tapZoneFor(position.x, size.width.toFloat(), isRtl)) {
+                        val zone = tapZoneFor(
+                            x = position.x,
+                            width = size.width.toFloat(),
+                            isRtl = currentIsRtl,
+                            reversed = currentReverseTapZones,
+                        )
+                        when (zone) {
                             TapZone.PREVIOUS -> {
                                 haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                                 currentOnIntent(ReaderIntent.PreviousUnit)
@@ -471,16 +485,8 @@ internal fun ReaderPage(
         ?.let { drawnPageSize(it.width, it.height, containerSize, fitMode) }
         ?: Size.Zero
 
-    // What the page would be drawn at if it were rendered at the reader's base resolution. For page
-    // fit and width fit this equals `drawnSize`, because those sizes come from the viewport rather
-    // than from the bitmap; for actual size it is the size the page is drawn at *per unit of zoom*,
-    // which is what the stored transform is measured against.
-    val referenceDrawnSize = remember(drawnSize, resolutionStep, containerSize, fitMode, bitmap) {
-        bitmap?.let {
-            val baseWidth = (it.width / resolutionStep).coerceAtLeast(1)
-            val baseHeight = (it.height / resolutionStep).coerceAtLeast(1)
-            drawnPageSize(baseWidth, baseHeight, containerSize, fitMode)
-        } ?: Size.Zero
+    val referenceDrawnSize = remember(drawnSize, fitMode, pageSize) {
+        referenceDrawnSizeFor(fitMode, drawnSize, pageSize)
     }
 
     LaunchedEffect(bitmap, drawnSize, referenceDrawnSize, containerSize) {
@@ -624,12 +630,18 @@ private fun shadeBrush(size: Size, pivot: Float, alpha: Float): Brush =
  *  - [PageFitMode.ACTUAL_SIZE] — the page's own dimensions, unscaled. One document point becomes one
  *    device pixel, so nothing is resampled.
  *
- * The two modes whose size comes from the *file* — width fit and actual size — are then capped by
- * [capRenderBox], because a PDF page tree may declare any MediaBox it likes and a 30000-point page
- * is a real thing to find in a malformed file. Page fit is not capped, and deliberately: its box is
- * the viewport, which is bounded by the device rather than by the document. Capping it would render
- * the page smaller than the frame it has to fill and blur it in the process. The rule is that what
- * the file controls gets bounded, and what the screen controls does not.
+ * **Every mode is capped by [capRenderBox], and the reason is [resolutionStep].** The step exists so
+ * that a zoomed page is re-rendered more sharply, so the box is the viewport *multiplied by the
+ * step* — which is not bounded by the device at all: 1080×2400 at step 3 is a 3240×7200 box, and a
+ * portrait comic page fills it with roughly 63 MB of pixels against a 64 MB cache. One page would
+ * take the whole budget, and the reader would re-render every page on every turn.
+ *
+ * Capping does not shrink the page on screen, which is what makes it safe for page fit. The size
+ * anything is *drawn* at comes from [drawnPageSize], which fits the bitmap into the viewport — so a
+ * box scaled down by a uniform factor yields a bitmap scaled down by the same factor, and the page
+ * occupies exactly the same pixels with less sharpness above what the screen can show. What the
+ * file controls still gets bounded too, for the original reason: a PDF page tree may declare any
+ * MediaBox it likes, and a 30000-point page is a real thing to find in a malformed file.
  */
 internal fun renderBoxFor(
     fitMode: PageFitMode,
@@ -641,10 +653,13 @@ internal fun renderBoxFor(
 
     val step = resolutionStep.coerceAtLeast(1)
     val viewport = IntSize(container.width * step, container.height * step)
-    val page = pageSize?.takeIf { it.width > 0 && it.height > 0 } ?: return viewport
+    // Capped on every path, including this one: the fallback is the viewport *times the step*, and
+    // at step 3 that is three times the device's width and height in each direction.
+    val page = pageSize?.takeIf { it.width > 0 && it.height > 0 }
+        ?: return capRenderBox(viewport.width, viewport.height)
 
     return when (fitMode) {
-        PageFitMode.PAGE -> viewport
+        PageFitMode.PAGE -> capRenderBox(viewport.width, viewport.height)
 
         PageFitMode.WIDTH -> capRenderBox(
             width = viewport.width,
@@ -703,6 +718,37 @@ internal fun drawnPageSize(
 
         PageFitMode.ACTUAL_SIZE -> Size(bitmapWidth.toFloat(), bitmapHeight.toFloat())
     }
+}
+
+/**
+ * What the page is drawn at when the render is at the reader's *base* resolution.
+ *
+ * The stored zoom is measured against this rather than against whatever render happens to be on
+ * screen, so that crossing a resolution step changes the sharpness and nothing else. Get it wrong
+ * and the page changes size in the middle of a pinch, which is the one thing a re-render must never
+ * do — and it is not a hypothetical: this returned `drawn / step` for every fit, which is right for
+ * two of the three and half the truth for the third.
+ *
+ * Page fit and width fit size the page from the *viewport*, so the drawn size does not depend on the
+ * bitmap's resolution at all: for those, base and current are the same rectangle.
+ *
+ * Actual size is the one fit whose drawn size is the page's own, and there the answer depends on the
+ * decoder — which the reader cannot see. Asked for a box twice as large, pdfium renders a bitmap
+ * twice as large, while the archive decoder only ever scales *down* (`PageDecoder`) and hands back
+ * the same bitmap as before. So the bitmap on screen cannot say what the base resolution draws; the
+ * page's declared size can, because the base box *is* the page's own size.
+ */
+internal fun referenceDrawnSizeFor(
+    fitMode: PageFitMode,
+    drawnSize: Size,
+    pageSize: PageSize?,
+): Size = when (fitMode) {
+    PageFitMode.PAGE, PageFitMode.WIDTH -> drawnSize
+
+    PageFitMode.ACTUAL_SIZE -> pageSize
+        ?.takeIf { it.width > 0 && it.height > 0 }
+        ?.let { Size(it.width.toFloat(), it.height.toFloat()) }
+        ?: drawnSize
 }
 
 /**

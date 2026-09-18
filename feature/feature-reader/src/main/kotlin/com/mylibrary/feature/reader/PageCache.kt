@@ -40,10 +40,7 @@ class PageCache(private val maxBytes: Int) {
 
     private data class Entry(val image: ImageBitmap, val byteSize: Int)
 
-    private val entries = object : LinkedHashMap<Key, Entry>(INITIAL_CAPACITY, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, Entry>): Boolean =
-            size > MAX_ENTRIES || totalBytes > maxBytes
-    }
+    private val entries = LinkedHashMap<Key, Entry>(INITIAL_CAPACITY, 0.75f, true)
 
     private var totalBytes: Int = 0
 
@@ -72,14 +69,23 @@ class PageCache(private val maxBytes: Int) {
     }
 
     /**
-     * Evicts least-recently-used entries until the budget is met.
+     * Evicts least-recently-used entries until both budgets are met.
      *
-     * `LinkedHashMap` only evicts on insertion, so a cache that grew by a large page and then had
-     * that page removed would never shrink back without this.
+     * **This is the only place an entry is ever dropped, and the only place [totalBytes] is ever
+     * decremented**, which is not a stylistic point. Eviction used to be split between here and
+     * `LinkedHashMap.removeEldestEntry`, which fires *inside* the map's own `put` — and that path
+     * removed the entry without touching the counter. The counter therefore drifted permanently
+     * upwards by the size of every entry evicted that way, and once the drift alone exceeded the
+     * budget this loop emptied the map on every insert while the counter stayed over: the cache
+     * silently stopped caching, and every page re-rendered from the engine on every frame.
+     *
+     * `LinkedHashMap` only considers eviction on insertion, so this also runs after a `put` that
+     * removed an existing key — a cache that had grown by a large page and then lost it would
+     * otherwise never shrink back.
      */
     private fun trimToBudget() {
         val iterator = entries.entries.iterator()
-        while (totalBytes > maxBytes && iterator.hasNext()) {
+        while ((totalBytes > maxBytes || entries.size > MAX_ENTRIES) && iterator.hasNext()) {
             val entry = iterator.next()
             totalBytes -= entry.value.byteSize
             iterator.remove()

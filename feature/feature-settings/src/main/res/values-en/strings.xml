@@ -21,8 +21,6 @@
     <string name="settings_theme_system">System</string>
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
-    <string name="settings_dynamic_color">Dynamic colour</string>
-    <string name="settings_dynamic_color_summary">Match the app\'s colours to the device wallpaper (Android 12 and later).</string>
     <string name="settings_ui_font">Interface font</string>
 
     <!-- Language -->
@@ -75,6 +73,8 @@
     <string name="settings_layout_paged">Pages</string>
     <string name="settings_tap_to_turn">Tap the sides to turn pages</string>
     <string name="settings_tap_to_turn_summary">The sides turn the page; the middle of the screen shows the toolbar.</string>
+    <string name="settings_reverse_tap">Reverse the sides taps go to</string>
+    <string name="settings_reverse_tap_summary">Swaps the two edges: the one that went forward now goes back.</string>
 
     <!-- About -->
     <string name="settings_about_version_title">Version</string>
@@ -93,4 +93,33 @@
     <string name="settings_reset_dialog_message">Your current preferences will be lost: theme, language, library view mode and reading settings.</string>
     <string name="settings_reset_confirm">Reset</string>
     <string name="settings_reset_done">Settings reset to their defaults.</string>
+    <string name="settings_appearance_colour">Colour</string>
+    <string name="settings_appearance_colour_summary">The app\'s colour, theme and interface font.</string>
+
+    <!-- Colour setup. Shown on a first launch and reopened from Appearance. -->
+    <string name="settings_color_title">Colour and theme</string>
+    <string name="settings_color_message">Choose how MyLibrary looks. You can change this at any time in Settings.</string>
+    <string name="settings_color_theme">Theme</string>
+    <string name="settings_color_colour">Colour</string>
+    <string name="settings_color_ui_font">Interface font</string>
+    <string name="settings_color_done">Get started</string>
+    <string name="settings_color_theme_system">System</string>
+    <string name="settings_color_theme_light">Light</string>
+    <string name="settings_color_theme_dark">Dark</string>
+    <string name="settings_color_wallpaper">Device wallpaper</string>
+    <string name="settings_color_teal">Teal</string>
+    <string name="settings_color_purple">Purple</string>
+    <string name="settings_color_blue">Blue</string>
+    <string name="settings_color_green">Green</string>
+    <string name="settings_color_amber">Amber</string>
+    <string name="settings_color_rose">Rose</string>
+    <string name="settings_color_font_system">Default</string>
+    <string name="settings_color_font_amiri">Amiri</string>
+    <string name="settings_color_font_plex">IBM Plex Arabic</string>
+    <string name="settings_color_font_reem">Reem Kufi</string>
+    <string name="settings_color_preview_title">Preview</string>
+    <string name="settings_color_preview_body">This is how the app looks in the colours you chose.</string>
+    <string name="settings_color_preview_button">Button</string>
+    <string name="settings_color_preview_chip">Chip</string>
+    <string name="settings_color_preview_switch">Switch</string>
 </resources>

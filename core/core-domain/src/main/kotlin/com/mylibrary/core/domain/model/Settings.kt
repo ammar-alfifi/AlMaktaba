@@ -4,6 +4,46 @@ package com.mylibrary.core.domain.model
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
 /**
+ * Where the app's colours come from.
+ *
+ * One setting rather than the "dynamic colour" switch this replaces, because "which palette" and
+ * "follow the wallpaper" are the same question, and two controls for one decision are two places to
+ * look for it — and two ways for the app to be told something it cannot honour.
+ *
+ * Every entry except [WALLPAPER] names a Material 3 scheme generated from a seed colour by
+ * `tools/material_palette.py` and shipped as constants; [WALLPAPER] is the device's own palette,
+ * which can only be read at runtime. [TEAL] is the app's original hand-authored scheme.
+ *
+ * Entries are only ever appended: the choice is persisted by name, and the settings store resolves
+ * an unknown name to the default rather than failing, so inserting one in the middle would not
+ * corrupt anything — but appending keeps the picker's order stable for anyone who has learnt it.
+ */
+enum class ColorSource {
+    /**
+     * Material You: the palette derived from the device's wallpaper.
+     *
+     * Needs Android 12. Below that there is no wallpaper palette to read, and this resolves to
+     * [TEAL] — which is why it is hidden from the picker entirely on those devices rather than
+     * offered and then quietly ignored.
+     */
+    WALLPAPER,
+
+    /** The app's own teal, hand-authored and unchanged since the first release. */
+    TEAL,
+
+    PURPLE,
+    BLUE,
+    GREEN,
+    AMBER,
+    ROSE,
+    ;
+
+    /** Whether this source has a palette that can be shown on the device it is being asked about. */
+    fun isAvailable(supportsWallpaperColors: Boolean): Boolean =
+        this != WALLPAPER || supportsWallpaperColors
+}
+
+/**
  * The UI language.
  *
  * [SYSTEM] follows the device. [ARABIC] and [ENGLISH] are explicit in-app overrides — Arabic is the
@@ -156,8 +196,16 @@ enum class LibrarySort {
  */
 data class ReaderSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    /** Use the Android 12+ wallpaper-derived palette. Ignored below API 31 and when disabled. */
-    val dynamicColor: Boolean = true,
+    /** Which palette the app is drawn in. See [ColorSource]. */
+    val colorSource: ColorSource = ColorSource.TEAL,
+    /**
+     * Whether the first-run colour setup has been answered.
+     *
+     * A first launch shows that screen; every launch after it goes straight to the shelf. It is
+     * true for anyone whose settings file has anything in it, so an upgrade never sends an existing
+     * reader through a welcome they have already had — see `SettingsDataStore`.
+     */
+    val setupComplete: Boolean = false,
     val language: AppLanguage = AppLanguage.ARABIC,
     /** The face the app's own interface is set in. Bundled faces only — see [AppFont]. */
     val uiFont: AppFont = AppFont.SYSTEM,
@@ -200,6 +248,17 @@ data class ReaderSettings(
      * the reason tap-to-turn is not baked in.
      */
     val tapToTurnPages: Boolean = true,
+
+    /**
+     * Whether a side tap goes the opposite way to the one it names.
+     *
+     * Separate from [readingDirection] on purpose, even though both end up deciding which side of the
+     * screen moves forward. They answer different questions: the direction is about the *book* — an
+     * Arabic comic's first page is on the right — while this is about the *hand*, and about a reader
+     * who has learnt to tap one way and is not going to relearn it because a file's direction says
+     * otherwise. Composed, they cover every combination without a second direction setting.
+     */
+    val reverseTapZones: Boolean = false,
 
     /** How a page is animated as it is turned. See [PageTurnEffect]. */
     val pageTurnEffect: PageTurnEffect = PageTurnEffect.CURL,

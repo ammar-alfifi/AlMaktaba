@@ -450,6 +450,12 @@ class ReaderViewModel @Inject constructor(
             is ReaderIntent.SetKeepScreenOn -> launch { updateSettings.setKeepScreenOn(intent.enabled) }
             is ReaderIntent.SetLayout -> launch { updateSettings.setLayout(intent.layout) }
             is ReaderIntent.SetTapToTurnPages -> launch { updateSettings.setTapToTurnPages(intent.enabled) }
+            is ReaderIntent.SetReadingDirection -> launch {
+                updateSettings.setReadingDirection(intent.direction)
+            }
+            is ReaderIntent.SetReverseTapZones -> launch {
+                updateSettings.setReverseTapZones(intent.enabled)
+            }
             is ReaderIntent.SetPageTurnEffect -> launch { updateSettings.setPageTurnEffect(intent.effect) }
             is ReaderIntent.SetBubbleZoom -> launch { updateSettings.setBubbleZoom(intent.enabled) }
 

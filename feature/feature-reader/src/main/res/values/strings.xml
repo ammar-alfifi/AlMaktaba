@@ -25,6 +25,12 @@
     <string name="reader_layout_scroll">تمرير متصل</string>
     <string name="reader_layout_paged">صفحات</string>
     <string name="reader_settings_tap_to_turn">النقر على الجانبين لقلب الصفحات</string>
+    <string name="reader_settings_direction">الاتجاه</string>
+    <string name="reader_settings_direction_summary">من أي جهة تبدأ الصفحة الأولى، وأي جهة ينقلك النقر إليها.</string>
+    <string name="reader_settings_reverse_tap">اعكس اتجاه النقر على الجانبين</string>
+    <string name="reader_direction_file">حسب الملف</string>
+    <string name="reader_direction_first_left">الأولى من اليسار</string>
+    <string name="reader_direction_first_right">الأولى من اليمين</string>
     <string name="reader_settings_reset">إعادة ضبط إعدادات القراءة</string>
     <string name="reader_settings_reset_message">سيُعاد ضبط الخط وحجمه وتباعد الأسطر وطريقة العرض وملاءمة الصفحة واتجاه القراءة. لن يتغيّر مظهر التطبيق ولا لغته ولا ترتيب مكتبتك.</string>
     <string name="reader_settings_reset_done">أُعيد ضبط إعدادات القراءة</string>

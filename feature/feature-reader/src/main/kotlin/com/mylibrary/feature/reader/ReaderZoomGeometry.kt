@@ -212,6 +212,55 @@ internal fun zoomTargetForRegion(
     )
 }
 
+/**
+ * A pinch on a page in the scrolling column, described in the terms the overlay needs to carry it on.
+ *
+ * **Why this has to exist.** The column draws a page width-fitted and the overlay draws the same page
+ * page-fitted — two different rectangles for one page — so a pinch that simply handed its
+ * magnification to the overlay magnified a *different* view, and the page visibly jumped the instant
+ * the overlay appeared. Everything here exists to make that handover exact: the point of the page
+ * under the fingers, the place on screen those fingers are, how far they have pinched, and the size
+ * the column was drawing the page at.
+ *
+ * [toTarget] then needs exactly one number it cannot know — how big the overlay draws the page — and
+ * that is supplied by the overlay itself, once, when it first reports its geometry.
+ */
+internal data class ColumnMagnify(
+    /** The point of the page under the fingers, as a fraction of the page in 0..1. */
+    val anchorFraction: Offset,
+    /** Where those fingers are, in the reader viewport's own coordinates. */
+    val anchorView: Offset,
+    /** How far the pinch has magnified, 1 meaning it has not started. */
+    val zoom: Float,
+    /** The size the column was drawing the page at. Width-fitted, so as wide as the viewport. */
+    val columnDrawn: Size,
+) {
+    /**
+     * The destination this pinch is heading for.
+     *
+     * [overlayDrawn] is the size the overlay draws the same page at, unzoomed. The ratio converts
+     * "as big as it was in the column" into the overlay's own scale — and because both fits preserve
+     * the page's proportions it is one number, not one per axis. It is at least 1: a width-fitted
+     * page is as wide as the viewport, and a page-fitted one is never wider than that.
+     */
+    fun toTarget(overlayDrawn: Size): ZoomTarget = ZoomTarget(
+        anchorFraction = anchorFraction,
+        anchorView = anchorView,
+        scale = zoom * continuityScale(columnDrawn, overlayDrawn),
+    )
+}
+
+/**
+ * How much bigger the overlay has to draw a page for it to look the size it looked in the column.
+ *
+ * Falls back to 1 when either size is unknown, which is the honest answer for "no information" —
+ * and is what the overlay did before this existed.
+ */
+internal fun continuityScale(columnDrawn: Size, overlayDrawn: Size): Float {
+    if (columnDrawn.width <= 0f || overlayDrawn.width <= 0f) return 1f
+    return columnDrawn.width / overlayDrawn.width
+}
+
 /** The destination that puts the page back where it started: whole, centred, at 1×. */
 internal fun identityTarget(bitmapWidth: Int, bitmapHeight: Int, container: IntSize): ZoomTarget =
     ZoomTarget(

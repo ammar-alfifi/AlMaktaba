@@ -13,6 +13,15 @@ object Routes {
     const val SEARCH = "search"
     const val SETTINGS = "settings"
 
+    /**
+     * The colour setup.
+     *
+     * A route as well as a first-run screen, so that reopening it from Settings is an ordinary
+     * navigation rather than a second copy of the screen behind a flag. Deliberately not in
+     * [topLevel]: it is somewhere you go and come back from, not a place to sit.
+     */
+    const val COLOR_SETUP = "color-setup"
+
     const val BOOK_ID_ARG = "bookId"
 
     const val BOOK_DETAILS = "book/{$BOOK_ID_ARG}"

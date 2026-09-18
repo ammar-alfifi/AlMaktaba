@@ -371,19 +371,41 @@ TXT_BODY = """{title}
 
 كان يا ما كان، في قديم الزمان، سلطانٌ له ثلاثة أبناء.
 وهذا سطر ثانٍ، وسطر ثالث.
+{recital}
 
 الفصل الثاني
 
 لمّا رجع الأبناء، جاء الأول بمرآة، وجاء الثاني بسجّادة، وجاء الثالث بطبيب.
+{recital}
 
 الفصل الثالث
 
 وتنتهي الحكاية هنا.
 """
 
+# Enough prose that one chapter cannot fit on one screen.
+#
+# This is here for a specific reason. The reader's *paged* view of a reflowable document only has
+# anything to do when a chapter is longer than the display: with one line per chapter, every chapter
+# was a single page, the pager had nowhere to go, and none of the page-turn machinery — including
+# the paper curl — could be exercised on a text file at all. Three short chapters were enough to
+# prove chapter splitting and nothing else.
+RECITAL = """
+وبينما هم في الطريق، هبّت ريحٌ شديدة، فتفرّقوا في الوادي، ولم يبقَ منهم أحدٌ يعرف
+أين صار الآخر. مضى الأول حتى بلغ مدينةً لا يعرف أحداً فيها، وسأل عن الطريق فعلم أنّ
+القافلة قد رحلت قبل يومين. ومضى الثاني حتى بلغ شاطئاً بعيداً، فجلس ينتظر مركباً لا
+يأتي إلا في الربيع. ومضى الثالث حتى بلغ غابةً كثيفة، فبات فيها ثلاث ليالٍ لا يجد ما
+يأكله إلا ما تسقطه الريح من ثمر.
+ولمّا كان اليوم الرابع، التقوا جميعاً عند بئرٍ قديمة، فقال الأول: إني أرى في المرآة
+ما لا يراه غيري. وقال الثاني: إني أجلس على السجّادة فأبلغ ما أريد. وقال الثالث: إني
+أداوي ما لا يداويه طبيب. فقالوا: نرجع إلى أبينا، فإنّه أحوج الناس إلينا.
+ورجعوا، فوجدوا السلطان قد كبر، فسلّموا إليه ما جاءوا به، ففرح بهم فرحاً شديداً،
+وأمر أن يُكتب ما جرى في كتابٍ ليكون للناس عبرة.
+"""
+
 
 def make_txt() -> None:
-    text = TXT_BODY.format(title=ARABIC_TITLE)
+    text = TXT_BODY.format(title=ARABIC_TITLE, recital=RECITAL)
     # Form feeds are what `:format:format-text` splits chapters on.
     chaptered = text.replace("\n\nالفصل", "\n\n\fالفصل")
 
@@ -393,6 +415,67 @@ def make_txt() -> None:
 
 # ------------------------------------------------------------------------------------------ CBZ
 
+def png_comic_page(width: int, height: int, number: int) -> bytes:
+    """
+    A page that looks like a comic: panels, speech bubbles, and lettering inside them.
+
+    Every other page in this archive is a solid field with a numeral on it, which is all the page
+    ordering and junk-entry tests need — and it is why the reader's *speech-bubble zoom* went
+    untested and broken for three releases: there was not one enclosed region in the whole corpus to
+    double-tap. This page exists so that "double-tap a bubble" has something on the device to
+    double-tap, and so a regression has a shape to point at.
+
+    The balloon outlines are deliberately of two weights — one solid, one a hairline, as a scan of
+    cheap print renders one — because the failure that mattered was a fill escaping through an
+    outline that was too thin to stop it.
+    """
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        return png_labelled(width, height, (60, 70, 140), number)
+
+    image = Image.new("RGB", (width, height), (255, 255, 255))
+    draw = ImageDraw.Draw(image)
+
+    border = 12
+    draw.rectangle([border, border, width - border, height // 2 - border], outline=(0, 0, 0), width=6)
+    draw.rectangle(
+        [border, height // 2 + border, width - border, height - border], outline=(0, 0, 0), width=6
+    )
+
+    def balloon(box, lines, outline_width, font_size):
+        from PIL import ImageFont
+
+        font = ImageFont.load_default(size=font_size)
+        draw.ellipse(box, fill=(255, 255, 255), outline=(0, 0, 0), width=outline_width)
+        x0, y0, x1, y1 = box
+        line_height = font_size + 10
+        y = (y0 + y1) // 2 - (len(lines) * line_height) // 2
+        for line in lines:
+            w = draw.textlength(line, font=font)
+            draw.text(((x0 + x1) / 2 - w / 2, y), line, fill=(0, 0, 0), font=font)
+            y += line_height
+
+    # A solid outline holding two lines, and a hairline one holding four cramped ones — the two
+    # shapes a bubble zoom has to cope with.
+    balloon(
+        (width // 2 - 190, 90, width // 2 + 190, 330),
+        ["I THINK WE", "ARE LOST"],
+        outline_width=4,
+        font_size=34,
+    )
+    balloon(
+        (width // 2 - 170, height // 2 + 130, width // 2 + 170, height // 2 + 410),
+        ["BUT THE MAP", "SAYS THE RIVER", "IS THE OTHER", "WAY, CAPTAIN"],
+        outline_width=1,
+        font_size=26,
+    )
+
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 def make_cbz() -> None:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as z:
@@ -400,10 +483,12 @@ def make_cbz() -> None:
         # exactly the bug the natural-order key exists to prevent.
         for page in range(1, 13):
             shade = 40 + (page * 15) % 200
-            z.writestr(
-                f"page{page}.png",
-                png_labelled(700, 1000, (shade, 70, 140), page),
+            image = (
+                png_comic_page(700, 1000, page)
+                if page == 1
+                else png_labelled(700, 1000, (shade, 70, 140), page)
             )
+            z.writestr(f"page{page}.png", image)
         # Real comic archives carry cruft; the engine must ignore all of it.
         z.writestr("__MACOSX/._page1.png", b"junk")
         z.writestr(".DS_Store", b"junk")
@@ -428,7 +513,7 @@ Each one exists to exercise something specific, so a failure points at a feature
 | `features.epub` | tables, nested lists, footnote links, cross-chapter links, external links, embedded Naskh font, figure captions, `<br>`, chapter titles, images |
 | `arabic-utf8.txt` | UTF-8 detection and form-feed chapter splitting |
 | `arabic-windows1256.txt` | the Windows-1256 fingerprint — the detector reports MacCyrillic for this file, so it is the one that proves the fingerprint runs first |
-| `comic.cbz` | natural page ordering (`page10` after `page2`) and junk-entry filtering (`__MACOSX/`, `.DS_Store`) |
+| `comic.cbz` | natural page ordering (`page10` after `page2`), junk-entry filtering (`__MACOSX/`, `.DS_Store`) and — on page 1 — **speech-bubble zoom**: two balloons, one solid-outlined with two lines and one hairline with four |
 
 **CBR has no fixture.** Creating a RAR archive requires a RAR encoder, and this machine has none
 (7z can extract RAR but not create it). Test CBR with a real comic archive.

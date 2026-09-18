@@ -24,6 +24,12 @@
     <string name="reader_layout_scroll">Continuous scroll</string>
     <string name="reader_layout_paged">Pages</string>
     <string name="reader_settings_tap_to_turn">Tap the sides to turn pages</string>
+    <string name="reader_settings_direction">Direction</string>
+    <string name="reader_settings_direction_summary">Which side the first page is on, and which side a tap takes you to.</string>
+    <string name="reader_settings_reverse_tap">Reverse the sides taps go to</string>
+    <string name="reader_direction_file">Follow the file</string>
+    <string name="reader_direction_first_left">First page on the left</string>
+    <string name="reader_direction_first_right">First page on the right</string>
     <string name="reader_settings_reset">Reset reading settings</string>
     <string name="reader_settings_reset_message">The font, its size and spacing, the layout, the page fit and the reading direction will go back to their defaults. Your app theme, language and library layout are not changed.</string>
     <string name="reader_settings_reset_done">Reading settings reset</string>

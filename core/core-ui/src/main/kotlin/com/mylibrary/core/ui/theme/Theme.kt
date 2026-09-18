@@ -14,16 +14,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import com.mylibrary.core.domain.model.AppFont
+import com.mylibrary.core.domain.model.ColorSource
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ThemeMode
 
 /**
  * The single theme wrapper for every MyLibrary screen.
  *
- * Dynamic colour is used on Android 12+ when the user has not turned it off, falling back to
- * [LightColors] / [DarkColors] everywhere else — which is the whole point of having a hand-built
- * palette rather than only the wallpaper one: the app looks deliberate on older devices instead of
- * looking like it forgot to style itself.
+ * The scheme comes from [ColorSource]: the device's wallpaper palette where there is one and the
+ * reader asked for it, and one of the generated Material palettes otherwise — which is the whole
+ * point of shipping six of them rather than only leaning on the wallpaper: the app looks deliberate
+ * on a device too old to have Material You, and on one whose wallpaper makes a poor interface.
  *
  * The type scale is chosen from the *layout direction* rather than from the locale string, because
  * layout direction is what actually determines how the text will be shaped and wrapped. That also
@@ -32,7 +33,7 @@ import com.mylibrary.core.domain.model.ThemeMode
 @Composable
 fun MyLibraryTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
-    dynamicColor: Boolean = true,
+    colorSource: ColorSource = ColorSource.TEAL,
     uiFont: AppFont = AppFont.SYSTEM,
     content: @Composable () -> Unit,
 ) {
@@ -45,12 +46,9 @@ fun MyLibraryTheme(
     val context = LocalContext.current
     val supportsDynamicColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
-    val colorScheme: ColorScheme = when {
-        dynamicColor && supportsDynamicColor && darkTheme -> dynamicDarkColorScheme(context)
-        dynamicColor && supportsDynamicColor -> dynamicLightColorScheme(context)
-        darkTheme -> DarkColors
-        else -> LightColors
-    }
+    val colorScheme: ColorScheme = wallpaperScheme(context, colorSource, darkTheme, supportsDynamicColor)
+        ?: generatedColorScheme(colorSource, darkTheme)
+        ?: if (darkTheme) TealDarkColors else TealLightColors
 
     val layoutDirection = LocalLayoutDirection.current
     val typography = remember(layoutDirection, uiFont) {
@@ -64,6 +62,42 @@ fun MyLibraryTheme(
         content = content,
     )
 }
+
+/**
+ * The device's own palette, or `null` when there is none to be had.
+ *
+ * **Returning `null` rather than a fallback is the point.** A caller that cannot tell "the wallpaper
+ * had nothing to say" from "here is the wallpaper's answer" would have no way to keep the two
+ * fallbacks in the right order, and this is the one place that knows all three of the conditions:
+ * the source must *be* the wallpaper, the device must be new enough to have Material You, and the
+ * platform must actually produce a scheme. Dynamic colour below API 31 is not a degraded wallpaper
+ * palette, it is no palette, and silently returning the default one here would make
+ * [ColorSource.WALLPAPER] look supported on devices where the picker does not even offer it.
+ */
+private fun wallpaperScheme(
+    context: android.content.Context,
+    colorSource: ColorSource,
+    darkTheme: Boolean,
+    supportsDynamicColor: Boolean,
+): ColorScheme? {
+    if (colorSource != ColorSource.WALLPAPER || !supportsDynamicColor) return null
+    return runCatching {
+        if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    }.getOrNull()
+}
+
+/**
+ * The light or dark scheme [source] stands for, without a device and without a wallpaper.
+ *
+ * Exists for the colour picker, which has to draw seven schemes at once on one screen and so cannot
+ * go through [MyLibraryTheme]: the swatches are each drawn in the palette they name, while the
+ * screen around them is drawn in the one being chosen. [ColorSource.WALLPAPER] resolves to the
+ * app's own scheme here — it has no colours of its own to show until a device supplies them, and a
+ * swatch that changed with the reader's wallpaper would be the one swatch that could not be
+ * compared with the others.
+ */
+fun colorSchemeForSource(source: ColorSource, dark: Boolean): ColorScheme =
+    generatedColorScheme(source, dark) ?: if (dark) TealDarkColors else TealLightColors
 
 /**
  * Overrides the layout direction for a subtree.
@@ -103,7 +137,7 @@ fun MyLibraryTheme(
 ) {
     MyLibraryTheme(
         themeMode = settings.themeMode,
-        dynamicColor = settings.dynamicColor,
+        colorSource = settings.colorSource,
         uiFont = settings.uiFont,
         content = content,
     )

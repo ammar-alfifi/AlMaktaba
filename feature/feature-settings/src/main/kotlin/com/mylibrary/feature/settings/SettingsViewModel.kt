@@ -128,7 +128,8 @@ internal val SettingsIntent.isSliderDrag: Boolean
  */
 internal fun ReaderSettings.updatedBy(intent: SettingsIntent): ReaderSettings = when (intent) {
     is SettingsIntent.ThemeModeChanged -> copy(themeMode = intent.mode)
-    is SettingsIntent.DynamicColorToggled -> copy(dynamicColor = intent.enabled)
+    is SettingsIntent.ColorSourceChanged -> copy(colorSource = intent.source)
+    SettingsIntent.SetupCompleted -> copy(setupComplete = true)
     is SettingsIntent.LanguageChanged -> copy(language = intent.language)
     is SettingsIntent.ViewModeChanged -> copy(viewMode = intent.mode)
     is SettingsIntent.SortChanged -> copy(librarySort = intent.sort)
@@ -151,6 +152,7 @@ internal fun ReaderSettings.updatedBy(intent: SettingsIntent): ReaderSettings = 
     is SettingsIntent.ShowProgressToggled -> copy(showProgressIndicator = intent.enabled)
     is SettingsIntent.LayoutChanged -> copy(layout = intent.layout)
     is SettingsIntent.TapToTurnToggled -> copy(tapToTurnPages = intent.enabled)
+    is SettingsIntent.ReverseTapZonesToggled -> copy(reverseTapZones = intent.enabled)
     is SettingsIntent.PageTurnEffectChanged -> copy(pageTurnEffect = intent.effect)
     is SettingsIntent.BubbleZoomToggled -> copy(bubbleZoom = intent.enabled)
     is SettingsIntent.UiFontChanged -> copy(uiFont = intent.font)
@@ -166,7 +168,8 @@ internal fun ReaderSettings.updatedBy(intent: SettingsIntent): ReaderSettings = 
  */
 internal suspend fun UpdateSettingsUseCase.persist(intent: SettingsIntent): Unit = when (intent) {
     is SettingsIntent.ThemeModeChanged -> setThemeMode(intent.mode)
-    is SettingsIntent.DynamicColorToggled -> setDynamicColor(intent.enabled)
+    is SettingsIntent.ColorSourceChanged -> setColorSource(intent.source)
+    SettingsIntent.SetupCompleted -> setSetupComplete(true)
     is SettingsIntent.LanguageChanged -> setLanguage(intent.language)
     is SettingsIntent.ViewModeChanged -> setViewMode(intent.mode)
     is SettingsIntent.SortChanged -> setLibrarySort(intent.sort)
@@ -179,6 +182,7 @@ internal suspend fun UpdateSettingsUseCase.persist(intent: SettingsIntent): Unit
     is SettingsIntent.ShowProgressToggled -> setShowProgressIndicator(intent.enabled)
     is SettingsIntent.LayoutChanged -> setLayout(intent.layout)
     is SettingsIntent.TapToTurnToggled -> setTapToTurnPages(intent.enabled)
+    is SettingsIntent.ReverseTapZonesToggled -> setReverseTapZones(intent.enabled)
     is SettingsIntent.PageTurnEffectChanged -> setPageTurnEffect(intent.effect)
     is SettingsIntent.BubbleZoomToggled -> setBubbleZoom(intent.enabled)
     is SettingsIntent.UiFontChanged -> setUiFont(intent.font)

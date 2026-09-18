@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
 import com.mylibrary.core.domain.model.AppFont
 import com.mylibrary.core.domain.model.AppLanguage
+import com.mylibrary.core.domain.model.ColorSource
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.PageTurnEffect
@@ -54,7 +55,10 @@ sealed interface SettingsIntent {
 
     data class ThemeModeChanged(val mode: ThemeMode) : SettingsIntent
 
-    data class DynamicColorToggled(val enabled: Boolean) : SettingsIntent
+    data class ColorSourceChanged(val source: ColorSource) : SettingsIntent
+
+    /** The first-run colour setup has been answered; it is not shown again. */
+    data object SetupCompleted : SettingsIntent
 
     data class LanguageChanged(val language: AppLanguage) : SettingsIntent
 
@@ -80,6 +84,8 @@ sealed interface SettingsIntent {
     data class LayoutChanged(val layout: ReaderLayout) : SettingsIntent
 
     data class TapToTurnToggled(val enabled: Boolean) : SettingsIntent
+
+    data class ReverseTapZonesToggled(val enabled: Boolean) : SettingsIntent
 
     data class PageTurnEffectChanged(val effect: PageTurnEffect) : SettingsIntent
 

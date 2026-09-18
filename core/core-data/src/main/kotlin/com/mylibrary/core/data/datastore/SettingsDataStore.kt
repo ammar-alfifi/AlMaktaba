@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.mylibrary.core.domain.model.AppLanguage
+import com.mylibrary.core.domain.model.ColorSource
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.ReaderFont
@@ -64,7 +65,8 @@ class SettingsDataStore @Inject constructor(
 
     private fun MutablePreferences.write(settings: ReaderSettings) {
         this[Keys.THEME_MODE] = settings.themeMode.name
-        this[Keys.DYNAMIC_COLOR] = settings.dynamicColor
+        this[Keys.COLOR_SOURCE] = settings.colorSource.name
+        this[Keys.SETUP_COMPLETE] = settings.setupComplete
         this[Keys.LANGUAGE] = settings.language.name
         this[Keys.UI_FONT] = settings.uiFont.name
         this[Keys.VIEW_MODE] = settings.viewMode.name
@@ -78,6 +80,7 @@ class SettingsDataStore @Inject constructor(
         this[Keys.SHOW_PROGRESS_INDICATOR] = settings.showProgressIndicator
         this[Keys.LAYOUT] = settings.layout.name
         this[Keys.TAP_TO_TURN_PAGES] = settings.tapToTurnPages
+        this[Keys.REVERSE_TAP_ZONES] = settings.reverseTapZones
         this[Keys.PAGE_TURN_EFFECT] = settings.pageTurnEffect.name
         this[Keys.BUBBLE_ZOOM] = settings.bubbleZoom
     }
@@ -93,6 +96,13 @@ class SettingsDataStore @Inject constructor(
  */
 private object Keys {
     val THEME_MODE = stringPreferencesKey("theme_mode")
+    val COLOR_SOURCE = stringPreferencesKey("color_source")
+    val SETUP_COMPLETE = booleanPreferencesKey("setup_complete")
+
+    // Written by every build up to 1.4.0 and read by no build after it, except as the fallback for
+    // `color_source` below. Kept rather than deleted because that fallback is the whole reason an
+    // upgrade does not silently repaint: a reader who had turned dynamic colour *off* must come back
+    // to the teal scheme they chose, not to the wallpaper one they refused.
     val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
     val LANGUAGE = stringPreferencesKey("language")
     val UI_FONT = stringPreferencesKey("ui_font")
@@ -110,6 +120,7 @@ private object Keys {
     // no migration mechanism here, and orphaning the key would silently reset every reader.
     val LAYOUT = stringPreferencesKey("reflow_mode")
     val TAP_TO_TURN_PAGES = booleanPreferencesKey("tap_to_turn_pages")
+    val REVERSE_TAP_ZONES = booleanPreferencesKey("reverse_tap_zones")
     val PAGE_TURN_EFFECT = stringPreferencesKey("page_turn_effect")
     val BUBBLE_ZOOM = booleanPreferencesKey("bubble_zoom")
 }
@@ -124,7 +135,23 @@ private fun ReaderSettings.Companion.fromPreferences(preferences: Preferences): 
     val defaults = ReaderSettings.Default
     return ReaderSettings(
         themeMode = preferences[Keys.THEME_MODE].toEnum(defaults.themeMode),
-        dynamicColor = preferences[Keys.DYNAMIC_COLOR] ?: defaults.dynamicColor,
+        colorSource = preferences[Keys.COLOR_SOURCE].toEnumOrNull<ColorSource>()
+            ?: when (preferences[Keys.DYNAMIC_COLOR]) {
+                // The key this setting replaced. A reader who had dynamic colour switched *on* gets
+                // the wallpaper they were already looking at; one who had it off gets the teal
+                // scheme they chose over it. Either way nobody's app repaints itself on upgrade.
+                true -> ColorSource.WALLPAPER
+                false -> ColorSource.TEAL
+                // Neither key. That is a fresh install rather than an upgrade — an existing install
+                // always has the old switch, because it was written on every save — so there is no
+                // previous choice to honour and this is the domain's own default. The setup screen
+                // a first launch opens on then offers the wallpaper as one of the choices, which is
+                // where a reader who wants it can say so.
+                null -> defaults.colorSource
+            },
+        // Absent for anyone who upgrades, and an empty file is the only thing that means "first
+        // run" — which is exactly what a fresh install has, and what the IO-failure fallback emits.
+        setupComplete = preferences[Keys.SETUP_COMPLETE] ?: preferences.asMap().isNotEmpty(),
         language = preferences[Keys.LANGUAGE].toEnum(defaults.language),
         uiFont = preferences[Keys.UI_FONT].toEnum(defaults.uiFont),
         viewMode = preferences[Keys.VIEW_MODE].toEnum(defaults.viewMode),
@@ -139,6 +166,7 @@ private fun ReaderSettings.Companion.fromPreferences(preferences: Preferences): 
             ?: defaults.showProgressIndicator,
         layout = preferences[Keys.LAYOUT].toEnum(defaults.layout),
         tapToTurnPages = preferences[Keys.TAP_TO_TURN_PAGES] ?: defaults.tapToTurnPages,
+        reverseTapZones = preferences[Keys.REVERSE_TAP_ZONES] ?: defaults.reverseTapZones,
         pageTurnEffect = preferences[Keys.PAGE_TURN_EFFECT].toEnum(defaults.pageTurnEffect),
         bubbleZoom = preferences[Keys.BUBBLE_ZOOM] ?: defaults.bubbleZoom,
     )
@@ -146,4 +174,14 @@ private fun ReaderSettings.Companion.fromPreferences(preferences: Preferences): 
 
 /** Resolves a stored enum name, falling back to [fallback] for absent or unrecognised values. */
 private inline fun <reified T : Enum<T>> String?.toEnum(fallback: T): T =
-    this?.let { name -> enumValues<T>().firstOrNull { it.name == name } } ?: fallback
+    this?.toEnumOrNull<T>() ?: fallback
+
+/**
+ * Resolves a stored enum name, or `null` when it is absent or unrecognised.
+ *
+ * The nullable half exists for [ColorSource], whose *absence* means something in particular — it is
+ * a value written by an older build under a different key — and so has to be distinguishable from an
+ * unrecognised one.
+ */
+private inline fun <reified T : Enum<T>> String?.toEnumOrNull(): T? =
+    this?.let { name -> enumValues<T>().firstOrNull { it.name == name } }

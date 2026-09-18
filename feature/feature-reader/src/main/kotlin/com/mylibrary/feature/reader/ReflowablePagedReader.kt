@@ -1,5 +1,6 @@
 package com.mylibrary.feature.reader
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -28,8 +30,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -42,7 +50,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.toIntSize
 import androidx.compose.ui.unit.dp
+import com.mylibrary.core.domain.model.PageTurnEffect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -172,6 +182,9 @@ fun ReflowablePagedContent(
 
         val currentPages by rememberUpdatedState(pages)
         val currentSettings by rememberUpdatedState(state.settings)
+        // Read through `rememberUpdatedState`: the gesture loop is not restarted when the direction
+        // changes, so a plain read inside it would keep the direction the chapter was opened in.
+        val currentIsRtl by rememberUpdatedState(isRtl)
 
         Box(
             modifier = Modifier
@@ -181,7 +194,12 @@ fun ReflowablePagedContent(
                         val settings = currentSettings
                         val pageCount = currentPages.size
                         val zone = if (settings.tapToTurnPages) {
-                            tapZoneFor(position.x, size.width.toFloat(), isRtl)
+                            tapZoneFor(
+                                x = position.x,
+                                width = size.width.toFloat(),
+                                isRtl = currentIsRtl,
+                                reversed = settings.reverseTapZones,
+                            )
                         } else {
                             TapZone.CENTER
                         }
@@ -222,23 +240,17 @@ fun ReflowablePagedContent(
                 ) { pageIndex ->
                     PageContent(
                         page = pages[pageIndex],
+                        pageIndex = pageIndex,
+                        pagerState = pagerState,
+                        isRtl = isRtl,
+                        // The same turn effect as the fixed-page reader, driven by the same value, so
+                        // a text file split into pages and a comic turn alike — which is the whole
+                        // reason the reader has one toolbar and one set of gestures for five formats.
+                        pageTurnEffect = currentSettings.pageTurnEffect,
                         content = content,
                         viewModel = viewModel,
                         state = state,
                         isLastPage = pageIndex == pages.lastIndex,
-                        // The same turn effect as the fixed-page reader, driven by the same value, so
-                        // a text file split into pages and a comic turn alike — which is the whole
-                        // reason the reader has one toolbar and one set of gestures for five formats.
-                        turnModifier = Modifier.graphicsLayer {
-                            val offset = pagerState.getOffsetDistanceInPages(pageIndex)
-                            val turn = pageTurnTransform(offset, currentSettings.pageTurnEffect, isRtl)
-                            scaleX = turn.scale
-                            scaleY = turn.scale
-                            alpha = turn.alpha
-                            rotationY = turn.rotationY
-                            transformOrigin = TransformOrigin(pageTurnPivotX(offset, isRtl), 0.5f)
-                            cameraDistance = PAGE_TURN_CAMERA_DISTANCE * density.density
-                        },
                     )
                 }
             }
@@ -246,38 +258,116 @@ fun ReflowablePagedContent(
     }
 }
 
-/** One page: its slices, and — on the last one — a way onward when the chapter has a next. */
+/**
+ * One page: its slices, and — on the last one — a way onward when the chapter has a next.
+ *
+ * **How a page of live text gets a paper curl.** Every other format's page is a bitmap, so bending
+ * it means re-drawing its pixels band by band. Text has no pixels: it is a tree of composables that
+ * draws itself into whatever canvas the composition hands it. So the page is drawn once into a
+ * [GraphicsLayer] — an offscreen display list, not a bitmap — and *that* is what the bend re-draws,
+ * many times, under the same transforms a comic's page goes through.
+ *
+ * Recording costs a display list per frame of the drag, and the bands then replay it. What it avoids
+ * is the alternative every other reader reaches for: rasterising the page to a bitmap on each frame,
+ * which is a GPU readback per frame and is what makes a text curl stutter on a cheap phone.
+ *
+ * A settled page takes none of this. It is drawn straight to the canvas exactly as it was before any
+ * of it existed, which is the property that matters most — a page nobody is touching cannot have
+ * been made slower or different by a page turn.
+ */
 @Composable
 private fun PageContent(
     page: ReaderPage,
+    pageIndex: Int,
+    pagerState: PagerState,
+    isRtl: Boolean,
+    pageTurnEffect: PageTurnEffect,
     content: ChapterContent,
     viewModel: ReaderViewModel,
     state: ReaderUiState,
     isLastPage: Boolean,
-    turnModifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = turnModifier
-            .fillMaxSize()
-            // A safety valve rather than a feature: an image taller than the page is placed anyway
-            // because the alternative is a page with nothing on it, and this is what lets a reader
-            // see the rest of it.
-            .verticalScroll(rememberScrollState())
-            .padding(
-                start = READING_MARGIN,
-                end = READING_MARGIN,
-                top = PAGE_TOP_MARGIN,
-                bottom = PAGE_BOTTOM_MARGIN,
-            ),
-        verticalArrangement = Arrangement.spacedBy(PAGE_BLOCK_SPACING),
-    ) {
-        page.slices.forEach { slice ->
-            val block = content.blocks.getOrNull(slice.blockIndex) ?: return@forEach
-            BlockSliceView(block = block, slice = slice, viewModel = viewModel, state = state)
-        }
+    val density = LocalDensity.current
+    val layer = rememberGraphicsLayer()
 
-        if (isLastPage && state.currentUnit < state.totalUnits - 1) {
-            ChapterEndFooter(onClick = { viewModel.onIntent(ReaderIntent.NextUnit) })
+    // The sheet the curl bends has to be opaque, or the reader sees the page behind it through the
+    // fold. It is painted the colour the page is already drawn on — the reader's own background — so
+    // a settled page is unchanged to the pixel, and only a page in the act of turning has a sheet.
+    val paper = MaterialTheme.colorScheme.background
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            // The bands are cut across the whole slot and can reach past the page's own rectangle —
+            // at a high roll the fold has travelled beyond its edge — so the slot clips them, the
+            // same way the fixed-page reader's does.
+            .clipToBounds(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    val offset = pagerState.getOffsetDistanceInPages(pageIndex)
+                    // A curl is the page bending, and the page draws that itself. Rotating the slot
+                    // as well would bend it twice; the identity here is continuous with the rotation
+                    // it replaces, so nothing jumps at the moment a gesture starts.
+                    val turn = if (paperCurlOwns(pageTurnEffect, offset)) {
+                        PageTurnTransform.Identity
+                    } else {
+                        pageTurnTransform(offset, pageTurnEffect, isRtl)
+                    }
+                    scaleX = turn.scale
+                    scaleY = turn.scale
+                    alpha = turn.alpha
+                    rotationY = turn.rotationY
+                    transformOrigin = TransformOrigin(pageTurnPivotX(offset, isRtl), 0.5f)
+                    cameraDistance = PAGE_TURN_CAMERA_DISTANCE * density.density
+                }
+                .drawWithContent {
+                    val offset = pagerState.getOffsetDistanceInPages(pageIndex)
+                    if (!paperCurlOwns(pageTurnEffect, offset) || size.width <= 0f || size.height <= 0f) {
+                        drawContent()
+                        return@drawWithContent
+                    }
+
+                    val frame = Rect(Offset.Zero, size)
+                    // The page draws itself once into the layer, and the bend below re-draws *that*
+                    // band by band. `drawContent` is called through the outer scope deliberately:
+                    // recording swaps the canvas the draw context points at, so the content lands in
+                    // the layer rather than on the screen it was about to be drawn to.
+                    layer.record(frame.size.toIntSize()) { this@drawWithContent.drawContent() }
+                    drawPaperCurlSheet(
+                        frame = frame,
+                        curl = paperCurl(
+                            roll = paperCurlRoll(offset),
+                            frame = frame,
+                            hingeAtLeft = pageTurnPivotX(offset, isRtl) < 0.5f,
+                        ),
+                    ) {
+                        drawLayer(layer)
+                    }
+                }
+                .background(paper)
+                // A safety valve rather than a feature: an image taller than the page is placed
+                // anyway because the alternative is a page with nothing on it, and this is what lets
+                // a reader see the rest of it.
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    start = READING_MARGIN,
+                    end = READING_MARGIN,
+                    top = PAGE_TOP_MARGIN,
+                    bottom = PAGE_BOTTOM_MARGIN,
+                ),
+            verticalArrangement = Arrangement.spacedBy(PAGE_BLOCK_SPACING),
+        ) {
+            page.slices.forEach { slice ->
+                val block = content.blocks.getOrNull(slice.blockIndex) ?: return@forEach
+                BlockSliceView(block = block, slice = slice, viewModel = viewModel, state = state)
+            }
+
+            if (isLastPage && state.currentUnit < state.totalUnits - 1) {
+                ChapterEndFooter(onClick = { viewModel.onIntent(ReaderIntent.NextUnit) })
+            }
         }
     }
 }

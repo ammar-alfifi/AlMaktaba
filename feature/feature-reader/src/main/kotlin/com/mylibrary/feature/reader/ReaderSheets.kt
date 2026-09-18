@@ -1,6 +1,8 @@
 package com.mylibrary.feature.reader
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -50,6 +52,7 @@ import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReadingLocator
 import com.mylibrary.core.domain.model.ReaderLayout
+import com.mylibrary.core.domain.model.ReadingDirection
 import com.mylibrary.core.domain.model.SearchHit
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.TocEntry
@@ -259,6 +262,12 @@ private fun ReaderSettingsPanel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            // Scrollable, and not merely as a precaution. The sheet is as tall as its content, and
+            // the content has outgrown a phone: adding the direction control pushed the tap and
+            // keep-awake switches — and the reset button — past the bottom of the display, where
+            // nothing could reach them. A settings panel that hides its own last section is worse
+            // than a long one.
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = Spacing.XLarge)
             .padding(bottom = Spacing.Huge),
         verticalArrangement = Arrangement.spacedBy(Spacing.Large),
@@ -371,16 +380,41 @@ private fun ReaderSettingsPanel(
 
         HorizontalDivider()
 
-        SwitchSetting(
-            title = stringResource(R.string.reader_settings_keep_awake),
-            checked = state.settings.keepScreenOn,
-            onCheckedChange = { onIntent(ReaderIntent.SetKeepScreenOn(it)) },
-        )
+        // Which way the book goes, and which way the thumb works it. Two controls rather than one
+        // because they are two questions — an Arabic comic reads right to left whether or not the
+        // reader's hand agrees — and together they reach every combination without a third setting.
+        SettingGroup(
+            title = stringResource(R.string.reader_settings_direction),
+            summary = stringResource(R.string.reader_settings_direction_summary),
+        ) {
+            ChoiceRow(
+                options = ReadingDirection.entries,
+                selected = state.settings.readingDirection,
+                onSelect = { onIntent(ReaderIntent.SetReadingDirection(it)) },
+                label = { direction -> Text(readingDirectionLabel(direction)) },
+            )
+        }
 
         SwitchSetting(
             title = stringResource(R.string.reader_settings_tap_to_turn),
             checked = state.settings.tapToTurnPages,
             onCheckedChange = { onIntent(ReaderIntent.SetTapToTurnPages(it)) },
+        )
+
+        // Absent rather than greyed out while side taps do nothing at all: a switch that cannot
+        // change anything is a control that teaches the reader the app ignores them.
+        if (state.settings.tapToTurnPages) {
+            SwitchSetting(
+                title = stringResource(R.string.reader_settings_reverse_tap),
+                checked = state.settings.reverseTapZones,
+                onCheckedChange = { onIntent(ReaderIntent.SetReverseTapZones(it)) },
+            )
+        }
+
+        SwitchSetting(
+            title = stringResource(R.string.reader_settings_keep_awake),
+            checked = state.settings.keepScreenOn,
+            onCheckedChange = { onIntent(ReaderIntent.SetKeepScreenOn(it)) },
         )
 
         HorizontalDivider()
@@ -655,6 +689,22 @@ fun PasswordDialog(
         },
     )
 }
+
+/**
+ * The direction, said as the reader sees it rather than as the enum spells it.
+ *
+ * "Right to left" is a fact about a writing system; "the first one is on the right" is the thing the
+ * reader is actually about to notice when they turn the page. The panel asks the question in the
+ * terms the answer is given in.
+ */
+@Composable
+private fun readingDirectionLabel(direction: ReadingDirection): String = stringResource(
+    when (direction) {
+        ReadingDirection.SYSTEM -> R.string.reader_direction_file
+        ReadingDirection.LEFT_TO_RIGHT -> R.string.reader_direction_first_left
+        ReadingDirection.RIGHT_TO_LEFT -> R.string.reader_direction_first_right
+    },
+)
 
 @Composable
 private fun themeModeLabel(mode: ThemeMode): String = stringResource(

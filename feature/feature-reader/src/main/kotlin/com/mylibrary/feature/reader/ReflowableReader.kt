@@ -97,6 +97,10 @@ fun ReflowableReaderContent(
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val currentOnIntent by rememberUpdatedState(onIntent)
     val currentTapToTurn by rememberUpdatedState(state.settings.tapToTurnPages)
+    val currentReverseTapZones by rememberUpdatedState(state.settings.reverseTapZones)
+    // Read through `rememberUpdatedState`: the gesture loop is not restarted when the direction
+    // changes, so a plain read inside it would keep the direction the book was opened in.
+    val currentIsRtl by rememberUpdatedState(isRtl)
 
     // A page turn has no meaning in a reflowed chapter, so the side zones advance by a screenful
     // instead — the same gesture and the same physical direction as the paged reader, which is what
@@ -108,7 +112,12 @@ fun ReflowableReaderContent(
             .pointerInput(Unit) {
                 detectTapGestures { position ->
                     val zone = if (currentTapToTurn) {
-                        tapZoneFor(position.x, size.width.toFloat(), isRtl)
+                        tapZoneFor(
+                            x = position.x,
+                            width = size.width.toFloat(),
+                            isRtl = currentIsRtl,
+                            reversed = currentReverseTapZones,
+                        )
                     } else {
                         TapZone.CENTER
                     }

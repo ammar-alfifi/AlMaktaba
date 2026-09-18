@@ -53,6 +53,7 @@ import com.mylibrary.feature.library.BookDetailsViewModel
 import com.mylibrary.feature.library.LibraryRoute
 import com.mylibrary.feature.reader.ReaderRoute
 import com.mylibrary.feature.search.SearchRoute
+import com.mylibrary.feature.settings.ColorSetupRoute
 import com.mylibrary.feature.settings.SettingsRoute
 import com.mylibrary.ui.navigation.Routes
 
@@ -87,7 +88,21 @@ fun MyLibraryApp(viewModel: AppViewModel = hiltViewModel()) {
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.background,
             ) {
-                MyLibraryNavHost()
+                // **A first launch asks about colours before it shows a shelf.**
+                //
+                // Outside the navigation graph rather than a start destination, because it has no
+                // back stack to belong to: there is nowhere behind it, and a back gesture during a
+                // first run should not be able to close the app's only screen. Once answered, the
+                // same screen is an ordinary route reached from Settings — one implementation, two
+                // ways in, which is what keeps a "welcome" from drifting away from the setting it
+                // was welcoming the reader to.
+                // The screen records its own answer through the settings store, which is what makes
+                // this branch flip without anything here having to know that it did.
+                if (state.settings.setupComplete) {
+                    MyLibraryNavHost()
+                } else {
+                    ColorSetupRoute(onDone = {})
+                }
             }
         }
     }
@@ -167,7 +182,16 @@ private fun MyLibraryNavHost(navController: NavHostController = rememberNavContr
             }
 
             composable(Routes.SETTINGS) {
-                SettingsRoute()
+                SettingsRoute(
+                    onOpenColorSetup = { navController.navigate(Routes.COLOR_SETUP) },
+                )
+            }
+
+            // The same screen a first launch shows, reached the ordinary way. Not a top-level
+            // destination, so the shell renders it without a navigation bar and it manages its own
+            // back gesture like the reader and the book details page do.
+            composable(Routes.COLOR_SETUP) {
+                ColorSetupRoute(onDone = { navController.popBackStack() })
             }
 
             composable(

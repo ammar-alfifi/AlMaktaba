@@ -83,6 +83,32 @@ class ReaderPageFitTest {
     }
 
     /**
+     * Page fit is capped too, and this is the case that matters most: its box is the viewport, which
+     * the doc comment used to call "bounded by the device" — true until the resolution step
+     * multiplies it, at which point a phone asks the decoder for a 3240×7200 bitmap of a page it
+     * will draw at 1080 pixels wide. One such page is 63 MB against a 64 MB cache.
+     */
+    @Test
+    fun `a zoomed page fit is capped like every other mode`() {
+        val box = renderBoxFor(PageFitMode.PAGE, IntSize(1080, 2400), resolutionStep = 3, pageSize = portraitPage)
+
+        assertTrue("must fit the pixel budget, was $box", box.width.toLong() * box.height <= 8_000_000L)
+        assertTrue("must fit the edge cap, was $box", box.height <= 4096)
+        assertTrue("aspect drifted, was $box", abs(box.width.toDouble() / box.height - 0.45) < 0.01)
+        // Still bigger than the viewport, so a zoomed page is genuinely sharper than an unzoomed one.
+        assertTrue("a zoom step must still buy resolution, was $box", box.width > 1080)
+    }
+
+    /** Turning the page with the page's size still unknown takes the same fallback, capped the same way. */
+    @Test
+    fun `an unknown page size at a zoom step is capped as well`() {
+        val box = renderBoxFor(PageFitMode.PAGE, IntSize(1080, 2400), resolutionStep = 3, pageSize = null)
+
+        assertTrue("must fit the pixel budget, was $box", box.width.toLong() * box.height <= 8_000_000L)
+        assertTrue("aspect drifted, was $box", abs(box.width.toDouble() / box.height - 0.45) < 0.01)
+    }
+
+    /**
      * A page that has not reported its size yet — or cannot — falls back to the viewport, which is
      * what the reader did for every page before the fit modes existed.
      */
@@ -186,6 +212,75 @@ class ReaderPageFitTest {
             Size.Zero,
             drawnPageSize(600, 1200, IntSize.Zero, PageFitMode.PAGE),
         )
+    }
+
+    // endregion
+
+    // region the reference a zoom is measured against
+
+    /**
+     * The bug this catches was reported as "the page jumps to a different size", and it could only
+     * happen on actual size with a document whose decoder ignores a bigger render box.
+     *
+     * The reader re-renders a zoomed page at two or three times the resolution and measures the
+     * stored zoom against the *base* render, so that the page does not change size when the render
+     * gets sharper. For actual size that base is the page's own pixel size — and the size of the
+     * bitmap on screen says nothing about it, because the archive decoder never upscales: asked for a
+     * 1400-wide box it returns the same 700-wide bitmap as before. Deriving the base by dividing the
+     * bitmap by the step therefore halved it, and the page came out at half the magnification the
+     * reader asked for — which on screen is a page that shrinks the moment a pinch crosses 2×.
+     */
+    @Test
+    fun `an actual-size page measures its zoom against the page, not the bitmap`() {
+        // A decoder that ignored the bigger box: the page is still drawn 600 wide at step 3.
+        val drawnNow = Size(600f, 1200f)
+
+        assertEquals(
+            "the base must be the page's own size, not the bitmap divided by the step",
+            Size(600f, 1200f),
+            referenceDrawnSizeFor(PageFitMode.ACTUAL_SIZE, drawnNow, portraitPage),
+        )
+
+        // ...and so the layer scale is the whole of the zoom, not a third of it.
+        assertEquals(2f, layerScaleFor(2f, drawnNow, Size(600f, 1200f)), 0.0001f)
+    }
+
+    /** A decoder that *did* honour the bigger box is the case the division was written for. */
+    @Test
+    fun `an actual-size page from a decoder that upscales keeps its size across a step`() {
+        val page = PageSize(600, 1200)
+        val atStepThree = Size(1800f, 3600f)
+
+        val reference = referenceDrawnSizeFor(PageFitMode.ACTUAL_SIZE, atStepThree, page)
+
+        assertEquals(Size(600f, 1200f), reference)
+        // Three times the pixels, a third of the layer scale: the same 600 pixels across.
+        assertEquals(600f, atStepThree.width * layerScaleFor(1f, atStepThree, reference), 0.01f)
+    }
+
+    /** Page fit and width fit size the page from the viewport, so there is nothing to correct. */
+    @Test
+    fun `a viewport-fitted page is its own reference at every resolution`() {
+        for (mode in listOf(PageFitMode.PAGE, PageFitMode.WIDTH)) {
+            for (step in listOf(1, 2, 3)) {
+                val drawn = drawnPageSize(600 * step, 1200 * step, viewport, mode)
+
+                assertEquals(
+                    "mode $mode at step $step",
+                    drawn,
+                    referenceDrawnSizeFor(mode, drawn, portraitPage),
+                )
+            }
+        }
+    }
+
+    /** A page that never reported its size falls back to what is actually on screen. */
+    @Test
+    fun `an unknown page size falls back to the drawn size`() {
+        val drawnNow = Size(600f, 1200f)
+
+        assertEquals(drawnNow, referenceDrawnSizeFor(PageFitMode.ACTUAL_SIZE, drawnNow, null))
+        assertEquals(drawnNow, referenceDrawnSizeFor(PageFitMode.ACTUAL_SIZE, drawnNow, PageSize(0, 0)))
     }
 
     // endregion

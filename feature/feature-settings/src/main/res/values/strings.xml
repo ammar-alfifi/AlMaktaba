@@ -26,8 +26,6 @@
     <string name="settings_theme_system">النظام</string>
     <string name="settings_theme_light">فاتح</string>
     <string name="settings_theme_dark">داكن</string>
-    <string name="settings_dynamic_color">الألوان الديناميكية</string>
-    <string name="settings_dynamic_color_summary">مطابقة ألوان التطبيق لخلفية الجهاز (أندرويد 12 وأحدث).</string>
     <string name="settings_ui_font">خط الواجهة</string>
 
     <!-- Language -->
@@ -80,6 +78,8 @@
     <string name="settings_layout_paged">صفحات</string>
     <string name="settings_tap_to_turn">النقر على الجانبين لقلب الصفحات</string>
     <string name="settings_tap_to_turn_summary">يقلّب الجانبان الصفحة، ويُظهر وسط الشاشة شريط الأدوات.</string>
+    <string name="settings_reverse_tap">اعكس اتجاه النقر على الجانبين</string>
+    <string name="settings_reverse_tap_summary">يقلب الجانبين: ما كان يقدّم صار يؤخّر، والعكس.</string>
 
     <!-- About -->
     <string name="settings_about_version_title">الإصدار</string>
@@ -98,4 +98,33 @@
     <string name="settings_reset_dialog_message">ستفقد تفضيلاتك الحالية: السمة واللغة وطريقة عرض المكتبة وإعدادات القراءة.</string>
     <string name="settings_reset_confirm">إعادة التعيين</string>
     <string name="settings_reset_done">تمت إعادة التعيين إلى الإعدادات الافتراضية.</string>
+    <string name="settings_appearance_colour">الألوان</string>
+    <string name="settings_appearance_colour_summary">لون التطبيق وسمته وخط واجهته.</string>
+
+    <!-- Colour setup. Shown on a first launch and reopened from Appearance. -->
+    <string name="settings_color_title">الألوان والمظهر</string>
+    <string name="settings_color_message">اختر لون التطبيق وسمته. يمكنك تغيير ذلك في أي وقت من الإعدادات.</string>
+    <string name="settings_color_theme">السمة</string>
+    <string name="settings_color_colour">اللون</string>
+    <string name="settings_color_ui_font">خط الواجهة</string>
+    <string name="settings_color_done">ابدأ</string>
+    <string name="settings_color_theme_system">النظام</string>
+    <string name="settings_color_theme_light">فاتح</string>
+    <string name="settings_color_theme_dark">داكن</string>
+    <string name="settings_color_wallpaper">خلفية الجهاز</string>
+    <string name="settings_color_teal">أخضر مزرق</string>
+    <string name="settings_color_purple">بنفسجي</string>
+    <string name="settings_color_blue">أزرق</string>
+    <string name="settings_color_green">أخضر</string>
+    <string name="settings_color_amber">عنبري</string>
+    <string name="settings_color_rose">وردي</string>
+    <string name="settings_color_font_system">الافتراضي</string>
+    <string name="settings_color_font_amiri">أميري (نسخ)</string>
+    <string name="settings_color_font_plex">Plex العربي</string>
+    <string name="settings_color_font_reem">ريم كوفي</string>
+    <string name="settings_color_preview_title">معاينة</string>
+    <string name="settings_color_preview_body">هكذا تبدو الواجهة بالألوان التي اخترتها.</string>
+    <string name="settings_color_preview_button">زر</string>
+    <string name="settings_color_preview_chip">وسم</string>
+    <string name="settings_color_preview_switch">مفتاح</string>
 </resources>

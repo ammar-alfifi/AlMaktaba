@@ -54,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mylibrary.core.domain.model.AppFont
 import com.mylibrary.core.domain.model.AppLanguage
 import com.mylibrary.core.domain.model.BookFormat
+import com.mylibrary.core.domain.model.ColorSource
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.PageTurnEffect
@@ -85,7 +86,10 @@ import com.mylibrary.core.ui.R as CoreUiR
  * navigation bar.
  */
 @Composable
-fun SettingsRoute(modifier: Modifier = Modifier) {
+fun SettingsRoute(
+    onOpenColorSetup: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val viewModel: SettingsViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -109,6 +113,7 @@ fun SettingsRoute(modifier: Modifier = Modifier) {
     SettingsContent(
         state = state,
         onIntent = viewModel::onIntent,
+        onOpenColorSetup = onOpenColorSetup,
         snackbarHostState = snackbarHostState,
         modifier = modifier,
     )
@@ -126,12 +131,14 @@ fun SettingsScreen(
     state: SettingsUiState,
     onIntent: (SettingsIntent) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenColorSetup: () -> Unit = {},
 ) {
     // A screen rendered without the route (a preview, or a UI test) still gets a host to render,
     // so the layout is identical in both cases; it simply never receives a message.
     SettingsContent(
         state = state,
         onIntent = onIntent,
+        onOpenColorSetup = onOpenColorSetup,
         snackbarHostState = remember { SnackbarHostState() },
         modifier = modifier,
     )
@@ -154,6 +161,7 @@ fun SettingsScreen(
 private fun SettingsContent(
     state: SettingsUiState,
     onIntent: (SettingsIntent) -> Unit,
+    onOpenColorSetup: () -> Unit,
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
@@ -179,7 +187,7 @@ private fun SettingsContent(
             // the last one does not leave a gap above the reset button.
             verticalArrangement = Arrangement.spacedBy(Spacing.XLarge),
         ) {
-            item { AppearanceSection(state.settings, onIntent) }
+            item { AppearanceSection(state.settings, onIntent, onOpenColorSetup) }
             item { LanguageSection(state.settings, onIntent) }
             item { LibrarySection(state.settings, onIntent) }
             item { ReadingSection(state.settings, onIntent) }
@@ -211,9 +219,13 @@ internal fun SettingsTopBar(modifier: Modifier = Modifier) {
     )
 }
 
-/** Theme mode, dynamic colour, and the face the interface is set in. */
+/** Theme mode, the app's colour, and the face the interface is set in. */
 @Composable
-private fun AppearanceSection(settings: ReaderSettings, onIntent: (SettingsIntent) -> Unit) {
+private fun AppearanceSection(
+    settings: ReaderSettings,
+    onIntent: (SettingsIntent) -> Unit,
+    onOpenColorSetup: () -> Unit,
+) {
     SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
         ChoiceSettingRow(
             title = stringResource(R.string.settings_theme_mode),
@@ -223,11 +235,26 @@ private fun AppearanceSection(settings: ReaderSettings, onIntent: (SettingsInten
             onSelect = { onIntent(SettingsIntent.ThemeModeChanged(it)) },
         )
         SectionDivider()
-        SwitchRow(
-            title = stringResource(R.string.settings_dynamic_color),
-            summary = stringResource(R.string.settings_dynamic_color_summary),
-            checked = settings.dynamicColor,
-            onCheckedChange = { onIntent(SettingsIntent.DynamicColorToggled(it)) },
+        // A row that opens the setup rather than a control that changes something here. The colour
+        // is a palette, not a switch, and choosing one means looking at it: the setup screen draws
+        // seven of them at once, in the reader's own language, with a preview of the interface
+        // underneath. A dropdown of colour names in a settings list would be asking the reader to
+        // pick blind, and then to trust that "Amber" was what they had in mind.
+        ListItem(
+            headlineContent = { Text(text = stringResource(R.string.settings_appearance_colour)) },
+            supportingContent = {
+                Text(
+                    text = stringResource(R.string.settings_appearance_colour_summary),
+                )
+            },
+            trailingContent = {
+                Text(
+                    text = stringResource(settings.colorSource.labelRes()),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            },
+            modifier = Modifier.clickable(onClick = onOpenColorSetup),
         )
         SectionDivider()
         UiFontSettingRow(
@@ -376,6 +403,16 @@ private fun SharedReadingSection(settings: ReaderSettings, onIntent: (SettingsIn
             checked = settings.tapToTurnPages,
             onCheckedChange = { onIntent(SettingsIntent.TapToTurnToggled(it)) },
         )
+        // Absent while side taps do nothing at all, matching the reader's own panel.
+        if (settings.tapToTurnPages) {
+            SectionDivider()
+            SwitchRow(
+                title = stringResource(R.string.settings_reverse_tap),
+                summary = stringResource(R.string.settings_reverse_tap_summary),
+                checked = settings.reverseTapZones,
+                onCheckedChange = { onIntent(SettingsIntent.ReverseTapZonesToggled(it)) },
+            )
+        }
         SectionDivider()
         SwitchRow(
             title = stringResource(R.string.settings_keep_screen_on),
@@ -738,6 +775,17 @@ private fun ReaderFont.labelRes(): Int = when (this) {
     ReaderFont.AMIRI -> CoreUiR.string.ui_font_amiri
     ReaderFont.PLEX_ARABIC -> CoreUiR.string.ui_font_plex_arabic
     ReaderFont.REEM_KUFI -> CoreUiR.string.ui_font_reem_kufi
+}
+
+@StringRes
+private fun ColorSource.labelRes(): Int = when (this) {
+    ColorSource.WALLPAPER -> R.string.settings_color_wallpaper
+    ColorSource.TEAL -> R.string.settings_color_teal
+    ColorSource.PURPLE -> R.string.settings_color_purple
+    ColorSource.BLUE -> R.string.settings_color_blue
+    ColorSource.GREEN -> R.string.settings_color_green
+    ColorSource.AMBER -> R.string.settings_color_amber
+    ColorSource.ROSE -> R.string.settings_color_rose
 }
 
 @StringRes

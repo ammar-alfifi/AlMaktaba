@@ -22,11 +22,24 @@ enum class TapZone {
  * trailing, and a right-to-left book mirrors them, so the physical gesture — tap the side you are
  * moving towards — is the same in Arabic and in English.
  *
+ * [reversed] is a second, independent answer to the same physical question — which side of the glass
+ * moves forward — so it is combined with the mirroring by *exclusive or* rather than applied after
+ * it. That is what makes it worth having: an Arabic comic reads right to left, so the direction
+ * mirrors the zones, and a reader whose thumb has learnt "the left side goes forward" can have the
+ * book the way the book goes and the taps the way their hand goes. Reversing a mirrored surface
+ * therefore gives back the unmirrored one, and there are exactly two tap mappings — but four
+ * combinations of *page order and tap mapping*, which is the choice the reader is actually making.
+ *
  * Pure, and separated out here so the mirroring can be pinned down by a test rather than by
  * inspecting a screenshot: getting this backwards silently reverses paging in Arabic, which is the
  * app's default language.
  */
-fun tapZoneFor(x: Float, width: Float, isRtl: Boolean): TapZone {
+fun tapZoneFor(
+    x: Float,
+    width: Float,
+    isRtl: Boolean,
+    reversed: Boolean = false,
+): TapZone {
     if (width <= 0f) return TapZone.CENTER
 
     val fraction = (x / width).coerceIn(0f, 1f)
@@ -35,7 +48,9 @@ fun tapZoneFor(x: Float, width: Float, isRtl: Boolean): TapZone {
         fraction > 1f - EDGE_FRACTION -> TapZone.NEXT
         else -> TapZone.CENTER
     }
-    return if (isRtl) zone.mirrored() else zone
+    // Exclusive or rather than two mirrors in a row: both settings answer the same question, so
+    // asking twice can only give the answer back.
+    return if (isRtl != reversed) zone.mirrored() else zone
 }
 
 private fun TapZone.mirrored(): TapZone = when (this) {

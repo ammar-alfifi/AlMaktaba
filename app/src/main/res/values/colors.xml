@@ -3,17 +3,25 @@
     <!--
       The window background behind the first Compose frame.
 
-      It **must** equal `LightColors.background` in `:core:core-ui` (`#F5FBF8`). It previously did
-      not (`#FBFDFA`), so a cold start painted a slightly different white than the app then settled
-      on — a visible flicker on exactly the launch path the startup tests cover, and one that only
-      shows up in a screenshot comparison because the two values are a couple of percent apart.
+      It **must** equal `TealLightColors.background` in `:core:core-ui` (`#F5FBF8`). It previously
+      did not (`#FBFDFA`), so a cold start painted a slightly different white than the app then
+      settled on — a visible flicker on exactly the launch path the startup tests cover, and one
+      that only shows up in a screenshot comparison because the two values are a couple of percent
+      apart.
     -->
     <color name="window_background">#F5FBF8</color>
 
     <!--
-      The launcher icon's backdrop colour, kept as the icon's base tone. The adaptive icon draws its
-      background from a gradient drawable instead — see `drawable/ic_launcher_background.xml` — but a
-      colour is still needed for surfaces that read one directly.
+      The launcher icon's ground, and the app's own primary — the same value as
+      `TealPrimaryLight` in `:core:core-ui`, so the icon cannot drift away from the interface it
+      opens.
+
+      A flat colour rather than the gradient this used to be: a Material icon is a mark on a field
+      of brand colour, and a diagonal ramp across 48dp is noise at the size the icon is actually
+      seen. The adaptive icon reads this resource directly.
+
+      Defined once here rather than in a `values-night` override as well, where it was previously
+      duplicated with an identical value — two places for one colour to drift apart.
     -->
-    <color name="ic_launcher_background">#0B4C55</color>
+    <color name="ic_launcher_background">#0E6E62</color>
 </resources>

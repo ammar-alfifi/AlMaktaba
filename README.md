@@ -34,7 +34,8 @@ Jetpack Compose و Material 3، ومعمارية نظيفة متعددة الو�
 | **Languages** | Arabic by default, English as a complete second locale, switchable in-app without a restart |
 | **Direction** | Full RTL for Arabic, LTR for English — and a document's own direction is honoured *independently* of the UI, so an English TXT reads left-to-right inside the Arabic interface |
 | **Library** | Import through the Storage Access Framework — single files **or a whole device folder**, which keeps a series together as one shelf and can be re-scanned for new volumes later; grid/list layouts, five sort orders, favourite, format and folder filters, automatic cover extraction, moving a book between folders |
-| **Reader** | One toolbar across all five formats, adapting to what the open file can do; **every format has both a pages layout and a continuous-scroll one**, chosen by one setting that both families obey; tap zones that turn the page (mirrored for Arabic) or scroll a screenful, with a haptic tick on every turn and a switch to turn them off; pinch-zoom, double-tap and a clamped pan; **double-tap a speech bubble or panel in a comic to zoom into it**; page turns animated by a page-curl, a slide or a fade — and in PDF, CBZ and CBR the curl lifts a corner on a diagonal fold and rolls the sheet over; three page-fit modes; per-document search, outlines, bookmarks; font/theme/line-height controls that apply live, three bundled Arabic typefaces plus an interface font of their own, and one button that puts them all back |
+| **Reader** | One toolbar across all five formats, adapting to what the open file can do; **every format has both a pages layout and a continuous-scroll one**, chosen by one setting that both families obey; tap zones that turn the page (mirrored for Arabic, and independently reversible) or scroll a screenful, with a haptic tick on every turn and a switch to turn them off; **which side the first page is on** is a setting of its own; pinch-zoom, double-tap and a clamped pan; **double-tap a speech bubble or panel in a comic to zoom into it** — the balloon is found by reading the page's pixels, and a break in its outline is sealed rather than allowed to hand back the panel; page turns animated by a page-curl, a slide or a fade — **the curl lifts a corner on a diagonal fold and rolls the sheet over in every format, reflowed text included**; three page-fit modes; per-document search, outlines, bookmarks; font/theme/line-height controls that apply live, three bundled Arabic typefaces plus an interface font of their own, and one button that puts them all back |
+| **Appearance** | Six Material 3 colour schemes — five generated from seeds by `tools/material_palette.py`, one the app's own hand-authored teal — plus the wallpaper palette on Android 12+; a first launch asks which, and the same screen reopens from Settings with the whole interface repainting live; light/dark/system; four interface typefaces |
 | **Storage** | No storage permission at all — only scoped `content://` access to files and folders the user picked |
 
 ## 2. Requirements compliance
@@ -49,7 +50,7 @@ Every hard constraint from the specification, and where it is satisfied:
 | 1 | Full RTL / LTR | `android:supportsRtl="true"`, direction derived from the effective locale, and a per-document direction override in the reader |
 | 1 | English content inside an Arabic UI | The reader sets direction from the *document's* language, not the UI's (`ReflowableDocument` → `ProvideLayoutDirection`) |
 | 2 | Material 3 only | `androidx.compose.material3` throughout; no Material 2 component anywhere. The XML theme is a bare `android:Theme.Material.*` used only for the window background before the first Compose frame |
-| 2 | Dynamic colour + fallback | `MyLibraryTheme` uses dynamic colour on API 31+ and a hand-built tonal palette (`theme/Color.kt`) otherwise |
+| 2 | Dynamic colour + fallback | `MyLibraryTheme` uses the wallpaper palette on API 31+ when asked, and one of six Material 3 schemes otherwise — five of them generated from a seed by `tools/material_palette.py`, which checks itself against Google's published baseline palette before writing |
 | 2 | M3 components | `Scaffold`, `TopAppBar`, `NavigationBar`, `NavigationRail`, `FloatingActionButton`, `ExtendedFloatingActionButton`, `Card`, `Button`, `OutlinedButton`, `TextButton`, `IconButton`, `OutlinedTextField`, `Switch`, `Slider`, `Snackbar`, `ModalBottomSheet`, `AlertDialog`, `SearchBar`, `SegmentedButton`, `FilterChip`, `AssistChip`, `ListItem`, `Badge`-style overlays, `LinearProgressIndicator`, `CircularProgressIndicator`, `HorizontalDivider`, `VerticalDivider`, `DropdownMenu` |
 | 2 | Edge-to-edge & predictive back | `enableEdgeToEdge()`, `android:enableOnBackInvokedCallback="true"`, and explicit `BackHandler` ordering in the reader |
 | 2 | Adaptive layouts | `WindowSizeClass` (AndroidX) drives `NavigationBar` ↔ `NavigationRail`; the library grid uses `GridCells.Adaptive` |
@@ -283,18 +284,18 @@ with the reader's series inside it.
 
 ## 6. Testing
 
-**453 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
+**514 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
 
 | Module | Tests | Covers |
 |---|---:|---|
 | `format-epub` | 84 | container/OPF parsing, nav + NCX, sanitiser, path resolution, traversal refusal, embedded fonts, links |
-| `feature-reader` | 167 | HTML → block parsing, chapter text offsets and link anchors, which toolbar actions a document supports, tap-zone mirroring, page-fit geometry, **page-breaking arithmetic** (line boundaries, spacing, atomic blocks, degenerate pages), progress agreement with the library, **the speech-bubble detector** (enclosed regions, leaks, specks, slivers, resolution independence), **the tap-to-page geometry**, the page-turn effects, **the curl** (that the fold runs diagonally rather than along an edge, that it sweeps the whole page over a turn, that every band is foreshortened and placed on the chord its angle subtends, that it never wraps past half a turn, and that it rolls far enough for the sheet to show its back), and **which settings a reader is offered** (the four document-and-layout combinations, and that page fit and bubble zoom do not gate on the same thing) |
+| `feature-reader` | 197 | HTML → block parsing, chapter text offsets and link anchors, which toolbar actions a document supports, tap-zone mirroring and its reversal, page-fit geometry, **page-breaking arithmetic** (line boundaries, spacing, atomic blocks, degenerate pages), progress agreement with the library, **the speech-bubble detector** (enclosed regions, specks, slivers, resolution independence, and — against whole drawn comic pages rather than hand-written pixel arrays — that a broken outline does not hand back the panel, and that a tap on the lettering finds the balloon), **the tap-to-page geometry**, the page-turn effects, **the zoom handover from the column to the opened page**, **the cache's byte accounting**, **the size a zoom is measured against**, **the curl** (that the fold runs diagonally rather than along an edge, that it sweeps the whole page over a turn, that every band is foreshortened and placed on the chord its angle subtends, that it never wraps past half a turn, and that it rolls far enough for the sheet to show its back), and **which settings a reader is offered** (the four document-and-layout combinations, and that page fit and bubble zoom do not gate on the same thing) |
 | `format-text` | 47 | Windows-1256/UTF-16/BOM decoding, chapter splitting, escaping, search offsets |
-| `core-domain` | 46 | format resolution, progress arithmetic, library join, import rules, **folder import and re-scan** (adoption, missing files, revoked grants, deleting with or without contents) |
+| `core-domain` | 47 | format resolution, progress arithmetic, library join, import rules, **folder import and re-scan** (adoption, missing files, revoked grants, deleting with or without contents) |
 | `core-common` | 30 | natural sort key, file-name parsing, byte formatting, result combinators |
 | `format-archive` | 29 | natural page ordering, junk-entry filtering, container sniffing, sample-size maths |
 | `feature-search` | 20 | snippet offsets, result grouping, query history |
-| `core-data` | 21 | **real SQLite**: every sort order, `LIKE … ESCAPE`, cascade deletes, upserts, folders, and **the version 1 → 2 migration against a real version 1 database** |
+| `core-data` | 29 | **real SQLite**: every sort order, `LIKE … ESCAPE`, cascade deletes, upserts, folders, and **the version 1 → 2 migration against a real version 1 database**. Also **the settings store's history**: that an upgrade is not sent through the first-run screen, that a reader who had turned dynamic colour *off* is not repainted with their wallpaper, and that an unknown colour name degrades rather than throws |
 | `format-pdf` | 15 | aspect fitting, outline nesting, malformed bookmark trees |
 | `app` | 8 | **cold start**: real Hilt graph + `MainActivity` lifecycle, and the language override |
 | `feature-settings` | 8 | intent → settings mapping, and that the reader's own reset touches only reading settings |
@@ -499,11 +500,6 @@ Stated rather than hidden:
 - **Folders are a grouping, not a copy.** Books are never moved or duplicated; a folder is a
   remembered SAF tree plus an id on each book. That is why removing a folder keeps its books, and why
   a folder whose permission has been revoked shows as "unavailable" until the user points at it again.
-- **`pageSnapping` is still a stored-but-unhonoured setting.** It is offered in Settings and
-  persisted, and the reader does not read it: Compose's `HorizontalPager` always snaps, so
-  "continuous scrolling instead of snapping to one page" would mean a second rendering path for
-  *fixed-page* documents. It is called out here rather than quietly left to look implemented, which
-  is exactly the state `pageFitMode` was in until it was wired up.
 - **R8/minification is disabled** for the release build, which is why the APK is ~33 MB. Turning it
   on needs keep rules for pdfium's JNI entry points and the Room/Hilt generated code; the proguard
   files are already wired up for it.
@@ -524,4 +520,5 @@ dependency.
 
 The three bundled typefaces — Amiri, IBM Plex Sans Arabic and Reem Kufi — are under the SIL Open Font
 License 1.1, and their licence texts are in `licenses/`. The launcher icon is drawn in this repository
-as vector paths.
+as vector paths — a single flat white open book on a flat field of the app's own primary, with no
+watermark, no ribbon and no gradient.

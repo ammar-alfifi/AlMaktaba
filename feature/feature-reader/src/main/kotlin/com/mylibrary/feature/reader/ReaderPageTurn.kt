@@ -60,24 +60,17 @@ internal fun pageTurnTransform(
     val travel = kotlin.math.abs(distance)
 
     return when (effect) {
-        // **Only a page drawn as a composable turns this way.** A reflowable page is live text with
-        // no pixels to bend, so [PageTurnEffect.CURL] is a rotation for it. A page that *is* a bitmap
-        // — PDF, CBZ, CBR — bends its sheet instead, and the reader hands those pages an identity
-        // transform here so that the two bends do not stack. See `PaperCurl.kt`.
-        PageTurnEffect.CURL -> PageTurnTransform(
-            // A page being turned swells very slightly as it comes off the block — enough to
-            // separate it from the page beneath, not enough to look like a zoom.
-            scale = 1f + CURL_SWELL * travel,
-            // The sign is chosen so the page's free edge — the one away from its hinge — comes
-            // *towards* the reader as it swings, which is what a sheet of paper does when it is
-            // lifted. The opposite sign pushes it into the screen and reads as the page being
-            // pressed flat instead.
-            rotationY = distance * CURL_DEGREES,
-            // The shading peaks around the middle of the turn and falls away at both ends: a page
-            // just starting to lift is still lit from the front, and one nearly flat on the other
-            // side has caught the light again.
-            shadeAlpha = CURL_SHADE * kotlin.math.sin(travel * Math.PI).toFloat().coerceAtLeast(0f),
-        )
+        // **The curl is not a transform of the page — the page bends, and draws that itself.**
+        //
+        // Bending a sheet means re-drawing its pixels band by band along a fold, which no scale, no
+        // rotation and no fade can express; a transform can move a page, and the whole point of a
+        // curl is that the page is no longer a plane. So the reader draws the bend ([drawPaperCurl])
+        // and hands this function an identity for it, in every layout and for every format — a
+        // reflowable page is drawn into a layer and bent exactly like a comic's.
+        //
+        // What used to be here was a 70° rotation with a gradient rectangle standing in for the
+        // shadow. It read as a card pivoting, because that is what it was.
+        PageTurnEffect.CURL -> PageTurnTransform.Identity
 
         PageTurnEffect.SLIDE -> PageTurnTransform(
             scale = 1f - SLIDE_SHRINK * travel,
@@ -111,21 +104,6 @@ internal fun pageTurnPivotX(offsetFraction: Float, isRtl: Boolean): Float {
     val leading = if (isRtl) 1f else 0f
     return if (hingesOnLeadingEdge) leading else 1f - leading
 }
-
-/**
- * How far a page lifts, in degrees, at the furthest point of a turn.
- *
- * Short of ninety on purpose: a page that reaches a right angle to the screen vanishes to a line and
- * takes the reader's place in the text with it. At seventy degrees the page is unmistakably turning
- * while its last lines stay readable.
- */
-private const val CURL_DEGREES = 70f
-
-/** The page grows by this much, at most, as it comes off the block. */
-private const val CURL_SWELL = 0.04f
-
-/** The deepest shadow a curling page casts on itself. */
-private const val CURL_SHADE = 0.34f
 
 /** How much a sliding page shrinks by the time it is a whole page away. */
 private const val SLIDE_SHRINK = 0.08f

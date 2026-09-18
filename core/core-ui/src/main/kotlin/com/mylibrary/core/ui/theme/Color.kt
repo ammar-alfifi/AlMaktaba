@@ -26,7 +26,7 @@ import androidx.compose.ui.graphics.Color
 internal val TealPrimaryLight = Color(0xFF0E6E62)
 internal val OnPrimaryLight = Color(0xFFFFFFFF)
 
-internal val LightColors = lightColorScheme(
+internal val TealLightColors = lightColorScheme(
     primary = TealPrimaryLight,
     onPrimary = OnPrimaryLight,
     primaryContainer = Color(0xFFA6F2E1),
@@ -79,7 +79,7 @@ internal val LightColors = lightColorScheme(
 
 // --- Dark ----------------------------------------------------------------
 
-internal val DarkColors = darkColorScheme(
+internal val TealDarkColors = darkColorScheme(
     primary = Color(0xFF8AD5C5),
     onPrimary = Color(0xFF003731),
     primaryContainer = Color(0xFF005048),

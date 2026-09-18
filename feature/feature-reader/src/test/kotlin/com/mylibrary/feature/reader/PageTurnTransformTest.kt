@@ -30,10 +30,6 @@ class PageTurnTransformTest {
 
     @Test
     fun `a page a whole turn away is at the end of its effect`() {
-        val curl = pageTurnTransform(-1f, PageTurnEffect.CURL, isRtl = false)
-        assertTrue("the page has swung away", curl.rotationY <= -45f)
-        assertTrue("and not so far that it vanishes", curl.rotationY >= -85f)
-
         val slide = pageTurnTransform(-1f, PageTurnEffect.SLIDE, isRtl = false)
         assertTrue("the page has receded", slide.scale < 1f)
         assertTrue("but is recognisably itself", slide.scale > 0.85f)
@@ -43,21 +39,30 @@ class PageTurnTransformTest {
         assertEquals("a page a full turn away has finished fading", 0f, fade.alpha, 0.001f)
     }
 
+    /**
+     * **The curl is not a transform, and that is the whole of it.**
+     *
+     * A page being curled is *bent* — its pixels are re-drawn band by band along a fold — which is not
+     * something a scale, a rotation and a fade can express. This function used to try: a 70° rotation
+     * with a gradient rectangle for a shadow, which reads as a card pivoting, because a plane cannot
+     * bend. Both readers now draw the bend themselves and hand this an identity for the curl, so what
+     * is pinned here is that the two never both act on the same page. A page bent twice looks like a
+     * page being crushed.
+     */
     @Test
-    fun `a curl shades a page while it is in the air and not at either end`() {
-        val halfway = pageTurnTransform(-0.5f, PageTurnEffect.CURL, isRtl = false)
-        val starting = pageTurnTransform(-0.02f, PageTurnEffect.CURL, isRtl = false)
-
-        assertTrue("a page in the air casts a shadow", halfway.shadeAlpha > 0.1f)
-        assertTrue(
-            "a page barely lifted is still lit from the front",
-            starting.shadeAlpha < halfway.shadeAlpha,
-        )
+    fun `the curl is not a transform of the page`() {
+        for (offset in listOf(-1f, -0.5f, -0.02f, 0.02f, 0.5f, 1f)) {
+            assertEquals(
+                "the curl must leave the transform alone at $offset",
+                PageTurnTransform.Identity,
+                pageTurnTransform(offset, PageTurnEffect.CURL, isRtl = false),
+            )
+        }
     }
 
     @Test
-    fun `only the curl rotates the page`() {
-        for (effect in listOf(PageTurnEffect.SLIDE, PageTurnEffect.FADE)) {
+    fun `only the slide and the fade rotate the page, and neither does`() {
+        for (effect in PageTurnEffect.entries) {
             assertEquals(
                 "a $effect turn is not a rotation",
                 0f,
@@ -112,8 +117,8 @@ class PageTurnTransformTest {
         // The pager only reports offsets within a page or so, but a fling can overshoot briefly and
         // an unclamped value would spin a page past its own end.
         assertEquals(
-            pageTurnTransform(-1f, PageTurnEffect.CURL, isRtl = false),
-            pageTurnTransform(-1.4f, PageTurnEffect.CURL, isRtl = false),
+            pageTurnTransform(-1f, PageTurnEffect.SLIDE, isRtl = false),
+            pageTurnTransform(-1.4f, PageTurnEffect.SLIDE, isRtl = false),
         )
         assertEquals(
             pageTurnTransform(1f, PageTurnEffect.FADE, isRtl = false),
@@ -122,12 +127,12 @@ class PageTurnTransformTest {
     }
 
     @Test
-    fun `a curl's rotation grows with the distance turned`() {
-        val quarter = pageTurnTransform(-0.25f, PageTurnEffect.CURL, isRtl = false)
-        val half = pageTurnTransform(-0.5f, PageTurnEffect.CURL, isRtl = false)
-        val whole = pageTurnTransform(-1f, PageTurnEffect.CURL, isRtl = false)
+    fun `an effect deepens with the distance turned`() {
+        val quarter = pageTurnTransform(-0.25f, PageTurnEffect.SLIDE, isRtl = false)
+        val half = pageTurnTransform(-0.5f, PageTurnEffect.SLIDE, isRtl = false)
+        val whole = pageTurnTransform(-1f, PageTurnEffect.SLIDE, isRtl = false)
 
-        assertTrue(quarter.rotationY > half.rotationY)
-        assertTrue(half.rotationY > whole.rotationY)
+        assertTrue(quarter.scale > half.scale)
+        assertTrue(half.scale > whole.scale)
     }
 }
