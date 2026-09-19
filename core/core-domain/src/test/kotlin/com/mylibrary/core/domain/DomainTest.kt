@@ -4,6 +4,7 @@ import com.mylibrary.core.common.DefaultDispatcherProvider
 import com.mylibrary.core.domain.model.Book
 import com.mylibrary.core.domain.model.BookFormat
 import com.mylibrary.core.domain.model.ColorSource
+import com.mylibrary.core.domain.model.Folder
 import com.mylibrary.core.domain.model.LibraryItem
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.ReadingLocator
@@ -13,8 +14,9 @@ import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.repository.BookMetadataResult
 import com.mylibrary.core.domain.usecase.ImportBooksUseCase
 import com.mylibrary.core.domain.usecase.ImportCandidate
-import com.mylibrary.core.domain.usecase.ObserveContinueReadingUseCase
+import com.mylibrary.core.domain.usecase.NextBookInFolder
 import com.mylibrary.core.domain.usecase.ObserveLibraryUseCase
+import com.mylibrary.core.domain.usecase.ObserveNextBookUseCase
 import com.mylibrary.core.domain.usecase.ReadingProgressUseCase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -145,8 +147,20 @@ class ObserveLibraryUseCaseTest {
     private val progress = FakeProgressRepository()
     private val useCase = ObserveLibraryUseCase(library, progress)
 
-    private fun book(id: Long, title: String, favorite: Boolean = false, format: BookFormat = BookFormat.PDF) =
-        Book(id = id, title = title, uri = "content://book/$id", format = format, isFavorite = favorite)
+    private fun book(
+        id: Long,
+        title: String,
+        favorite: Boolean = false,
+        format: BookFormat = BookFormat.PDF,
+        folderId: Long? = null,
+    ) = Book(
+        id = id,
+        title = title,
+        uri = "content://book/$id",
+        format = format,
+        isFavorite = favorite,
+        folderId = folderId,
+    )
 
     @Test
     fun `attaches reading progress to each book`() = runTest {
@@ -199,7 +213,7 @@ class ObserveLibraryUseCaseTest {
             2L to ReadingPosition(2, ReadingLocator.Paged(0), 0.1f),
         )
 
-        val item = ObserveContinueReadingUseCase(library, progress)().first()
+        val item = useCase.continueReading().first()
 
         assertEquals(2L, item?.book?.id)
     }
@@ -215,9 +229,52 @@ class ObserveLibraryUseCaseTest {
             2L to ReadingPosition(2, ReadingLocator.Paged(5), 0.4f),
         )
 
-        val item = ObserveContinueReadingUseCase(library, progress)().first()
+        val item = useCase.continueReading().first()
 
         assertEquals(2L, item?.book?.id)
+    }
+
+    @Test
+    fun `continue reading follows the open folder, not the whole library`() = runTest {
+        // The book read most recently is in no folder at all. With folder 7 open the offer has to
+        // be the series' own book — offering the other one would be answering a different question
+        // from the one the chip asked.
+        library.books.value = listOf(
+            book(1, "خارج المجلد").copy(lastOpenedAt = 900),
+            book(2, "المجلد الأول").copy(lastOpenedAt = 100, folderId = 7),
+            book(3, "المجلد الثاني").copy(lastOpenedAt = 500, folderId = 7),
+        )
+        progress.positions.value = mapOf(
+            1L to ReadingPosition(1, ReadingLocator.Paged(0), 0.3f),
+            2L to ReadingPosition(2, ReadingLocator.Paged(0), 0.3f),
+            3L to ReadingPosition(3, ReadingLocator.Paged(0), 0.3f),
+        )
+
+        assertEquals(3L, useCase.continueReading(folderId = 7).first()?.book?.id)
+        assertEquals(1L, useCase.continueReading().first()?.book?.id)
+    }
+
+    @Test
+    fun `continue reading has nothing to offer when nothing has been opened`() = runTest {
+        // No position at all: "continue" on a book nobody has started would be a lie, so the
+        // button is absent rather than pointing at the newest unread book.
+        library.books.value = listOf(book(1, "جديد"), book(2, "أحدث"))
+
+        assertNull(useCase.continueReading().first())
+    }
+
+    @Test
+    fun `continue reading has nothing to offer from a folder whose books are all finished`() = runTest {
+        library.books.value = listOf(
+            book(1, "مكتمل", folderId = 7),
+            book(2, "أيضاً مكتمل", folderId = 7),
+        )
+        progress.positions.value = mapOf(
+            1L to ReadingPosition(1, ReadingLocator.Paged(99), 1f),
+            2L to ReadingPosition(2, ReadingLocator.Paged(49), 1f),
+        )
+
+        assertNull(useCase.continueReading(folderId = 7).first())
     }
 
     @Test
@@ -228,6 +285,95 @@ class ObserveLibraryUseCaseTest {
             ReadingPosition(1, ReadingLocator.Paged(100), 0.999f),
         )
         assertTrue(nearlyDone.isFinished)
+    }
+}
+
+/**
+ * The next volume of a series, which is what the reader offers at the end of a book.
+ *
+ * The order is the property worth pinning: a folder of volumes is a series, and the book after
+ * volume two is volume three — not whatever a plain string sort or the reader's own history happens
+ * to put beside it.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class ObserveNextBookUseCaseTest {
+
+    private val library = FakeLibraryRepository()
+    private val folders = FakeFolderRepository(library)
+    private val useCase = ObserveNextBookUseCase(library, folders)
+
+    private fun book(
+        id: Long,
+        title: String,
+        folderId: Long? = null,
+    ) = Book(
+        id = id,
+        title = title,
+        uri = "content://book/$id",
+        format = BookFormat.CBZ,
+        folderId = folderId,
+    )
+
+    private suspend fun nextAfter(bookId: Long): NextBookInFolder? = useCase(bookId).first()
+
+    @Test
+    fun `the next book is the following volume in natural order`() = runTest {
+        // Deliberately added out of order and read out of order: neither the insertion order nor the
+        // "recently read" order of the shelf may decide which volume comes next.
+        folders.folders.value = listOf(Folder(id = 7, name = "السلاسل", uri = "content://tree/7"))
+        library.books.value = listOf(
+            book(1, "المجلد 10", folderId = 7).copy(lastOpenedAt = 900),
+            book(2, "المجلد 2", folderId = 7),
+            book(3, "المجلد 3", folderId = 7).copy(lastOpenedAt = 100),
+        )
+
+        val next = nextAfter(2)
+
+        assertEquals(3L, next?.book?.id)
+        assertEquals("السلاسل", next?.folderName)
+    }
+
+    @Test
+    fun `the last volume of a folder has no next book`() = runTest {
+        library.books.value = listOf(
+            book(1, "المجلد 1", folderId = 7),
+            book(2, "المجلد 2", folderId = 7),
+        )
+
+        assertNull(nextAfter(2))
+    }
+
+    @Test
+    fun `a book filed on its own has no next book`() = runTest {
+        library.books.value = listOf(
+            book(1, "وحيد", folderId = 7),
+            book(2, "خارج المجلد"),
+            book(3, "أيضاً خارجه"),
+        )
+
+        assertNull(nextAfter(1))
+        assertNull(nextAfter(2))
+        assertNull(nextAfter(3))
+    }
+
+    @Test
+    fun `a removed folder leaves the book with no next volume`() = runTest {
+        // The folder row is gone but the book still carries its id until the association is
+        // cleared; nothing may be offered in the meantime.
+        library.books.value = listOf(book(1, "المجلد 1", folderId = 7))
+
+        assertNull(nextAfter(1))
+    }
+
+    @Test
+    fun `matching is by folder, not by every unfiled book`() = runTest {
+        library.books.value = listOf(
+            book(1, "أ", folderId = 7),
+            book(2, "ب"),
+            book(3, "ج", folderId = 7),
+        )
+
+        assertEquals(3L, nextAfter(1)?.book?.id)
     }
 }
 

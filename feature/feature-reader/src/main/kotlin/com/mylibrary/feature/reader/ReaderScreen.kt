@@ -59,6 +59,7 @@ import kotlin.math.roundToInt
 @Composable
 fun ReaderRoute(
     onBack: () -> Unit,
+    onOpenBook: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val viewModel: ReaderViewModel = hiltViewModel()
@@ -70,6 +71,11 @@ fun ReaderRoute(
     ObserveEffects(viewModel.effects) { effect ->
         when (effect) {
             ReaderEffect.NavigateBack -> onBack()
+
+            // Moving on to the next volume of a series. The reader reports it upward rather than
+            // navigating itself, so this screen stays usable from a preview and a test without a
+            // navigation host — the same rule the library screen follows.
+            is ReaderEffect.OpenBook -> onOpenBook(effect.bookId)
 
             is ReaderEffect.ShowMessage -> pendingMessage = effect.message
 
@@ -226,7 +232,7 @@ fun ReaderScreen(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 96.dp),
+                .padding(bottom = ReaderChromeClearance),
         ) { data -> Snackbar(snackbarData = data) }
     }
 
@@ -342,6 +348,17 @@ private fun ProgressSlider(
         )
     }
 }
+
+/**
+ * How tall the reader's bottom chrome is, in the content's own terms.
+ *
+ * Anything the reader must be able to reach at the *end* of a book has to sit above the progress bar
+ * and its slider: a scrolling column is drawn under the chrome, so the last thing in the column is
+ * otherwise behind it and cannot be scrolled clear. Named once because it is now three callers'
+ * number — the snackbar, the reflowable column and the end-of-book panel — and a length written out
+ * three times is how a control ends up half-covered by the bar it was measured against.
+ */
+internal val ReaderChromeClearance = 96.dp
 
 /**
  * Keeps the screen awake while a book is open.

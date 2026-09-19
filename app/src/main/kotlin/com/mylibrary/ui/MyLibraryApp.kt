@@ -276,7 +276,20 @@ private fun MyLibraryNavHost(
                     )
                 },
             ) {
-                ReaderRoute(onBack = { navController.popBackStack() })
+                ReaderRoute(
+                    onBack = { navController.popBackStack() },
+                    // Moving on to the next volume of a series replaces the reader rather than
+                    // stacking one book on the last. Each reader entry holds an open decoder — a
+                    // pdfium document, an open archive — and a reader working through ten volumes
+                    // would otherwise leave ten of them resident; the reader's own page cache is
+                    // bounded in bytes precisely because that is the resource that runs out first.
+                    // Back therefore returns to the shelf, which is where the reader came from.
+                    onOpenBook = { bookId ->
+                        navController.navigate(Routes.readerAtStart(bookId)) {
+                            popUpTo(Routes.READER) { inclusive = true }
+                        }
+                    },
+                )
             }
         }
     }

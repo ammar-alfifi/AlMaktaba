@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -41,9 +42,11 @@ import androidx.compose.ui.unit.LayoutDirection
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.PageSize
 import com.mylibrary.core.domain.model.PageTurnEffect
+import com.mylibrary.core.ui.theme.Spacing
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -89,17 +92,22 @@ internal fun PagedScrollReaderContent(
     val currentBubbleZoom by rememberUpdatedState(state.settings.bubbleZoom)
     val currentHapticsEnabled by rememberUpdatedState(state.settings.hapticsEnabled)
 
-    // Column -> state. `distinctUntilChanged` keeps the effect below from ping-ponging with it.
-    LaunchedEffect(listState) {
+    // Column -> state. The index is mapped through `contentIndex` because the column can end in an
+    // item that is not part of the document — the next-book panel — and a reader who has scrolled
+    // onto it is still on the last page. `distinctUntilChanged` keeps the effect below from
+    // ping-ponging with it.
+    LaunchedEffect(listState, state.totalUnits) {
         snapshotFlow { listState.firstVisibleItemIndex }
+            .map { index -> contentIndex(index, state.totalUnits) }
             .distinctUntilChanged()
             .collect { page -> onIntent(ReaderIntent.PageChanged(page)) }
     }
 
     // State -> column, for a jump that did not come from scrolling: an outline entry, a search
-    // result, a bookmark, or the slider in the bottom bar.
+    // result, a bookmark, or the slider in the bottom bar. Compared through the same mapping, so
+    // scrolling onto the panel is not mistaken for a position the reader did not ask for and undone.
     LaunchedEffect(state.currentUnit, state.totalUnits) {
-        if (state.totalUnits > 0 && state.currentUnit != listState.firstVisibleItemIndex) {
+        if (state.totalUnits > 0 && state.currentUnit != contentIndex(listState.firstVisibleItemIndex, state.totalUnits)) {
             listState.scrollToItem(state.currentUnit)
         }
     }
@@ -180,6 +188,26 @@ internal fun PagedScrollReaderContent(
                     onIntent = onIntent,
                     onMagnify = { pinch -> inspection.magnify(index, pinch) },
                 )
+            }
+
+            // The end of the file, and what comes after it in the folder. Only ever present for a
+            // book that has a next volume; see [NextBookFooter].
+            state.nextBook?.let { next ->
+                item(key = NEXT_BOOK_ITEM_KEY) {
+                    NextBookFooter(
+                        next = next,
+                        onOpen = { onIntent(ReaderIntent.OpenNextBook) },
+                        // The pages themselves are full-bleed and may run under the chrome, but the
+                        // panel's button has to be reachable with the chrome showing — so this is
+                        // the one item in the column that leaves room for it, which the reflowable
+                        // reader gets instead from its own content padding.
+                        modifier = Modifier.padding(
+                            start = Spacing.Large,
+                            end = Spacing.Large,
+                            bottom = ReaderChromeClearance,
+                        ),
+                    )
+                }
             }
         }
 

@@ -7,8 +7,6 @@ import com.mylibrary.core.domain.engine.PagedDocument
 import com.mylibrary.core.domain.engine.ReflowableDocument
 import com.mylibrary.core.domain.model.Book
 import com.mylibrary.core.domain.model.Bookmark
-import com.mylibrary.core.domain.model.LibraryItem
-import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.ReadingLocator
 import com.mylibrary.core.domain.model.ReadingPosition
 import com.mylibrary.core.domain.repository.BookmarkRepository
@@ -205,22 +203,4 @@ class ReadingProgressUseCase @Inject constructor() {
         val withinChapter = fractionWithinChapter.coerceIn(0f, 1f)
         return ((chapterIndex + withinChapter) / chapterCount).coerceIn(0f, 1f)
     }
-}
-
-/** The book to offer on the "continue reading" shelf. */
-class ObserveContinueReadingUseCase @Inject constructor(
-    private val libraryRepository: LibraryRepository,
-    private val progressRepository: ReadingProgressRepository,
-) {
-    operator fun invoke(): Flow<LibraryItem?> =
-        kotlinx.coroutines.flow.combine(
-            libraryRepository.observeBooks(LibrarySort.RECENTLY_READ),
-            progressRepository.observeAllPositions(),
-        ) { books, positions ->
-            val progressByBook = positions.associateBy { it.bookId }
-            books.asSequence()
-                .map { LibraryItem(it, progressByBook[it.id]) }
-                .firstOrNull { it.position != null && !it.isFinished }
-                ?: books.firstOrNull()?.let { LibraryItem(it, progressByBook[it.id]) }
-        }
 }

@@ -49,5 +49,16 @@ object Routes {
     fun reader(bookId: Long, locator: ReadingLocator): String =
         "reader/$bookId?locator=${locator.encoded()}"
 
+    /**
+     * Opens a book at its first page, rather than wherever it was last left.
+     *
+     * What the reader's end-of-volume panel needs: moving on to the next book of a series means
+     * *starting* it, and resuming would drop the reader at whatever point a previous visit to a book
+     * they have not begun happened to stop at. Encoded as a page index because the first unit of a
+     * book is its first unit whatever the file is made of — the reader maps `Paged(0)` onto the
+     * first chapter of a reflowable document, which is the same place.
+     */
+    fun readerAtStart(bookId: Long): String = reader(bookId, ReadingLocator.Paged(0))
+
     fun isTopLevel(route: String?): Boolean = route != null && route in topLevel
 }

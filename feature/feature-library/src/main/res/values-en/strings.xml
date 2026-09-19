@@ -34,6 +34,9 @@
     <string name="lib_import_result_with_skipped">Added %1$d, %2$d already in the library, %3$d unsupported</string>
     <string name="lib_import_nothing">Nothing was added</string>
 
+    <!-- Continue reading: the book the reader was last in, within the folder chip that is selected -->
+    <string name="lib_continue_in_folder">Continue reading from “%1$s”</string>
+
     <!-- Context menu -->
     <string name="lib_menu_details">Details</string>
     <string name="lib_menu_add_favorite">Add to favourites</string>

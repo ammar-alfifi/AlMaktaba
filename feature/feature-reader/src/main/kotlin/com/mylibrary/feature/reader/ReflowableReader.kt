@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.ui.theme.readerFontFamily
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -82,14 +83,20 @@ fun ReflowableReaderContent(
         initialFirstVisibleItemIndex = state.currentUnit.coerceAtLeast(0),
     )
 
-    LaunchedEffect(listState) {
+    // Column -> state. The index is mapped through `contentIndex` because the column can end in an
+    // item that is not part of the document — the next-book panel — and a reader who has scrolled
+    // onto it is still on the last chapter.
+    LaunchedEffect(listState, state.totalUnits) {
         snapshotFlow { listState.firstVisibleItemIndex }
+            .map { index -> contentIndex(index, state.totalUnits) }
             .distinctUntilChanged()
             .collect { chapterIndex -> onIntent(ReaderIntent.ChapterChanged(chapterIndex)) }
     }
 
+    // Compared through the same mapping, so scrolling onto the panel is not mistaken for a position
+    // the reader did not ask for and immediately undone.
     LaunchedEffect(state.currentUnit, state.totalUnits) {
-        if (state.totalUnits > 0 && state.currentUnit != listState.firstVisibleItemIndex) {
+        if (state.totalUnits > 0 && state.currentUnit != contentIndex(listState.firstVisibleItemIndex, state.totalUnits)) {
             listState.animateScrollToItem(state.currentUnit)
         }
     }
@@ -155,7 +162,9 @@ fun ReflowableReaderContent(
                 start = margin,
                 end = margin,
                 top = 24.dp,
-                bottom = 96.dp,
+                // Room for the reader's own bottom chrome, which the column is drawn under — and so
+                // also room to scroll the end-of-book panel clear of it.
+                bottom = ReaderChromeClearance,
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -169,6 +178,17 @@ fun ReflowableReaderContent(
                     state = state,
                     onIntent = onIntent,
                 )
+            }
+
+            // The end of the file, and what comes after it in the folder. Only ever present for a
+            // book that has a next volume; see [NextBookFooter].
+            state.nextBook?.let { next ->
+                item(key = NEXT_BOOK_ITEM_KEY) {
+                    NextBookFooter(
+                        next = next,
+                        onOpen = { onIntent(ReaderIntent.OpenNextBook) },
+                    )
+                }
             }
         }
     }

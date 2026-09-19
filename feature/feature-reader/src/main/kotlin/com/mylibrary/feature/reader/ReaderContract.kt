@@ -17,6 +17,7 @@ import com.mylibrary.core.domain.model.ReaderLayout
 import com.mylibrary.core.domain.model.SearchHit
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.TocEntry
+import com.mylibrary.core.domain.usecase.NextBookInFolder
 
 /** Which panel is open over the page, if any. Exactly one can be open at a time. */
 enum class ReaderPanel { TABLE_OF_CONTENTS, BOOKMARKS, SETTINGS, SEARCH }
@@ -150,6 +151,16 @@ data class ReaderUiState(
      * learn.
      */
     val documentFont: FontFamily? = null,
+
+    /**
+     * The next volume in this book's device folder, offered at the end of the book.
+     *
+     * `null` for a book filed on its own, for the last volume of a series, and for a book whose
+     * folder is no longer in the library — the scroll readers simply end, as they always did, when
+     * there is nothing to continue into. It is a *folder* question rather than a format or a layout
+     * one: a series is a shelf the reader pointed at, and the panel exists to carry them along it.
+     */
+    val nextBook: NextBookInFolder? = null,
 ) {
     /**
      * Whether the reader is showing discrete pages right now, whatever the document is made of.
@@ -280,6 +291,14 @@ sealed interface ReaderIntent {
     data object PreviousUnit : ReaderIntent
 
     /**
+     * The reader asked to carry on into the next book of the folder, from the panel at the end.
+     *
+     * An intent rather than navigation at the panel: the position in the book being left has to be
+     * written first, and only the ViewModel owns that.
+     */
+    data object OpenNextBook : ReaderIntent
+
+    /**
      * The whole book has been measured, or the measurement that was running is no longer about the
      * layout on screen.
      *
@@ -339,6 +358,16 @@ sealed interface ReaderIntent {
 sealed interface ReaderEffect {
     data object NavigateBack : ReaderEffect
     data class ShowMessage(val message: ReaderMessage) : ReaderEffect
+
+    /**
+     * Open a different book, at its first page.
+     *
+     * The screen navigates, because the ViewModel has no `NavController` and deliberately never
+     * gets one. Starting at the beginning rather than at the saved position is the whole point of
+     * the only caller — the end-of-volume panel — which exists to *begin* the next book: resuming a
+     * book the reader has not yet started would drop them wherever a previous visit stopped.
+     */
+    data class OpenBook(val bookId: Long) : ReaderEffect
 
     /**
      * A link leaving the document. The screen hands it to the platform, which is the only layer that

@@ -21,6 +21,7 @@ import com.mylibrary.core.domain.repository.BookmarkRepository
 import com.mylibrary.core.domain.repository.DocumentRepository
 import com.mylibrary.core.domain.repository.LibraryRepository
 import com.mylibrary.core.domain.usecase.DeleteBookmarkUseCase
+import com.mylibrary.core.domain.usecase.ObserveNextBookUseCase
 import com.mylibrary.core.domain.usecase.ObserveSettingsUseCase
 import com.mylibrary.core.domain.usecase.OpenBookUseCase
 import com.mylibrary.core.domain.usecase.ReadingProgressUseCase
@@ -99,6 +100,7 @@ class ReaderViewModel @Inject constructor(
     private val observeSettings: ObserveSettingsUseCase,
     private val updateSettings: UpdateSettingsUseCase,
     private val searchInDocument: SearchInDocumentUseCase,
+    private val observeNextBookInFolder: ObserveNextBookUseCase,
     private val fontLoader: DocumentFontLoader,
     private val dispatchers: DispatcherProvider,
 ) : MviViewModel<ReaderUiState, ReaderIntent, ReaderEffect>(ReaderUiState()) {
@@ -132,6 +134,7 @@ class ReaderViewModel @Inject constructor(
     init {
         collectSettings()
         observeBookmarks()
+        observeNextBook()
         loadBook()
     }
 
@@ -444,6 +447,7 @@ class ReaderViewModel @Inject constructor(
             is ReaderIntent.JumpTo -> jumpTo(intent.locator)
             ReaderIntent.NextUnit -> moveTo(currentState.currentUnit + 1)
             ReaderIntent.PreviousUnit -> moveTo(currentState.currentUnit - 1)
+            ReaderIntent.OpenNextBook -> openNextBook()
 
             ReaderIntent.ToggleBookmark -> toggleBookmarkAtCurrentPosition()
             is ReaderIntent.DeleteBookmark -> launch {
@@ -515,6 +519,39 @@ class ReaderViewModel @Inject constructor(
 
             ReaderIntent.PasswordDismissed -> launch { sendEffect(ReaderEffect.NavigateBack) }
             ReaderIntent.Retry -> launch { openDocument(password = null) }
+        }
+    }
+
+    /**
+     * Keeps the end-of-volume offer current.
+     *
+     * Collected rather than resolved once when the document opens, because the library is live: a
+     * volume imported, a book moved into or out of the folder while this one is being read changes
+     * the answer, and the panel has to offer what is true when the reader reaches it.
+     */
+    private fun observeNextBook() {
+        launch {
+            observeNextBookInFolder(bookId).collect { next ->
+                setState { copy(nextBook = next) }
+            }
+        }
+    }
+
+    /**
+     * Carries on into the next book of the folder.
+     *
+     * The position in the book being left is written *before* the effect that leaves it, and written
+     * directly rather than through [scheduleProgressSave]: the reader's entry is popped as soon as
+     * the navigation happens, which clears this ViewModel and cancels everything it was still
+     * waiting to do — including a save that was still inside the debounce. The position at the end
+     * of a volume is exactly the one worth keeping, since it is what says the volume was finished.
+     */
+    private fun openNextBook() {
+        val next = currentState.nextBook?.book ?: return
+        progressJob?.cancel()
+        launch {
+            saveCurrentProgress()
+            sendEffect(ReaderEffect.OpenBook(next.id))
         }
     }
 

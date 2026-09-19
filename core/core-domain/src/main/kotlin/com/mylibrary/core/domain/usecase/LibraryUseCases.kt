@@ -3,14 +3,17 @@ package com.mylibrary.core.domain.usecase
 import com.mylibrary.core.common.DispatcherProvider
 import com.mylibrary.core.common.fileStem
 import com.mylibrary.core.common.getOrNull
+import com.mylibrary.core.common.naturalSortKey
 import com.mylibrary.core.domain.model.Book
 import com.mylibrary.core.domain.model.BookFormat
 import com.mylibrary.core.domain.model.Bookmark
+import com.mylibrary.core.domain.model.FolderSummary
 import com.mylibrary.core.domain.model.LibraryItem
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.ReadingPosition
 import com.mylibrary.core.domain.repository.BookmarkRepository
 import com.mylibrary.core.domain.repository.DocumentRepository
+import com.mylibrary.core.domain.repository.FolderRepository
 import com.mylibrary.core.domain.repository.LibraryRepository
 import com.mylibrary.core.domain.repository.ReadingProgressRepository
 import kotlinx.coroutines.flow.Flow
@@ -53,12 +56,22 @@ class ObserveLibraryUseCase @Inject constructor(
         }
 
     /**
-     * The book to offer on the "continue reading" shelf: the most recently opened one that has not
-     * been finished, falling back to the most recent book when everything is finished or new.
+     * The book to offer next: the most recently read one in scope that the reader has not finished.
+     *
+     * [folderId] is what makes the offer follow the shelf the reader is looking at. A device folder
+     * is a series, so with one open the book to continue is that series' own — the most recent book
+     * in the library as a whole is the wrong answer to "carry on" once the reader has narrowed the
+     * shelf to one folder.
+     *
+     * A book that has never been *opened* is never offered: "continue" on a book nobody has started
+     * is a lie, and the shelf itself is where an unread book is found. Everything finished, or
+     * nothing started at all, therefore means `null` — no button — rather than a button pointing at
+     * a book the reader has no position in. That is also what stops the button from reopening the
+     * volume the reader has just moved on from: the next book was opened more recently than it.
      */
-    fun continueReading(): Flow<LibraryItem?> =
-        invoke(sort = LibrarySort.RECENTLY_READ).map { items ->
-            items.firstOrNull { it.position != null && !it.isFinished } ?: items.firstOrNull()
+    fun continueReading(folderId: Long? = null): Flow<LibraryItem?> =
+        invoke(sort = LibrarySort.RECENTLY_READ, folderId = folderId).map { items ->
+            items.firstOrNull { it.position != null && !it.isFinished }
         }
 }
 
@@ -200,3 +213,67 @@ class ToggleFavoriteUseCase @Inject constructor(
     suspend operator fun invoke(bookId: Long, isFavorite: Boolean) =
         libraryRepository.setFavorite(bookId, isFavorite)
 }
+
+/**
+ * The volume that follows [book] in its folder, offered when the reader reaches the end of it.
+ *
+ * [folderName] travels with the book so the reader can say *which* series is being continued: a
+ * panel offering "Vol 3" is a guess about what the reader owns, while "Next in «Detective Conan»"
+ * is a fact they can check at a glance.
+ */
+data class NextBookInFolder(
+    val book: Book,
+    val folderName: String?,
+)
+
+/**
+ * The next book in the same device folder, for the end of a volume.
+ *
+ * A folder is a series, and a reader who has just finished volume two overwhelmingly wants volume
+ * three — so the reader offers it there instead of sending them back to the shelf to find it.
+ *
+ * **The order is the folder's own, not the shelf's.** Siblings are sorted by [naturalSortKey] of the
+ * title, which is the same natural order the folder was *scanned* in, so `Vol 2` precedes `Vol 10`
+ * rather than following it — a plain string sort would put the tenth volume second. Deliberately not
+ * the library's display sort: "recently read" is a property of the reader's history and not of the
+ * series, and a next volume that depended on which books were opened most recently would move around
+ * underneath the reader between one tap and the next.
+ *
+ * Observed rather than resolved once, because the library can change while a book is open — a volume
+ * imported, a book moved to another folder — and the panel has to offer what is true when the reader
+ * arrives at it. A book filed on its own, the last one in its folder, or one that has just been
+ * unfiled reports `null`, which is what keeps the reader from offering a continuation that does not
+ * exist.
+ */
+class ObserveNextBookUseCase @Inject constructor(
+    private val libraryRepository: LibraryRepository,
+    private val folderRepository: FolderRepository,
+) {
+    operator fun invoke(bookId: Long): Flow<NextBookInFolder?> = combine(
+        libraryRepository.observeBook(bookId),
+        libraryRepository.observeBooks(),
+        folderRepository.observeFolders(),
+    ) { current, books, folders -> nextInFolder(current, books, folders) }
+
+    private fun nextInFolder(
+        current: Book?,
+        books: List<Book>,
+        folders: List<FolderSummary>,
+    ): NextBookInFolder? {
+        val folderId = current?.folderId ?: return null
+
+        val siblings = books
+            .filter { it.folderId == folderId }
+            // The id breaks a tie between two volumes whose titles sort identically, so the order is
+            // stable rather than dependent on the order the rows came back in.
+            .sortedWith(compareBy({ naturalSortKey(it.title) }, { it.id }))
+
+        val index = siblings.indexOfFirst { it.id == current.id }
+        val next = if (index < 0) null else siblings.getOrNull(index + 1)
+        return next?.let { NextBookInFolder(it, folders.folderNameOf(folderId)) }
+    }
+}
+
+/** The name of a folder, or `null` when the row is gone — a book keeps working without its folder. */
+private fun List<FolderSummary>.folderNameOf(folderId: Long): String? =
+    firstOrNull { it.folder.id == folderId }?.folder?.name

@@ -62,6 +62,7 @@ class LibraryViewModel @Inject constructor(
 
     init {
         observeLibraryContent()
+        observeContinueReading()
         observeCountsAndFormats()
         observePreferences()
         observeFolderList()
@@ -93,6 +94,28 @@ class LibraryViewModel @Inject constructor(
                     folderId = folderId,
                 ).collect { items -> setState { copy(items = items) } }
             }
+        }
+    }
+
+    /**
+     * Keeps the "continue reading" button pointing at what the open folder is up to.
+     *
+     * Re-queried whenever the folder selection changes — and on every change to the books or the
+     * positions behind it, since [ObserveLibraryUseCase.continueReading] is itself a `Flow` — which
+     * is what makes the button follow the chips rather than the order they were tapped in. It is not
+     * derived from [LibraryUiState.items]: those are filtered by the favourites and format chips as
+     * well, and a button that disappeared because the reader had filtered to comics would be a
+     * different control from the one they asked for.
+     */
+    private fun observeContinueReading() {
+        launch {
+            state.map { it.folderFilter }
+                .distinctUntilChanged()
+                .collectLatest { folderId ->
+                    observeLibrary.continueReading(folderId).collect { item ->
+                        setState { copy(continueReading = item) }
+                    }
+                }
         }
     }
 

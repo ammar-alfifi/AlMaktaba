@@ -33,9 +33,9 @@ Jetpack Compose و Material 3، ومعمارية نظيفة متعددة الو�
 | **Formats** | PDF (pdfium), EPUB 2 & 3, plain text (with Arabic charset detection), CBZ (zip), CBR (RAR) |
 | **Languages** | Arabic by default, English as a complete second locale, switchable in-app without a restart |
 | **Direction** | Full RTL for Arabic, LTR for English — and a document's own direction is honoured *independently* of the UI, so an English TXT reads left-to-right inside the Arabic interface |
-| **Library** | Import through the Storage Access Framework — single files **or a whole device folder**, which keeps a series together as one shelf and can be re-scanned for new volumes later; grid/list layouts, five sort orders, favourite, format and folder filters, automatic cover extraction, moving a book between folders |
+| **Library** | Import through the Storage Access Framework — single files **or a whole device folder**, which keeps a series together as one shelf and can be re-scanned for new volumes later; grid/list layouts, five sort orders, favourite, format and folder filters, automatic cover extraction, moving a book between folders; a **continue-reading button above the shelf that follows the folder chip** — with a folder open it offers *that series'* book, not the most recent book in the library, and it says which book it would open |
 | **Opening from elsewhere** | The app registers as a viewer for every format it reads, so opening a file from a file manager — or sharing one into it — adds the book to the library and opens it in the reader. A search hit opens the reader *at the hit*, not at the last position |
-| **Reader** | One toolbar across all five formats, adapting to what the open file can do; **every format has both a pages layout and a continuous-scroll one**, chosen by one setting that both families obey; tap zones that turn the page (mirrored for Arabic, and independently reversible) or scroll a screenful, with a haptic tick on every turn and a switch to turn them off; **which side the first page is on** is a setting of its own; pinch-zoom, double-tap and a clamped pan; **double-tap a speech bubble or panel in a comic to zoom into it** — the balloon is found by reading the page's pixels, and a break in its outline is sealed rather than allowed to hand back the panel; page turns animated by a page-curl, a slide or a fade — **the curl lifts a corner on a diagonal fold and rolls the sheet over in every format, reflowed text included**; three page-fit modes; per-document search, outlines, bookmarks; **font, size, line spacing, margins, paragraph spacing and a first-line indent, applied live to a reflowed book** — three bundled Arabic typefaces and the platform's own — and one button that puts a reader's settings back **without touching the app's theme or its language** |
+| **Reader** | One toolbar across all five formats, adapting to what the open file can do; **every format has both a pages layout and a continuous-scroll one**, chosen by one setting that both families obey; tap zones that turn the page (mirrored for Arabic, and independently reversible) or scroll a screenful, with a haptic tick on every turn and a switch to turn them off; **which side the first page is on** is a setting of its own; pinch-zoom, double-tap and a clamped pan; **double-tap a speech bubble or panel in a comic to zoom into it** — the balloon is found by reading the page's pixels, and a break in its outline is sealed rather than allowed to hand back the panel; page turns animated by a page-curl, a slide or a fade — **the curl lifts a corner on a diagonal fold and rolls the sheet over in every format, reflowed text included**; three page-fit modes; per-document search, outlines, bookmarks; **font, size, line spacing, margins, paragraph spacing and a first-line indent, applied live to a reflowed book** — three bundled Arabic typefaces and the platform's own — and one button that puts a reader's settings back **without touching the app's theme or its language**; and, at the end of a book in a folder of several, a **panel that offers the next volume of the series** — the folder's own next book, ordered naturally so *Vol 2* precedes *Vol 10*, opening it at its first page |
 | **Appearance** | Six Material 3 colour schemes — five generated from seeds by `tools/material_palette.py`, one the app's own hand-authored teal — plus the wallpaper palette on Android 12+; a first launch asks which, and the same screen reopens from Settings with the whole interface repainting live; light/dark/system |
 | **Storage** | No storage permission at all — only scoped `content://` access to files and folders the user picked |
 
@@ -305,22 +305,45 @@ being sent through a welcome they have already had reads as the reset having bro
 **The folder is the unit of a series, and a folder is not a copy.** Adding a folder through the
 Storage Access Framework records the *tree* URI, takes a persistable read grant, walks the tree and
 files what it finds under it. Nothing is copied and nothing is moved: the association is an id on each
-book, which is why a re-scan can pick up new volumes, why removing a folder keeps its books, and why a
-folder whose permission has been revoked is shown as unavailable rather than silently disappearing
+book, which is why a re-scan can pick up new volumes, why removing a folder keeps its books, and why
+a folder whose permission has been revoked is shown as unavailable rather than silently disappearing
 with the reader's series inside it.
+
+**What "continue" means is decided by the folder chip, not by the shelf.** A device folder is a
+series, so the book to carry on with is the series' own — the most recently read book in the whole
+library is a different question from the one the chip asked, and answering it anyway is how a reader
+who has opened a folder ends up in a book from somewhere else. The button is therefore scoped by the
+same selection that scopes the list, and it names the folder it is reading from. It is also why a book
+that has never been *opened* is never offered: "continue" on a book nobody has started is a lie, and
+the shelf is where an unread book is found — which leaves the button absent rather than wrong when
+everything is finished or nothing has been started.
+
+**The end of a volume offers the next one, and the order is the folder's rather than the shelf's.**
+Reaching the last page of volume two of a series and having to go back to the shelf to find volume
+three is where the thread of a series is usually dropped, so both scroll readers put a card after the
+last page — Mihon's chapter end, for the same reason — and its button opens the next book *at its
+first page*, since the point is to start it rather than to resume it. Two choices are worth naming.
+The order is `naturalSortKey` of the title, the same natural order the folder was scanned in, so
+`Vol 2` precedes `Vol 10` — not the library's display sort, because "recently read" is a property of
+the reader's history and not of the series, and a next volume that moved around as books were opened
+would be worse than none. And the panel is *outside* the document: it is the last item of the column
+rather than a page of the book, so both readers had to learn that a column's last item is not a
+position — the index the column reports is mapped through the document's own length before it reaches
+the state, or the panel would be clamped away and the reader dragged back to the last page before
+they could reach it.
 
 **Room generates Java here, deliberately.** See [§7](#7-engineering-findings-worth-knowing).
 
 ## 6. Testing
 
-**527 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
+**577 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
 
 | Module | Tests | Covers |
 |---|---:|---|
 | `format-epub` | 84 | container/OPF parsing, nav + NCX, sanitiser, path resolution, traversal refusal, embedded fonts, links |
-| `feature-reader` | 200 | **the margins and paragraph spacing the two readers share** (that the settings reach both, and that a spacing of zero means none), HTML → block parsing, chapter text offsets and link anchors, which toolbar actions a document supports, tap-zone mirroring and its reversal, page-fit geometry, **page-breaking arithmetic** (line boundaries, spacing, atomic blocks, degenerate pages), progress agreement with the library, **the speech-bubble detector** (enclosed regions, specks, slivers, resolution independence, and — against whole drawn comic pages rather than hand-written pixel arrays — that a broken outline does not hand back the panel, and that a tap on the lettering finds the balloon), **the tap-to-page geometry**, the page-turn effects, **the zoom handover from the column to the opened page**, **the cache's byte accounting**, **the size a zoom is measured against**, **the curl** (that the fold runs diagonally rather than along an edge, that it sweeps the whole page over a turn, that every band is foreshortened and placed on the chord its angle subtends, that it never wraps past half a turn, and that it rolls far enough for the sheet to show its back), and **which settings a reader is offered** (the four document-and-layout combinations, and that page fit and bubble zoom do not gate on the same thing) |
-| `format-text` | 47 | Windows-1256/UTF-16/BOM decoding, chapter splitting, escaping, search offsets |
-| `core-domain` | 55 | format resolution, progress arithmetic, library join, import rules, **folder import and re-scan** (adoption, missing files, revoked grants, deleting with or without contents), and **the range of every slider** (both ends clamped, the middle untouched, and a floor of zero that is genuinely reachable) |
+| `feature-reader` | 237 | **the margins and paragraph spacing the two readers share** (that the settings reach both, and that a spacing of zero means none), HTML → block parsing, chapter text offsets and link anchors, which toolbar actions a document supports, tap-zone mirroring and its reversal, page-fit geometry, **page-breaking arithmetic** (line boundaries, spacing, atomic blocks, degenerate pages), progress agreement with the library, **the speech-bubble detector** (enclosed regions, specks, slivers, resolution independence, and — against whole drawn comic pages rather than hand-written pixel arrays — that a broken outline does not hand back the panel, and that a tap on the lettering finds the balloon), **the tap-to-page geometry**, the page-turn effects, **the zoom handover from the column to the opened page**, **the cache's byte accounting**, **the size a zoom is measured against**, **the curl** (that the fold runs diagonally rather than along an edge, that it sweeps the whole page over a turn, that every band is foreshortened and placed on the chord its angle subtends, that it never wraps past half a turn, and that it rolls far enough for the sheet to show its back), and **which settings a reader is offered** (the four document-and-layout combinations, and that page fit and bubble zoom do not gate on the same thing) |
+| `format-text` | 52 | Windows-1256/UTF-16/BOM decoding, chapter splitting, escaping, search offsets |
+| `core-domain` | 63 | format resolution, progress arithmetic, library join, import rules, **folder import and re-scan** (adoption, missing files, revoked grants, deleting with or without contents), **what "continue reading" offers** (the open folder rather than the whole library, a book nobody has opened, a folder with nothing unfinished left), **the next volume of a series** (natural order, the last volume, an unfiled book, a folder that has gone), and **the range of every slider** (both ends clamped, the middle untouched, and a floor of zero that is genuinely reachable) |
 | `core-common` | 30 | natural sort key, file-name parsing, byte formatting, result combinators |
 | `format-archive` | 29 | natural page ordering, junk-entry filtering, container sniffing, sample-size maths |
 | `feature-search` | 20 | snippet offsets, result grouping, query history |
@@ -366,6 +389,21 @@ emulator process, and the headless build dies regardless of backend). That made 
 document had always listed as unverified — the reader's gestures, the bubble detector, the folder
 import, the upgrade path — testable, and the first thing it found was that swiping did not turn
 pages. See [§7](#7-engineering-findings-worth-knowing).
+
+**Two behaviours are shell-verified on it rather than only unit-tested**, because both are things a
+reader does with a finger and a folder of volumes:
+
+| What was checked | How it was checked |
+|---|---|
+| The continue-reading button follows the folder chip | A folder of three comics added through the picker; with `Series` selected the button reads *متابعة القراءة من «Series»* and offers that folder's book, and switching to a folder whose books have never been opened removes it entirely |
+| The end-of-book panel offers the next volume | `Vol 2` scrolled to its last page offers *الكتاب التالي في «Series» / Vol 10* — the natural order, since a plain string sort would have put `Vol 10` before `Vol 2` and left no next book at all |
+| The button opens the next book *at its first page* | Tapping it opened `Vol 10` at `١ من ١٢`, not at a saved position |
+| The panel is not shown where there is nothing to continue into | The last volume of the folder (`comic`) scrolled to its end simply ends |
+| A reflowed book offers the next one too | An Arabic TXT in another folder offered its `bubble` (a CBZ) at the end, and the button opened it across formats at page one |
+| The panel's button is reachable with the chrome showing | First attempt had it under the progress bar; the panel now leaves `ReaderChromeClearance` at its foot, which is the same 96 dp the snackbar and the reflowed column already reserved |
+
+`adb` drives it — `input tap`, `uiautomator dump` — which is why the checks above are statements about
+what the screen said rather than about what the code intended.
 
 ## 7. Engineering findings worth knowing
 
@@ -509,10 +547,10 @@ Stated rather than hidden:
   (3×), so the sharpest render is 3× the viewport however far the zoom goes.
 - **The reader's gestures are the part of this app least covered by tests.** The geometry, the
   action rules and the page-breaking arithmetic behind them are pure functions with unit tests, but
-  the gestures themselves — tap zones, pinch-zoom, the clamped pan — have only been exercised by
-  reading the code and building the APK, because the environment this was developed in has no device
-  or emulator to run them on. The same goes for pagination end to end: what it *decides* is tested,
-  what it *looks like* is not. Treat the first run on real hardware as the real test.
+  the gestures themselves — tap zones, pinch-zoom, the clamped pan — have no automated coverage:
+  they have been exercised by hand on the emulator (see [§6](#6-testing)) and by reading the code.
+  The same goes for pagination end to end: what it *decides* is tested, what it *looks like* is not.
+  Treat the first run on real hardware as the real test.
 - **Paged text stops at the end of a chapter.** Swiping turns pages within the chapter and no
   further, because the view paginates one chapter at a time — a pager spanning several would have to
   re-index its pages every time a window shifted, and a jump nobody can test is worse than a
@@ -526,6 +564,14 @@ Stated rather than hidden:
   file has been moved, or whose storage is not mounted, is indistinguishable from one that was
   genuinely removed — so the count is reported and the book stays. The scan also stops at 2000 files
   and 8 levels deep, and says so when it does.
+- **The end-of-volume panel belongs to the continuous-scroll layout.** Scrolling past the last page
+  is what reveals it — there is no "past the last page" in the pages layout, where a tap at the end
+  simply stops at the end — so a reader who keeps the pages layout for a series will not meet it. The
+  layout is one setting for every book, so switching it on for a series is a one-off.
+- **The next volume is the folder's, in natural title order.** `Vol 2` precedes `Vol 10`, which is
+  what a series needs and what a file named `chapter-10` also gets — but a folder whose files carry
+  no ordering in their names (a pile of unrelated books imported together) will offer them in an
+  order that is alphabetical-by-natural-sort rather than the order they were added.
 - **Folders are a grouping, not a copy.** Books are never moved or duplicated; a folder is a
   remembered SAF tree plus an id on each book. That is why removing a folder keeps its books, and why
   a folder whose permission has been revoked shows as "unavailable" until the user points at it again.
@@ -540,7 +586,8 @@ Stated rather than hidden:
   VIEW intents only a transient one. The book opens this session; a later open can fail with a
   file-access error, and the honest fixes are copying the file in or re-adding it from the picker.
 - **CBR has no automated success-path test** — see [§6](#6-testing).
-- **The app has not been run on a device** in the environment it was built in; see §6.
+- **There is no physical device in this environment** — everything that needs a screen has been
+  checked on the emulator only; see [§6](#6-testing).
 
 ---
 

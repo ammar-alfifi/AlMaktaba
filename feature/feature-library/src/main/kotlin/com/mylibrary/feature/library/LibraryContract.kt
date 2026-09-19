@@ -51,6 +51,18 @@ data class LibraryUiState(
     val importingFolderName: String? = null,
 
     val totalBookCount: Int = 0,
+
+    /**
+     * The book the "continue reading" button offers, or `null` when there is nothing to continue.
+     *
+     * Scoped to [folderFilter] rather than to the whole library: a device folder is a series, so
+     * with one open the button must offer that series' own book — which is the whole point of the
+     * control following the chip the reader has selected. A book nobody has started is never
+     * offered, and neither is one that has been finished, so this being `null` is the ordinary state
+     * of a shelf that has just been filled.
+     */
+    val continueReading: LibraryItem? = null,
+
     /** The book whose context menu is open, if any. */
     val menuTarget: Book? = null,
     /** The book being moved between folders, if any. */

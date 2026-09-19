@@ -1,13 +1,16 @@
 package com.mylibrary.feature.library
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -23,10 +26,12 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DropdownMenuItem
@@ -62,13 +67,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mylibrary.core.domain.model.Book
 import com.mylibrary.core.domain.model.BookFormat
 import com.mylibrary.core.domain.model.Folder
+import com.mylibrary.core.domain.model.LibraryItem
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.ViewMode
 import com.mylibrary.core.domain.usecase.FolderImportSummary
+import com.mylibrary.core.ui.component.BookCover
 import com.mylibrary.core.ui.component.BookGridCard
 import com.mylibrary.core.ui.component.BookListRow
 import com.mylibrary.core.ui.component.EmptyState
 import com.mylibrary.core.ui.component.FeatureScaffold
+import com.mylibrary.core.ui.format.progressLabel
 import com.mylibrary.core.ui.mvi.ObserveEffects
 import com.mylibrary.core.ui.theme.Spacing
 
@@ -185,6 +193,17 @@ fun LibraryScreen(
                     }
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
+            }
+
+            // The one thing most readers open the app to do, above the shelf rather than inside it:
+            // it stays put while the grid scrolls, and it follows the folder chip — see
+            // [ContinueReadingCard].
+            state.continueReading?.let { item ->
+                ContinueReadingCard(
+                    item = item,
+                    folderName = state.activeFolder?.name,
+                    onClick = { onIntent(LibraryIntent.BookOpened(item.book.id)) },
+                )
             }
 
             when {
@@ -417,6 +436,84 @@ private fun LibraryFilterRow(
                 selected = format in state.formatFilter,
                 onClick = { onIntent(LibraryIntent.ToggleFormatFilter(format)) },
                 label = { Text(format.displayName) },
+            )
+        }
+    }
+}
+
+/**
+ * The "continue reading" button.
+ *
+ * It answers the question the reader arrived with — *where was I?* — and it is scoped to the folder
+ * chip that is selected, because a device folder is a series: with one open, the book to carry on
+ * with is that series' own, which is rarely the most recent book in the whole library.
+ *
+ * A row rather than a button because it has to say *which* book it would open: an unlabelled
+ * "continue" leaves the reader to guess, and the guess is exactly what they came to avoid. The whole
+ * row is the touch target — `clickable` merges its children into one node for a screen reader, so
+ * the cover, the title and the progress are announced together with the action.
+ */
+@Composable
+private fun ContinueReadingCard(
+    item: LibraryItem,
+    folderName: String?,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = Spacing.Large,
+                end = Spacing.Large,
+                top = Spacing.Small,
+                bottom = Spacing.ExtraSmall,
+            ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = Spacing.Medium, vertical = Spacing.Small),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.Medium),
+        ) {
+            BookCover(
+                book = item.book,
+                modifier = Modifier.width(36.dp),
+                contentDescription = null,
+            )
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = folderName?.let {
+                        stringResource(R.string.lib_continue_in_folder, it)
+                    } ?: stringResource(com.mylibrary.core.ui.R.string.ui_continue_reading),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = item.book.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    // The same caption the shelf's own cards carry, so the percentage here and the
+                    // one on the card below it can never disagree.
+                    text = progressLabel(item),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
             )
         }
     }

@@ -35,6 +35,9 @@
     <string name="lib_import_result_with_skipped">تمت إضافة %1$d، و%2$d موجودة مسبقاً، و%3$d غير مدعومة</string>
     <string name="lib_import_nothing">لم تتم إضافة أي كتاب</string>
 
+    <!-- Continue reading: the book the reader was last in, within the folder chip that is selected -->
+    <string name="lib_continue_in_folder">متابعة القراءة من «%1$s»</string>
+
     <!-- Context menu -->
     <string name="lib_menu_details">التفاصيل</string>
     <string name="lib_menu_add_favorite">إضافة إلى المفضلة</string>
