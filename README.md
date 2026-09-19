@@ -76,7 +76,7 @@ Every hard constraint from the specification, and where it is satisfied:
 
 A signed, installable build is attached to the latest release:
 
-**→ [MyLibrary-v1.6.0.apk](https://github.com/ammar-alfifi/MyLibrary/releases/download/v1.6.0/MyLibrary-v1.6.0.apk)** (~33 MB)
+**→ [MyLibrary-v1.7.0.apk](https://github.com/ammar-alfifi/MyLibrary/releases/download/v1.7.0/MyLibrary-v1.7.0.apk)** (~33 MB)
 
 Android 8.0 (API 26) and above. Signed with APK Signature Scheme v2 + v3. The app requests **no
 storage permission** — books are added through the system file picker, which grants access to the
