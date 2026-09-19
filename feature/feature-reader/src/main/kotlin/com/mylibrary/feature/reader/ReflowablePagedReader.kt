@@ -6,9 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
@@ -16,19 +14,15 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
@@ -46,9 +40,9 @@ import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
@@ -58,8 +52,12 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.toIntSize
 import androidx.compose.ui.unit.dp
 import com.mylibrary.core.domain.model.PageTurnEffect
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 import kotlin.math.roundToInt
 
 /** Only reached if a font size is set beyond the settings' own ceiling, so it is a backstop. */
@@ -68,7 +66,7 @@ private const val MAX_MEASURED_LINES = 400
 /**
  * The paged view for reflowable documents.
  *
- * The chapter is measured once, split into pages by [paginate], and then turned with the same
+ * A window of chapters is measured, split into pages by [paginate], and then turned with the same
  * gestures as a PDF or a comic — which is the point: a text file and a scanned book should not feel
  * like two different applications. What differs is only how a page comes to exist. A PDF page is an
  * image the decoder hands over; a page here is a decision the reader makes, and the decision is
@@ -77,6 +75,12 @@ private const val MAX_MEASURED_LINES = 400
  * Re-measuring is why the position is kept as a character offset rather than a page number. Change
  * the font size and the chapter may go from twelve pages to fifteen; the reader stays where they
  * were reading, because the text they were looking at is still the text they were looking at.
+ *
+ * **And a turn crosses chapters.** The pager holds [windowChapters] — the chapter being read and one
+ * on each side of it — rather than the one chapter, so a chapter's first page follows the last page
+ * of the one before it and a turn reaches it the way it reaches any other page, in both directions.
+ * Nothing special happens at the seam, which is the whole of the design: no button, and no case for
+ * the end of a chapter anywhere below.
  */
 @Composable
 fun ReflowablePagedContent(
@@ -94,100 +98,251 @@ fun ReflowablePagedContent(
     val currentHapticsEnabled by rememberUpdatedState(state.settings.hapticsEnabled)
     val linkColor = MaterialTheme.colorScheme.primary
 
-    val content by produceState<ChapterContent>(ChapterContent.Empty, state.currentUnit, linkColor) {
-        value = viewModel.chapterContent(
-            chapterIndex = state.currentUnit,
-            links = LinkStyling(color = linkColor) { href ->
-                currentOnIntent(ReaderIntent.FollowLink(href))
-            },
-        )
+    // The chapters the pager holds at once. A pure function of the reader's own chapter, which is
+    // what keeps a window slide to one per chapter crossed — see `windowChapters`.
+    val chapters = windowChapters(currentUnit = state.currentUnit, totalUnits = state.totalUnits)
+
+    // One parse per chapter in the window rather than one for the chapter being read: a page has to
+    // be drawn from the chapter it is *in*, and once a turn can cross a boundary that is the
+    // neighbour's chapter as often as it is this one's.
+    val contents by produceState<Map<Int, ChapterContent>>(emptyMap(), chapters, linkColor) {
+        value = chapters.associateWith { chapter ->
+            viewModel.chapterContent(
+                chapterIndex = chapter,
+                links = LinkStyling(color = linkColor) { href ->
+                    currentOnIntent(ReaderIntent.FollowLink(href))
+                },
+            )
+        }
     }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val widthPx = with(density) { (maxWidth - READING_MARGIN * 2).roundToPx() }
+        // The margins, and the gap between blocks, are the reader's to set. Both are read here
+        // rather than inside the `remember` below, because both change the width a page is measured
+        // into and the space its blocks need — a margin or a spacing the paginator did not know
+        // about is a page with a line of text past its bottom edge.
+        val margin = state.readingMargin()
+        val widthPx = with(density) { (maxWidth - margin * 2).roundToPx() }
         val heightPx = with(density) { (maxHeight - PAGE_TOP_MARGIN - PAGE_BOTTOM_MARGIN).toPx() }
-        val spacingPx = with(density) { PAGE_BLOCK_SPACING.toPx() }
+        val spacingPx = with(density) { state.paragraphSpacing().toPx() }
 
         // Measured outside the pagination so the styles are plain values the remember can compare:
         // keying on the whole reader state would re-paginate the chapter on every page turn.
         val bodyStyle = state.bodyTextStyle()
+        val paragraphStyle = state.paragraphTextStyle()
         val headingStyles = (1..4).map { level -> state.headingStyle(level) }
         val layoutDirection = LocalLayoutDirection.current
 
-        val pages = remember(content.blocks, widthPx, heightPx, spacingPx, bodyStyle, headingStyles) {
+        // A measurer of the book's own, used only by the pass below and only from that pass's thread.
+        //
+        // `TextMeasurer` keeps every layout it has made in a cache of its own, and that cache is an
+        // unsynchronised `LruCache` behind two plain fields — so one instance shared between the page
+        // being drawn on the main thread and a sweep of the whole book on another is two threads
+        // writing the same map, and the measurements that come back can be another block's. Nothing
+        // about the measurer is expensive to have twice, so the composition's is left entirely to the
+        // composition and this one is never touched from anywhere else.
+        val fontFamilyResolver = LocalFontFamilyResolver.current
+        val bookMeasurer = remember(fontFamilyResolver, density, layoutDirection) {
+            TextMeasurer(fontFamilyResolver, density, layoutDirection)
+        }
+
+        // A paragraph is measured in the style it is drawn in, indent and all: the drawer decides the
+        // indent from the same setting, so the two cannot disagree about how wide the first line is.
+        // Everything else — a quotation, a list item, a caption — is set flush and measured flush.
+        //
+        // Shared with the book-wide measurement below, and it has to be: the two must cut a chapter
+        // into the same pages, or the page count the reader is shown would be a count of pages the
+        // pager never draws.
+        val styleFor: (ContentBlock) -> TextStyle = { block ->
+            when (block) {
+                is ContentBlock.Heading -> headingStyles[(block.level - 1).coerceIn(0, 3)]
+                is ContentBlock.Paragraph -> paragraphStyle
+                else -> bodyStyle
+            }
+        }
+
+        // One chapter's pages: cut from the chapter's own text, at this width and this font. Keyed on
+        // the parsed chapters rather than on the window, so a chapter carried over a slide is not
+        // measured a second time on the frame that slid it.
+        val chapterPages = remember(
+            contents,
+            widthPx,
+            heightPx,
+            spacingPx,
+            bodyStyle,
+            paragraphStyle,
+            headingStyles,
+        ) {
             val measure = TextLayoutBlockMeasure(
                 measurer = measurer,
                 layoutDirection = layoutDirection,
                 pageHeightPx = heightPx,
-                styleFor = { block ->
-                    when (block) {
-                        is ContentBlock.Heading -> headingStyles[(block.level - 1).coerceIn(0, 3)]
-                        else -> bodyStyle
-                    }
-                },
+                styleFor = styleFor,
             )
-            paginate(
-                blocks = content.blocks,
-                widthPx = widthPx,
-                pageHeightPx = heightPx,
-                spacingPx = spacingPx,
-                measure = measure,
-            )
-        }
-
-        val pagerState = rememberPagerState(pageCount = { pages.size })
-
-        // Where the reader is, as a character offset into the chapter. It is what survives
-        // re-pagination, and what a restored position lands on.
-        var anchor by remember { mutableIntStateOf(state.reflowOffset) }
-        var anchoredChapter by remember { mutableIntStateOf(state.currentUnit) }
-
-        fun chapterOffsetOf(page: ReaderPage): Int =
-            page.slices.firstOrNull()?.let { content.offsets.startOf(it.blockIndex) + it.start } ?: 0
-
-        // A chapter the reader has just moved to starts at its own beginning: an offset from the
-        // chapter they came from would land them somewhere arbitrary in the new one.
-        LaunchedEffect(state.currentUnit) {
-            if (state.currentUnit != anchoredChapter) {
-                anchoredChapter = state.currentUnit
-                anchor = 0
+            chapters.associateWith { chapter ->
+                paginate(
+                    blocks = contents[chapter]?.blocks.orEmpty(),
+                    widthPx = widthPx,
+                    pageHeightPx = heightPx,
+                    spacingPx = spacingPx,
+                    measure = measure,
+                )
             }
         }
 
-        LaunchedEffect(pages, content.anchorBlocks, state.pendingAnchor) {
-            if (pages.isEmpty()) return@LaunchedEffect
+        // The whole book measured, so that the progress bar can count its pages rather than its
+        // chapters — see `BookPageIndex`. The reader is the only side that knows the width, the
+        // height, the spacing and the text styles a page is made at, which is why this runs here and
+        // not in the ViewModel.
+        //
+        // Keyed on the layout and on nothing else. Keying on `contents` would re-measure the book
+        // every time the theme colour changed, and keying on the state would do it on every page
+        // turn; what it answers is "how long is this book, laid out *like this*", and that changes
+        // only with the things below.
+        LaunchedEffect(
+            state.countsBookPages,
+            state.totalUnits,
+            widthPx,
+            heightPx,
+            spacingPx,
+            bodyStyle,
+            paragraphStyle,
+            headingStyles,
+            layoutDirection,
+        ) {
+            // A reader counting chapters is not owed the measurement, and asking for one would take
+            // the cost of the feature away from the setting that is supposed to control it. The
+            // index is dropped on the way out so that what is left behind cannot be read.
+            if (!state.countsBookPages) {
+                currentOnIntent(ReaderIntent.BookPageIndexCleared)
+                return@LaunchedEffect
+            }
 
-            // A followed link wins over the remembered offset: it is where the reader just asked to
-            // go, and the offset is where they were before they asked.
-            val anchorBlock = state.pendingAnchor?.let { content.anchorBlocks[it] }
-            val target = if (anchorBlock != null) {
-                pages.indexOfFirst { page -> page.slices.any { it.blockIndex == anchorBlock } }
-            } else {
-                pages.indexOfLast { page -> chapterOffsetOf(page) <= anchor }
-            }.coerceAtLeast(0)
+            // Dropped before the pass starts rather than after it finishes: a font-size change
+            // restarts this effect, and the reader must fall back to counting chapters during the
+            // new pass instead of going on counting the pages of the layout that is gone.
+            currentOnIntent(ReaderIntent.BookPageIndexCleared)
 
-            if (target != pagerState.currentPage) pagerState.scrollToPage(target)
+            val index = withContext(Dispatchers.Default) {
+                val measure = TextLayoutBlockMeasure(
+                    measurer = bookMeasurer,
+                    layoutDirection = layoutDirection,
+                    pageHeightPx = heightPx,
+                    styleFor = styleFor,
+                )
+                val measured = ArrayList<IntArray?>(state.totalUnits)
+                for (chapter in 0 until state.totalUnits) {
+                    // Co-operative rather than merely cancellable: a chapter is one long measurement
+                    // with no suspension point inside it, so the check belongs between them.
+                    coroutineContext.ensureActive()
+                    val content = viewModel.chapterContent(chapter)
+                    measured += paginate(
+                        blocks = content.blocks,
+                        widthPx = widthPx,
+                        pageHeightPx = heightPx,
+                        spacingPx = spacingPx,
+                        measure = measure,
+                    ).map { page -> pageOffset(page, content.offsets) }.toIntArray()
+                }
+                BookPageIndex.of(measured)
+            }
+            currentOnIntent(ReaderIntent.BookPageIndexReady(index))
+        }
+
+        // The pager's pages: every page of every chapter in the window, in one flat sequence. A
+        // chapter still being parsed, or one that paginated to nothing, contributes none — so the
+        // turn across it happens between two pages that exist.
+        val pageRefs = remember(chapters, chapterPages) {
+            windowPages(chapters, chapterPages.mapValues { it.value.size })
+        }
+
+        val pagerState = rememberPagerState(pageCount = { pageRefs.size })
+
+        // What turns a page into a position: the block → character offset map of each chapter in the
+        // window, so a page can say which character of *its own* chapter it begins at. Kept apart
+        // from `contents` because it is the only part the position arithmetic needs.
+        val offsets = remember(contents) { contents.mapValues { it.value.offsets } }
+
+        // Puts the pager on the page the reader's position is on.
+        //
+        // The position is the state's and not one remembered here, because the state is where every
+        // way of moving the reader arrives — an outline entry, the page slider, a link followed and a
+        // link returned from, and the reports of the reader's own turns — and a second copy of it
+        // here would be the one that is right when a *jump* arrives and wrong when anything else
+        // does. What it must not be is a page *number*: that names a pagination which no longer
+        // exists. The character offset is the part that survives the text being laid out again, and
+        // it is what both the state and the saved position are kept as.
+        //
+        // A page turn is the case that needs nothing done and gets nothing: the turn reports the page
+        // it arrived on, this finds that same page again, and the reader stays where they put
+        // themselves.
+        LaunchedEffect(state.currentUnit, state.pendingAnchor, state.reflowOffset, chapterPages, contents) {
+            if (pageRefs.isEmpty()) return@LaunchedEffect
+
+            val chapter = state.currentUnit
+            val pagesInChapter = chapterPages[chapter].orEmpty()
+            val chapterOffsets = offsets[chapter] ?: ChapterTextMap.Empty
+            val anchorBlock = state.pendingAnchor?.let { id ->
+                contents[chapter]?.anchorBlocks?.get(id)
+            }
+            val landing = landingPageIn(pagesInChapter, chapterOffsets, state.reflowOffset, anchorBlock)
+            if (landing < 0) return@LaunchedEffect
+
+            val target = indexOfPage(pageRefs, chapter, landing)
+            if (target < 0) return@LaunchedEffect
+            // Against the page the pager is *resting* on, not the one a gesture is turning to: a
+            // drag in progress must not be snapped back to where it started.
+            if (target != pagerState.settledPage) pagerState.scrollToPage(target)
 
             if (anchorBlock != null) {
-                // Record where the jump landed before clearing the anchor, so clearing it does not
-                // send the reader back to where they were before the link.
-                anchor = chapterOffsetOf(pages[target])
                 currentOnIntent(ReaderIntent.AnchorReached)
+                // A link names a block and the page holding it may begin before it, and the state is
+                // still holding the offset of the chapter the link was followed *from*. So say where
+                // the jump actually landed — otherwise the reader's position, and the position that
+                // gets saved, is a place in a chapter they are no longer in.
+                currentOnIntent(
+                    ReaderIntent.ReflowPositionChanged(
+                        chapterIndex = chapter,
+                        pageIndex = landing,
+                        pageCount = pagesInChapter.size,
+                        offset = pageOffset(pagesInChapter[landing], chapterOffsets),
+                    ),
+                )
             }
         }
 
-        LaunchedEffect(pagerState, pages, content.offsets) {
-            snapshotFlow { pagerState.currentPage }
+        // Where the reader has got to, reported as they read. Taken from the *settled* page rather
+        // than the one being turned to, so the chapter and the page within it always come from the
+        // same page — a report taken mid-turn could name a page of one chapter inside another.
+        //
+        // This collector is started once and never restarted, which is the whole reason it reads the
+        // window through `rememberUpdatedState`: a restart would re-announce the page already on
+        // screen, and a report is also read as a page turn. After a jump the pager is still on the
+        // old chapter's page when the window changes, so that re-announcement would arrive as the
+        // reader turning back — and cancel the jump that started it.
+        val latestPages by rememberUpdatedState(pageRefs)
+        val latestChapterPages by rememberUpdatedState(chapterPages)
+        val latestOffsets by rememberUpdatedState(offsets)
+        LaunchedEffect(pagerState) {
+            snapshotFlow { pagerState.settledPage }
                 .distinctUntilChanged()
-                .collect { page ->
-                    val current = pages.getOrNull(page) ?: return@collect
-                    val offset = chapterOffsetOf(current)
-                    anchor = offset
-                    currentOnIntent(ReaderIntent.ReflowPositionChanged(page, pages.size, offset))
+                .collect { settled ->
+                    val ref = latestPages.getOrNull(settled) ?: return@collect
+                    val page = latestChapterPages[ref.chapterIndex]
+                        ?.getOrNull(ref.pageIndexInChapter) ?: return@collect
+                    val offset = pageOffset(page, latestOffsets[ref.chapterIndex] ?: ChapterTextMap.Empty)
+                    currentOnIntent(
+                        ReaderIntent.ReflowPositionChanged(
+                            chapterIndex = ref.chapterIndex,
+                            pageIndex = ref.pageIndexInChapter,
+                            pageCount = latestChapterPages[ref.chapterIndex]?.size ?: 0,
+                            offset = offset,
+                        ),
+                    )
                 }
         }
 
-        val currentPages by rememberUpdatedState(pages)
+        val currentPages by rememberUpdatedState(pageRefs)
         val currentSettings by rememberUpdatedState(state.settings)
         // Read through `rememberUpdatedState`: the gesture loop is not restarted when the direction
         // changes, so a plain read inside it would keep the direction the chapter was opened in.
@@ -243,26 +398,37 @@ fun ReflowablePagedContent(
                     }
                 },
         ) {
-            if (pages.isNotEmpty()) {
+            if (pageRefs.isNotEmpty()) {
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
                     pageSpacing = PAGE_SPACING,
+                    // The page's own identity rather than its place in the list. A window slide
+                    // renumbers every page in it, and this is what lets the pager find the page it
+                    // was on again — inside the measure pass that renumbered them, so no frame is
+                    // ever drawn with the new list and the old index. `(chapter, page)` names exactly
+                    // one page in the book; see `pagerKey` for why it travels as a number.
+                    key = { index -> pageRefs[index].pagerKey() },
                 ) { pageIndex ->
-                    PageContent(
-                        page = pages[pageIndex],
-                        pageIndex = pageIndex,
-                        pagerState = pagerState,
-                        isRtl = isRtl,
-                        // The same turn effect as the fixed-page reader, driven by the same value, so
-                        // a text file split into pages and a comic turn alike — which is the whole
-                        // reason the reader has one toolbar and one set of gestures for five formats.
-                        pageTurnEffect = currentSettings.pageTurnEffect,
-                        content = content,
-                        viewModel = viewModel,
-                        state = state,
-                        isLastPage = pageIndex == pages.lastIndex,
-                    )
+                    val ref = pageRefs[pageIndex]
+                    val page = chapterPages[ref.chapterIndex]?.getOrNull(ref.pageIndexInChapter)
+                    if (page != null) {
+                        PageContent(
+                            ref = ref,
+                            pageIndex = pageIndex,
+                            page = page,
+                            pagerState = pagerState,
+                            isRtl = isRtl,
+                            // The same turn effect as the fixed-page reader, driven by the same
+                            // value, so a text file split into pages and a comic turn alike — which
+                            // is the whole reason the reader has one toolbar and one set of gestures
+                            // for five formats.
+                            pageTurnEffect = currentSettings.pageTurnEffect,
+                            content = contents[ref.chapterIndex] ?: ChapterContent.Empty,
+                            viewModel = viewModel,
+                            state = state,
+                        )
+                    }
                 }
             }
         }
@@ -270,7 +436,7 @@ fun ReflowablePagedContent(
 }
 
 /**
- * One page: its slices, and — on the last one — a way onward when the chapter has a next.
+ * One page of one chapter.
  *
  * **How a page of live text gets a paper curl.** Every other format's page is a bitmap, so bending
  * it means re-drawing its pixels band by band. Text has no pixels: it is a tree of composables that
@@ -286,6 +452,7 @@ fun ReflowablePagedContent(
  */
 @Composable
 private fun PageContent(
+    ref: PageRef,
     page: ReaderPage,
     pageIndex: Int,
     pagerState: PagerState,
@@ -294,7 +461,6 @@ private fun PageContent(
     content: ChapterContent,
     viewModel: ReaderViewModel,
     state: ReaderUiState,
-    isLastPage: Boolean,
 ) {
     val density = LocalDensity.current
     val layer = rememberGraphicsLayer()
@@ -304,9 +470,11 @@ private fun PageContent(
     // a settled page is unchanged to the pixel, and only a page in the act of turning has a sheet.
     val paper = MaterialTheme.colorScheme.background
 
-    // Keyed on the page and on the paper, so that anything that changes how the page looks — a new
-    // pagination, a colour scheme — throws the old pixels away rather than bending them.
-    val sheet = remember(pageIndex, page, paper) { Sheet() }
+    // Keyed on the page's own identity, the page and the paper, so that anything that changes how
+    // the page looks — a new pagination, a colour scheme — throws the old pixels away rather than
+    // bending them, while a window slide, which renumbers every page in the list, does not: the
+    // sheet is the pixels the turn bends, and rebuilding it costs the frame that rasterises it.
+    val sheet = remember(ref, page, paper) { Sheet() }
 
     Box(
         modifier = Modifier
@@ -320,7 +488,7 @@ private fun PageContent(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    val offset = pagerState.getOffsetDistanceInPages(pageIndex)
+                    val offset = pagerState.offsetFor(pageIndex)
                     // A curl is the page bending, and the page draws that itself. Rotating the slot
                     // as well would bend it twice; the identity here is continuous with the rotation
                     // it replaces, so nothing jumps at the moment a gesture starts.
@@ -337,7 +505,7 @@ private fun PageContent(
                     cameraDistance = PAGE_TURN_CAMERA_DISTANCE * density.density
                 }
                 .drawWithContent {
-                    val offset = pagerState.getOffsetDistanceInPages(pageIndex)
+                    val offset = pagerState.offsetFor(pageIndex)
                     if (!paperCurlOwns(pageTurnEffect, offset) || size.width <= 0f || size.height <= 0f) {
                         // A settled page gives its pixels back and goes on being drawn straight to the
                         // canvas — the one code path that has always drawn it.
@@ -367,24 +535,32 @@ private fun PageContent(
                 // a reader see the rest of it.
                 .verticalScroll(rememberScrollState())
                 .padding(
-                    start = READING_MARGIN,
-                    end = READING_MARGIN,
+                    start = state.readingMargin(),
+                    end = state.readingMargin(),
                     top = PAGE_TOP_MARGIN,
                     bottom = PAGE_BOTTOM_MARGIN,
                 ),
-            verticalArrangement = Arrangement.spacedBy(PAGE_BLOCK_SPACING),
+            verticalArrangement = Arrangement.spacedBy(state.paragraphSpacing()),
         ) {
             page.slices.forEach { slice ->
                 val block = content.blocks.getOrNull(slice.blockIndex) ?: return@forEach
                 BlockSliceView(block = block, slice = slice, viewModel = viewModel, state = state)
             }
-
-            if (isLastPage && state.currentUnit < state.totalUnits - 1) {
-                ChapterEndFooter(onClick = { viewModel.onIntent(ReaderIntent.NextUnit) })
-            }
         }
     }
 }
+
+/**
+ * How far [pageIndex] is from the settled position, in pages.
+ *
+ * `getOffsetDistanceInPages` itself refuses an index outside the pager, and a window slide hands it
+ * one: the slide renumbers the pages in one frame, and a page composed under the old numbering can
+ * still re-run its layer lambda after the count has changed — the index it was given no longer
+ * exists. Rather than throwing in a draw pass, such a page draws settled: it is on its way out of
+ * the pager, where the identity transform is what a page not being turned draws anyway.
+ */
+private fun PagerState.offsetFor(pageIndex: Int): Float =
+    if (pageIndex in 0 until pageCount) getOffsetDistanceInPages(pageIndex) else 0f
 
 /**
  * The sheet a turn bends, as pixels.
@@ -444,28 +620,6 @@ private fun DrawScope.rasterise(
         drawLayer(layer)
     }
     return pixels
-}
-
-/**
- * The end of a chapter, said out loud.
- *
- * Swiping stops at the last page — a pager has nowhere to go — so the reader is told what comes
- * next and given one control that goes there, rather than being left to discover that the edge of
- * the screen turns the page but the end of the chapter does not.
- */
-@Composable
-private fun ChapterEndFooter(onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 24.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TextButton(onClick = onClick) {
-            Text(stringResource(R.string.reader_next_chapter))
-        }
-    }
 }
 
 /**
@@ -550,10 +704,10 @@ private class TextLayoutBlockMeasure(
 /** A `HorizontalDivider` with its vertical padding, near enough at any density. */
 private const val DIVIDER_HEIGHT_PX = 17f
 
-private val READING_MARGIN = 20.dp
+// The side margin and the gap between blocks are not here: both are the reader's own settings now,
+// and both are read from the state — see `readingMargin` and `paragraphSpacing`.
 private val PAGE_TOP_MARGIN = 24.dp
 private val PAGE_BOTTOM_MARGIN = 24.dp
-private val PAGE_BLOCK_SPACING = 10.dp
 private val PAGE_SPACING = 8.dp
 
 /** Camera distance for the page-turn rotation, matching the fixed-page reader's. */

@@ -48,6 +48,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextIndent
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -144,12 +146,14 @@ fun ReflowableReaderContent(
                 }
             },
     ) {
+        val margin = state.readingMargin()
+
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = READING_MARGIN,
-                end = READING_MARGIN,
+                start = margin,
+                end = margin,
                 top = 24.dp,
                 bottom = 96.dp,
             ),
@@ -210,7 +214,7 @@ private fun ChapterContentView(
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(state.paragraphSpacing())) {
         // A document that names its chapters announces them; one that does not — a plain TXT file —
         // falls back to the chapter number so the reader can still tell where a part begins.
         if (chapterIndex > 0 || content.title != null) {
@@ -257,7 +261,15 @@ internal fun BlockSliceView(
     val part = text.subSequence(from, to)
 
     when (block) {
-        is ContentBlock.Paragraph -> BodyText(text = part, state = state)
+        // The indent belongs to the paragraph's *first* line, so a slice that begins part-way
+        // through one is set flush: it is a continuation, and indenting it would read as a new
+        // paragraph starting mid-sentence. It is also what the pagination measured — the lines after
+        // the first were laid out at full width.
+        is ContentBlock.Paragraph -> BodyText(
+            text = part,
+            state = state,
+            asParagraph = slice.start <= 0,
+        )
 
         is ContentBlock.Heading -> Text(
             text = part,
@@ -289,7 +301,7 @@ private fun BlockView(
     state: ReaderUiState,
 ) {
     when (block) {
-        is ContentBlock.Paragraph -> BodyText(text = block.text, state = state)
+        is ContentBlock.Paragraph -> BodyText(text = block.text, state = state, asParagraph = true)
 
         is ContentBlock.Heading -> Text(
             text = block.text,
@@ -376,11 +388,22 @@ private fun TableBlock(table: ContentBlock.Table, state: ReaderUiState) {
     }
 }
 
+/**
+ * A run of the document's body text.
+ *
+ * [asParagraph] decides only whether the first line is set in: the indent is a paragraph's, and a
+ * heading, a quotation, a list item, a table cell or a caption is not one — this is why the flag is
+ * passed at the call site rather than folded into [ReaderUiState.bodyTextStyle].
+ */
 @Composable
-private fun BodyText(text: AnnotatedString, state: ReaderUiState) {
+private fun BodyText(
+    text: AnnotatedString,
+    state: ReaderUiState,
+    asParagraph: Boolean = false,
+) {
     Text(
         text = text,
-        style = state.bodyTextStyle(),
+        style = if (asParagraph) state.paragraphTextStyle() else state.bodyTextStyle(),
         color = MaterialTheme.colorScheme.onSurface,
     )
 }
@@ -565,6 +588,27 @@ internal fun ReaderUiState.bodyTextStyle(): TextStyle {
     )
 }
 
+/**
+ * Body text as a paragraph: the reader's body style, with the first line set in if asked.
+ *
+ * A paragraph's own style rather than a modification of [bodyTextStyle] at the call site, because
+ * the indent is measured in *ems* — it is a proportion of the type, so it follows the font-size
+ * slider and stays the same shape of indent at every size a reader might choose.
+ *
+ * The paged reader measures with this style and draws with it, and the two have to agree: the
+ * indent shortens the paragraph's first line, which is a line of text the paginator has to know is
+ * shorter. Keying it off the same function is what stops a paginated page from spilling a line past
+ * its bottom.
+ */
+@Composable
+internal fun ReaderUiState.paragraphTextStyle(): TextStyle {
+    val style = bodyTextStyle()
+    if (!settings.firstLineIndent) return style
+    return style.copy(
+        textIndent = TextIndent(firstLine = (style.fontSize.value * FIRST_LINE_INDENT_EM).sp),
+    )
+}
+
 /** Headings follow the same scaling as body text so the hierarchy stays proportional. */
 @Composable
 internal fun ReaderUiState.headingStyle(level: Int): TextStyle {
@@ -586,6 +630,24 @@ internal fun ReaderUiState.headingStyle(level: Int): TextStyle {
 private const val LINE_HEIGHT_RATIO = 1.5f
 
 /**
+ * The reader's side margins, scaled by the setting.
+ *
+ * Read through the state rather than passed in, because both readers need the same number for
+ * different purposes — one pads a column with it, the other subtracts twice it from the width it
+ * paginates into — and computing it twice is how the two come apart.
+ */
+internal fun ReaderUiState.readingMargin(): Dp = READING_MARGIN * settings.marginScale
+
+/**
+ * The space between two blocks of text, scaled by the setting.
+ *
+ * Zero is a real value: a document that already separates its paragraphs with blank lines of its own
+ * does not need the reader to add another, and a reader who set the slider there has said so.
+ */
+internal fun ReaderUiState.paragraphSpacing(): Dp =
+    PARAGRAPH_SPACING_BASE * settings.paragraphSpacingScale
+
+/**
  * How much of a screenful a side tap moves.
  *
  * Not a whole one: repeating a line or two at the top is what stops a reader losing their place at
@@ -594,4 +656,17 @@ private const val LINE_HEIGHT_RATIO = 1.5f
  */
 
 private val READING_MARGIN = 20.dp
+
+/**
+ * The gap between two blocks, before the reader's own multiplier is applied.
+ *
+ * Shared with the paged reader rather than written twice: the paginator has to be told the same
+ * number the column is laid out with, or a page comes out with a gap in it the text was not
+ * measured to leave.
+ */
+internal val PARAGRAPH_SPACING_BASE = 10.dp
+
+/** An indent of one and a half ems, the printed-book proportion at any font size. */
+private const val FIRST_LINE_INDENT_EM = 1.5f
+
 private const val IMAGE_TARGET_WIDTH_PX = 1080

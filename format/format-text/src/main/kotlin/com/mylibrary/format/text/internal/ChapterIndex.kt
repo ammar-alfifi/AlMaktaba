@@ -10,7 +10,9 @@ package com.mylibrary.format.text.internal
  *
  *  1. **Form feeds.** A file that contains `0x0C` is a file whose producer already decided where its
  *     pages are — that is what the character is for, and it is what the converters that turn PDFs
- *     and scans into TXT emit. Those breaks become the chapters.
+ *     and scans into TXT emit. Those breaks become the chapters — with one exception, the run before
+ *     the *first* break, which is often the book's own title page rather than a chapter and is
+ *     carried by the chapter that follows it. See [isTitlePage].
  *  2. **Paragraph boundaries.** Everything else is cut at a paragraph boundary into segments of
  *     about [TARGET_CHAPTER_CHARS] characters. The reader needs *some* unit it can load, render and
  *     report progress against, and "the whole book" is not one: rendering a 20 MB string into HTML
@@ -48,6 +50,14 @@ internal class ChapterIndex private constructor(
         /** A paragraph cut earlier than this would leave a stunted chapter, so one is not taken. */
         private const val MIN_CHAPTER_CHARS: Int = TARGET_CHAPTER_CHARS / 2
 
+        /**
+         * The longest opening section that can still be a title page rather than a chapter.
+         *
+         * Generous for a title, and short enough that a converter which puts a form feed after every
+         * *page* cannot have its first page of prose swallowed into the next chapter.
+         */
+        private const val TITLE_PAGE_MAX_CHARS: Int = 200
+
         private const val FORM_FEED = ''
         private const val LINE_BREAK = '\n'
         private const val BLANK_LINE = "\n\n"
@@ -64,8 +74,19 @@ internal class ChapterIndex private constructor(
                 // A file with form feeds: walk them, treating each run of text between two of them
                 // as one chapter. Blank runs — a form feed at the very start, or two in a row — are
                 // skipped rather than reported as an empty chapter the reader would have to page past.
+                //
+                // The run before the first feed is the one exception. A producer that writes a title
+                // page puts the book's title there and nothing else, and a title is not a chapter:
+                // standing alone it is a page holding a single line, which is what the reader opens
+                // the book on. When that run is nothing but a short title it is not a boundary at
+                // all — the walk starts at 0, so the title is carried by the chapter that follows it
+                // and appears above that chapter's own text.
                 var from = 0
-                var feed = firstFeed
+                var feed = if (isTitlePage(text, 0, firstFeed)) {
+                    text.indexOf(FORM_FEED, firstFeed + 1)
+                } else {
+                    firstFeed
+                }
                 while (feed >= 0) {
                     appendChapter(text, from, feed, starts, ends)
                     from = feed + 1
@@ -110,6 +131,58 @@ internal class ChapterIndex private constructor(
             }
             val lineBreak = text.lastIndexOf(LINE_BREAK, limit)
             return if (lineBreak > start) lineBreak + 1 else limit
+        }
+
+        /**
+         * Whether the opening section `[start, end)` is a title page — the book's own title, written
+         * before the first form feed — rather than a chapter of its own.
+         *
+         * Two things make it one, and both are needed:
+         *
+         *  - **One paragraph.** A chapter's own opening is a heading, a blank line and then its text,
+         *    which is two paragraphs, so a section holding more than one is prose and keeps its
+         *    chapter. This is what leaves a file whose first page is a real one alone.
+         *  - **Short.** See [TITLE_PAGE_MAX_CHARS].
+         *
+         * Nothing is dropped either way: a title page is *carried* by the chapter that follows it, so
+         * the title still reads at the top of that chapter's first page. Only the boundary between
+         * the two goes.
+         */
+        private fun isTitlePage(text: String, start: Int, end: Int): Boolean {
+            val to = trimEnd(text, start, end)
+            if (to <= start || to - start > TITLE_PAGE_MAX_CHARS) return false
+
+            var lineStart = start
+            var seenContent = false
+            while (lineStart < to) {
+                val breakIndex = text.indexOf(LINE_BREAK, lineStart)
+                val lineEnd = if (breakIndex in lineStart until to) breakIndex else to
+
+                var blank = true
+                for (index in lineStart until lineEnd) {
+                    if (!text[index].isWhitespace()) {
+                        blank = false
+                        break
+                    }
+                }
+
+                // The range is trimmed, so a blank line can only be an interior one — and an interior
+                // one after content begins a second paragraph, which makes this a chapter.
+                if (blank) {
+                    if (seenContent) return false
+                } else {
+                    seenContent = true
+                }
+                lineStart = lineEnd + 1
+            }
+            return true
+        }
+
+        /** [end] with the whitespace before it excluded, so the length test measures the text. */
+        private fun trimEnd(text: String, start: Int, end: Int): Int {
+            var to = end
+            while (to > start && text[to - 1].isWhitespace()) to--
+            return to
         }
 
         private fun addIfNotBlank(

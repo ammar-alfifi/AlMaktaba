@@ -35,8 +35,8 @@ Jetpack Compose و Material 3، ومعمارية نظيفة متعددة الو�
 | **Direction** | Full RTL for Arabic, LTR for English — and a document's own direction is honoured *independently* of the UI, so an English TXT reads left-to-right inside the Arabic interface |
 | **Library** | Import through the Storage Access Framework — single files **or a whole device folder**, which keeps a series together as one shelf and can be re-scanned for new volumes later; grid/list layouts, five sort orders, favourite, format and folder filters, automatic cover extraction, moving a book between folders |
 | **Opening from elsewhere** | The app registers as a viewer for every format it reads, so opening a file from a file manager — or sharing one into it — adds the book to the library and opens it in the reader. A search hit opens the reader *at the hit*, not at the last position |
-| **Reader** | One toolbar across all five formats, adapting to what the open file can do; **every format has both a pages layout and a continuous-scroll one**, chosen by one setting that both families obey; tap zones that turn the page (mirrored for Arabic, and independently reversible) or scroll a screenful, with a haptic tick on every turn and a switch to turn them off; **which side the first page is on** is a setting of its own; pinch-zoom, double-tap and a clamped pan; **double-tap a speech bubble or panel in a comic to zoom into it** — the balloon is found by reading the page's pixels, and a break in its outline is sealed rather than allowed to hand back the panel; page turns animated by a page-curl, a slide or a fade — **the curl lifts a corner on a diagonal fold and rolls the sheet over in every format, reflowed text included**; three page-fit modes; per-document search, outlines, bookmarks; font/theme/line-height controls that apply live, three bundled Arabic typefaces plus an interface font of their own, and one button that puts them all back |
-| **Appearance** | Six Material 3 colour schemes — five generated from seeds by `tools/material_palette.py`, one the app's own hand-authored teal — plus the wallpaper palette on Android 12+; a first launch asks which, and the same screen reopens from Settings with the whole interface repainting live; light/dark/system; four interface typefaces |
+| **Reader** | One toolbar across all five formats, adapting to what the open file can do; **every format has both a pages layout and a continuous-scroll one**, chosen by one setting that both families obey; tap zones that turn the page (mirrored for Arabic, and independently reversible) or scroll a screenful, with a haptic tick on every turn and a switch to turn them off; **which side the first page is on** is a setting of its own; pinch-zoom, double-tap and a clamped pan; **double-tap a speech bubble or panel in a comic to zoom into it** — the balloon is found by reading the page's pixels, and a break in its outline is sealed rather than allowed to hand back the panel; page turns animated by a page-curl, a slide or a fade — **the curl lifts a corner on a diagonal fold and rolls the sheet over in every format, reflowed text included**; three page-fit modes; per-document search, outlines, bookmarks; **font, size, line spacing, margins, paragraph spacing and a first-line indent, applied live to a reflowed book** — three bundled Arabic typefaces and the platform's own — and one button that puts a reader's settings back **without touching the app's theme or its language** |
+| **Appearance** | Six Material 3 colour schemes — five generated from seeds by `tools/material_palette.py`, one the app's own hand-authored teal — plus the wallpaper palette on Android 12+; a first launch asks which, and the same screen reopens from Settings with the whole interface repainting live; light/dark/system |
 | **Storage** | No storage permission at all — only scoped `content://` access to files and folders the user picked |
 
 ## 2. Requirements compliance
@@ -124,7 +124,7 @@ MyLibrary/
 ├── feature/
 │   ├── feature-library/      library, import, book details
 │   ├── feature-reader/       paged + reflowable readers, panels, page cache
-│   ├── feature-settings/     appearance, language, library and reading settings
+│   ├── feature-settings/     appearance and language — the interface's own settings alone
 │   └── feature-search/       library search and search inside books
 ├── format/
 │   ├── format-pdf/           pdfium engine
@@ -264,15 +264,43 @@ progress counts the chapters *behind* the reader, and the reader's own progress 
 with a character offset within the chapter is modelled — `fromChapter` takes a fraction — but nothing
 tracks a scroll fraction to pass it yet, so both screens are chapter-accurate and agree.
 
-**Arabic typefaces are bundled, and the interface can wear one.** The app shipped with the platform's
+**Arabic typefaces are bundled, and the reader can wear one.** The app shipped with the platform's
 own families — Noto Naskh Arabic and Noto Sans Arabic, resolved by the system stack — on the argument
 that the platform already shapes Arabic correctly and a bundled face would cost megabytes for nothing.
 That argument holds for *correctness* and fails for *choice*: a reader has no way to change the voice
 of a book, and the same page looks different on two devices. Three faces under the SIL Open Font
 License are therefore in `:core:core-ui`'s `res/font` — Amiri (a Naskh revival), IBM Plex Sans Arabic
-and Reem Kufi — offered as reading fonts *and* as an interface font, drawn in the picker in their own
-face so the choice is made by looking rather than by reading a name. ~790 KB, and the licence texts
-ship in `licenses/`.
+and Reem Kufi — offered as reading fonts, drawn in the picker in their own face so the choice is made
+by looking rather than by reading a name. ~790 KB, and the licence texts ship in `licenses/`.
+
+They are reading fonts only. An interface could wear one too, and the app offered exactly that from
+1.3.0 to 1.6.0 — a fourth picker on the colour screen, feeding the app's whole type scale. It was
+removed, and the reason is worth keeping: a body face chosen for a column of prose is the wrong
+instrument for a row in a list. Amiri wants a leading that leaves a settings list looking untidy, and
+Reem Kufi's geometric Kufic turns a button label into an ornament, so two of the three were never a
+sensible answer and the picker was really offering one decision disguised as three. The scale the app
+draws with is now `myLibraryTypography`'s, unconditionally, and the type is one less thing that can
+be wrong in a way nobody can see from a screenshot.
+
+**The settings screen is the interface's; the reader's panel is the book's.** One `ReaderSettings`
+object observed by every screen is what makes a setting change a single `copy()` and a single write,
+and it is worth keeping — but one object is not one *screen*. Settings used to offer the reading
+controls a second time, in the one place none of them can be seen working: a font size, a leading, a
+layout, chosen three taps away from the page they apply to with a library list in between. Every one
+of them is now offered only in the reader's panel, which opens over the page and shows the result as
+the finger moves, and the settings screen holds what a reader cannot see from inside a book — the
+theme, the colour and the language. The line is held by the intent interfaces rather than by
+discipline: there is one sealed interface per surface, so changing the leading is a `ReaderIntent`
+and no composable on the settings screen can name it.
+
+The two resets follow the same line, and are disjoint. The screen's puts back the theme, the colour
+and the language; the reader's puts back everything that decides how a book is read. Between them
+every field has exactly one home, which is what stops either from undoing the other's work: someone
+who has spent an evening tuning their text cannot lose it to a button on a screen that does not show
+a single one of those controls, and someone who has made a book unreadable — a font size they cannot
+see past, margins that leave no column — can put *that* back without the app's language changing
+under them. The settings screen's reset also keeps the answer to the first-run colour setup, because
+being sent through a welcome they have already had reads as the reset having broken something.
 
 **The folder is the unit of a series, and a folder is not a copy.** Adding a folder through the
 Storage Access Framework records the *tree* URI, takes a persistable read grant, walks the tree and
@@ -285,21 +313,21 @@ with the reader's series inside it.
 
 ## 6. Testing
 
-**514 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
+**527 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
 
 | Module | Tests | Covers |
 |---|---:|---|
 | `format-epub` | 84 | container/OPF parsing, nav + NCX, sanitiser, path resolution, traversal refusal, embedded fonts, links |
-| `feature-reader` | 197 | HTML → block parsing, chapter text offsets and link anchors, which toolbar actions a document supports, tap-zone mirroring and its reversal, page-fit geometry, **page-breaking arithmetic** (line boundaries, spacing, atomic blocks, degenerate pages), progress agreement with the library, **the speech-bubble detector** (enclosed regions, specks, slivers, resolution independence, and — against whole drawn comic pages rather than hand-written pixel arrays — that a broken outline does not hand back the panel, and that a tap on the lettering finds the balloon), **the tap-to-page geometry**, the page-turn effects, **the zoom handover from the column to the opened page**, **the cache's byte accounting**, **the size a zoom is measured against**, **the curl** (that the fold runs diagonally rather than along an edge, that it sweeps the whole page over a turn, that every band is foreshortened and placed on the chord its angle subtends, that it never wraps past half a turn, and that it rolls far enough for the sheet to show its back), and **which settings a reader is offered** (the four document-and-layout combinations, and that page fit and bubble zoom do not gate on the same thing) |
+| `feature-reader` | 200 | **the margins and paragraph spacing the two readers share** (that the settings reach both, and that a spacing of zero means none), HTML → block parsing, chapter text offsets and link anchors, which toolbar actions a document supports, tap-zone mirroring and its reversal, page-fit geometry, **page-breaking arithmetic** (line boundaries, spacing, atomic blocks, degenerate pages), progress agreement with the library, **the speech-bubble detector** (enclosed regions, specks, slivers, resolution independence, and — against whole drawn comic pages rather than hand-written pixel arrays — that a broken outline does not hand back the panel, and that a tap on the lettering finds the balloon), **the tap-to-page geometry**, the page-turn effects, **the zoom handover from the column to the opened page**, **the cache's byte accounting**, **the size a zoom is measured against**, **the curl** (that the fold runs diagonally rather than along an edge, that it sweeps the whole page over a turn, that every band is foreshortened and placed on the chord its angle subtends, that it never wraps past half a turn, and that it rolls far enough for the sheet to show its back), and **which settings a reader is offered** (the four document-and-layout combinations, and that page fit and bubble zoom do not gate on the same thing) |
 | `format-text` | 47 | Windows-1256/UTF-16/BOM decoding, chapter splitting, escaping, search offsets |
-| `core-domain` | 47 | format resolution, progress arithmetic, library join, import rules, **folder import and re-scan** (adoption, missing files, revoked grants, deleting with or without contents) |
+| `core-domain` | 55 | format resolution, progress arithmetic, library join, import rules, **folder import and re-scan** (adoption, missing files, revoked grants, deleting with or without contents), and **the range of every slider** (both ends clamped, the middle untouched, and a floor of zero that is genuinely reachable) |
 | `core-common` | 30 | natural sort key, file-name parsing, byte formatting, result combinators |
 | `format-archive` | 29 | natural page ordering, junk-entry filtering, container sniffing, sample-size maths |
 | `feature-search` | 20 | snippet offsets, result grouping, query history |
 | `core-data` | 29 | **real SQLite**: every sort order, `LIKE … ESCAPE`, cascade deletes, upserts, folders, and **the version 1 → 2 migration against a real version 1 database**. Also **the settings store's history**: that an upgrade is not sent through the first-run screen, that a reader who had turned dynamic colour *off* is not repainted with their wallpaper, and that an unknown colour name degrades rather than throws |
 | `format-pdf` | 15 | aspect fitting, outline nesting, malformed bookmark trees |
 | `app` | 8 | **cold start**: real Hilt graph + `MainActivity` lifecycle, and the language override |
-| `feature-settings` | 8 | intent → settings mapping, and that the reader's own reset touches only reading settings |
+| `feature-settings` | 10 | intent → settings mapping on both paths, and **the line between the two resets** — that the screen's puts back the theme, the colour and the language and touches nothing else, compared as a whole object so a field added later cannot slip through, and that the reader's is the exact complement |
 
 Three properties of the suite are worth pointing out:
 

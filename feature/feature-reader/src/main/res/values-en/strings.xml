@@ -32,10 +32,11 @@
     <string name="reader_direction_first_left">First page on the left</string>
     <string name="reader_direction_first_right">First page on the right</string>
     <string name="reader_settings_reset">Reset reading settings</string>
-    <string name="reader_settings_reset_message">The font, its size and spacing, the layout, the page fit and the reading direction will go back to their defaults. Your app theme, language and library layout are not changed.</string>
+    <string name="reader_settings_reset_message">The font, its size, the line spacing, the margins, the paragraph spacing, the first-line indent, the layout, the page fit and the reading direction will go back to their defaults. Your app theme, language and library layout are not changed.</string>
     <string name="reader_settings_reset_done">Reading settings reset</string>
-    <string name="reader_page_of_chapter">Page %1$d of %2$d</string>
-    <string name="reader_next_chapter">Next chapter</string>
+    <!-- One string for both counters: the sentence is the same and only the total it counts to
+         differs, so naming it after one of them would be the thing that is wrong. -->
+    <string name="reader_page_of">Page %1$d of %2$d</string>
     <string name="reader_theme_system">System</string>
     <string name="reader_theme_light">Light</string>
     <string name="reader_theme_dark">Dark</string>
@@ -46,6 +47,10 @@
     <string name="reader_page_turn_curl">Page curl</string>
     <string name="reader_page_turn_slide">Slide</string>
     <string name="reader_page_turn_fade">Fade</string>
+    <string name="reader_settings_progress_scope">Page counting</string>
+    <string name="reader_settings_progress_scope_summary">The number on the progress bar: whether it counts the whole book\'s pages or the current chapter\'s.</string>
+    <string name="reader_progress_scope_book">Whole book</string>
+    <string name="reader_progress_scope_chapter">Current chapter</string>
     <string name="reader_settings_bubble_zoom">Zoom into speech bubbles</string>
     <string name="reader_settings_bubble_zoom_summary">A double-tap on a speech bubble or panel in a comic zooms into it.</string>
     <string name="reader_font_system">Default</string>
@@ -54,6 +59,9 @@
     <string name="reader_font_mono">Monospace</string>
     <string name="reader_settings_font_size">Font size</string>
     <string name="reader_settings_line_height">Line spacing</string>
+    <string name="reader_settings_margins">Margins</string>
+    <string name="reader_settings_paragraph_spacing">Paragraph spacing</string>
+    <string name="reader_settings_first_line_indent">Indent the first line</string>
     <string name="reader_settings_page_fit">Page fit</string>
     <string name="reader_fit_width">Width</string>
     <string name="reader_fit_page">Whole page</string>

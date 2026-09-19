@@ -13,7 +13,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
-import com.mylibrary.core.domain.model.AppFont
 import com.mylibrary.core.domain.model.ColorSource
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ThemeMode
@@ -34,7 +33,6 @@ import com.mylibrary.core.domain.model.ThemeMode
 fun MyLibraryTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     colorSource: ColorSource = ColorSource.TEAL,
-    uiFont: AppFont = AppFont.SYSTEM,
     content: @Composable () -> Unit,
 ) {
     val darkTheme = when (themeMode) {
@@ -51,8 +49,8 @@ fun MyLibraryTheme(
         ?: if (darkTheme) TealDarkColors else TealLightColors
 
     val layoutDirection = LocalLayoutDirection.current
-    val typography = remember(layoutDirection, uiFont) {
-        myLibraryTypography(rtl = layoutDirection == LayoutDirection.Rtl, uiFont = uiFont)
+    val typography = remember(layoutDirection) {
+        myLibraryTypography(rtl = layoutDirection == LayoutDirection.Rtl)
     }
 
     MaterialTheme(
@@ -138,7 +136,6 @@ fun MyLibraryTheme(
     MyLibraryTheme(
         themeMode = settings.themeMode,
         colorSource = settings.colorSource,
-        uiFont = settings.uiFont,
         content = content,
     )
 }

@@ -93,16 +93,6 @@ enum class ReaderFont {
 }
 
 /**
- * The typeface the app's *own* interface is set in.
- *
- * Separate from [ReaderFont] rather than reusing it, because the two answer different questions.
- * `ReaderFont` chooses how a *document* is set, which is why it offers serif, sans and monospace —
- * distinctions that belong to typography for reading. This one chooses how MyLibrary looks, where
- * the only real decision is which Arabic face the interface speaks in.
- */
-enum class AppFont { SYSTEM, AMIRI, PLEX_ARABIC, REEM_KUFI }
-
-/**
  * How a reflowable document — an EPUB or a plain-text file — is presented.
  *
  * [SCROLL] is one continuous column: the text moves under a still reader, and where they are in the
@@ -169,6 +159,29 @@ enum class PageTurnEffect {
 }
 
 /**
+ * What the progress bar counts: the whole book, or the chapter the reader is in.
+ *
+ * Both are honest answers to "how far along am I", and which one is wanted depends on the book. A
+ * novel read from front to back wants the book's own page number, because that is the number a
+ * reader remembers and the one that says how much is left. A reference work, a collection of essays,
+ * or a religious text read a chapter at a time wants the chapter's, because the position inside the
+ * chapter being read is the one that changes as pages are turned, and "page 3 of 20" says more about
+ * how long the sitting will be than "page 412 of 900" does.
+ *
+ * Counting the book is the default because it is what the bar already claimed to do: the percentage
+ * beside it has always been the book's, so a counter that restarted at every chapter was the odd one
+ * out. It is also the expensive one — the book has to be measured to know how long it is in pages —
+ * which is why it can be turned off.
+ */
+enum class ProgressScope {
+    /** The book's own page number: "page 124 of 340", continuing across every chapter. */
+    BOOK,
+
+    /** The page within the chapter being read: "page 3 of 20", restarting at each one. */
+    CHAPTER,
+}
+
+/**
  * The direction pages advance in.
  *
  * [SYSTEM] derives the direction from the book's own language — an Arabic book reads right-to-left
@@ -207,8 +220,6 @@ data class ReaderSettings(
      */
     val setupComplete: Boolean = false,
     val language: AppLanguage = AppLanguage.ARABIC,
-    /** The face the app's own interface is set in. Bundled faces only — see [AppFont]. */
-    val uiFont: AppFont = AppFont.SYSTEM,
     val viewMode: ViewMode = ViewMode.GRID,
     val librarySort: LibrarySort = LibrarySort.RECENTLY_ADDED,
 
@@ -218,6 +229,48 @@ data class ReaderSettings(
     val fontScale: Float = 1.0f,
     /** Multiplier applied to line height. Arabic script needs more leading than Latin. */
     val lineHeightScale: Float = 1.0f,
+
+    /**
+     * Multiplier applied to the side margins of reflowed text.
+     *
+     * The margins are a page's own proportion rather than a fixed inset, so they are stored as a
+     * multiplier on the reader's base margin exactly as the type is stored as a multiplier on the
+     * base size. 1.0 is the margin the reader shipped with; larger is a narrower column with more
+     * white around it, which is how a book is set, and smaller is what a reader who wants the
+     * longest possible line on a phone will choose.
+     *
+     * It applies to the text, not to the page: a PDF or a comic is a picture of a page and is
+     * fitted, not re-laid out, so this has nothing to say about it.
+     */
+    val marginScale: Float = 1.0f,
+
+    /**
+     * Multiplier applied to the space between paragraphs in reflowed text.
+     *
+     * Separate from [lineHeightScale], which opens up the leading *inside* a paragraph. The two are
+     * different decisions — a reader can want loose lines and paragraphs that run on, or the
+     * reverse — and a book set with no first-line indent needs the paragraph break to be visible in
+     * the white space between blocks instead.
+     *
+     * Zero is a legitimate value: a document where every block is separated by a blank line of its
+     * own does not need the reader to add another.
+     */
+    val paragraphSpacingScale: Float = 1.0f,
+
+    /**
+     * Whether the first line of a paragraph is indented.
+     *
+     * Off by default, because a reflowable document already says where its paragraphs begin — the
+     * block list keeps them apart, and the spacing above is what a reader sees. On is for anyone who
+     * wants the printed-book convention, which also makes a paragraph break legible with
+     * [paragraphSpacingScale] turned all the way down.
+     *
+     * A switch rather than a slider: the indent is a convention, not a measurement, and the whole of
+     * the choice is "in the manner of a printed book" or not. It is set relative to the text size,
+     * so it stays a proportional indent at every font size.
+     */
+    val firstLineIndent: Boolean = false,
+
     val pageFitMode: PageFitMode = PageFitMode.PAGE,
     val readingDirection: ReadingDirection = ReadingDirection.SYSTEM,
     /** Keep the screen awake while a book is open. */
@@ -238,6 +291,16 @@ data class ReaderSettings(
      * scroll is one tap away for anyone who wants it.
      */
     val layout: ReaderLayout = ReaderLayout.PAGED,
+
+    /**
+     * Whether the page counter and the progress bar count the whole book or the current chapter.
+     *
+     * Only the reflowable paged reader has a choice to make here. A PDF or a comic already counts the
+     * book, because a page *is* its unit, and a scrolling column has no pages to count at all — so a
+     * setting that looks app-wide is honoured in exactly one place, which is why it is documented
+     * rather than assumed. See [ProgressScope].
+     */
+    val progressScope: ProgressScope = ProgressScope.BOOK,
 
     /**
      * Whether tapping the sides of the page turns it.
@@ -285,6 +348,26 @@ data class ReaderSettings(
      */
     val bubbleZoom: Boolean = true,
 ) {
+    /**
+     * The app's *own* settings back at their defaults, and nothing else.
+     *
+     * The three fields here are the ones the settings screen holds — the theme, the colour and the
+     * language — and they are reset together because that screen is the interface's, and this is
+     * what its "reset to defaults" means. What a book looks like is not in this list: the reader's
+     * settings have their own reset, in the reader's panel, where the effect of it is visible on the
+     * page.
+     *
+     * Defined here rather than written out in each of the two places that apply it — the use case
+     * that persists it and the screen that shows it optimistically — because a reset that meant one
+     * thing in the store and another in the UI would be a button whose effect visibly changed the
+     * moment the store answered.
+     */
+    fun resetInterfaceDefaults(): ReaderSettings = copy(
+        themeMode = Default.themeMode,
+        colorSource = Default.colorSource,
+        language = Default.language,
+    )
+
     companion object {
         val Default = ReaderSettings()
     }

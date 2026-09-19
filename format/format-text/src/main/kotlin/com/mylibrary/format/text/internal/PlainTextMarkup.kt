@@ -38,6 +38,14 @@ internal object PlainTextMarkup {
      * it is why the text is never wrapped in a `<p>` that contains other `<p>`s or left as raw
      * newlines that HTML would silently collapse into a single space.
      *
+     * A form feed ends a paragraph too, and for the same reason: it is the file's own page break, and
+     * a reader whose pages are decided by pagination has no use for it — so all it can still say is
+     * that the text either side of it is set apart. It is handled *here* rather than left to survive
+     * inside a paragraph, because a control character written into the HTML is one the parser may
+     * quietly turn into a space, and the text of that paragraph then no longer matches the chapter
+     * text it is supposed to be found in — which is what a reading position, a search hit and a
+     * highlight are all expressed in.
+     *
      * Escaping and rendering happen in the same pass: `&`, `<` and `>` are the only characters that
      * can change meaning inside a paragraph, and writing each one straight into a fresh buffer means
      * there is no intermediate string for an ampersand to be escaped in twice.
@@ -48,8 +56,8 @@ internal object PlainTextMarkup {
         var paragraphEnd = -1
 
         while (lineStart < to) {
-            val breakIndex = text.indexOf('\n', lineStart)
-            val lineEnd = if (breakIndex in lineStart until to) breakIndex else to
+            val breakIndex = nextBreak(text, lineStart, to)
+            val lineEnd = if (breakIndex >= 0) breakIndex else to
 
             var blank = true
             for (index in lineStart until lineEnd) {
@@ -59,16 +67,28 @@ internal object PlainTextMarkup {
                 }
             }
 
-            if (blank) {
-                appendParagraph(text, paragraphStart, paragraphEnd, html)
-                paragraphStart = -1
-            } else {
+            if (!blank) {
                 if (paragraphStart < 0) paragraphStart = lineStart
                 paragraphEnd = lineEnd
+            }
+
+            if (blank || (breakIndex >= 0 && text[breakIndex] == FORM_FEED)) {
+                appendParagraph(text, paragraphStart, paragraphEnd, html)
+                paragraphStart = -1
+                paragraphEnd = -1
             }
             lineStart = lineEnd + 1
         }
         appendParagraph(text, paragraphStart, paragraphEnd, html)
+    }
+
+    /** The first line terminator of `[from, to)`, or `-1` when that range holds none. */
+    private fun nextBreak(text: String, from: Int, to: Int): Int {
+        for (index in from until to) {
+            val character = text[index]
+            if (character == '\n' || character == FORM_FEED) return index
+        }
+        return -1
     }
 
     private fun appendParagraph(text: String, start: Int, end: Int, html: StringBuilder) {
@@ -89,4 +109,7 @@ internal object PlainTextMarkup {
 
     /** Rough size of `<div dir="rtl"></div>`, so a one-paragraph chapter does not reallocate. */
     private const val ROOT_OVERHEAD_CHARS = 32
+
+    /** The form feed the chapter index splits a file on; see [ChapterIndex]. */
+    private const val FORM_FEED = ''
 }

@@ -9,10 +9,6 @@
     <string name="settings_title">Settings</string>
     <string name="settings_section_appearance">Appearance</string>
     <string name="settings_section_language">Language</string>
-    <string name="settings_section_reading">Reading</string>
-    <string name="settings_section_reading_text">Reading text</string>
-    <string name="settings_section_reading_pages">Reading page images</string>
-    <string name="settings_section_reading_all">All documents</string>
     <string name="settings_section_about">About</string>
 
     <!-- Appearance -->
@@ -20,49 +16,12 @@
     <string name="settings_theme_system">System</string>
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
-    <string name="settings_ui_font">Interface font</string>
 
     <!-- Language -->
     <string name="settings_language">App language</string>
     <string name="settings_language_arabic">Arabic</string>
     <string name="settings_language_english">English</string>
     <string name="settings_language_system">System language</string>
-
-    <!-- Reading -->
-    <string name="settings_reader_font">Reading font</string>
-    <string name="settings_font_system">System font</string>
-    <string name="settings_font_serif">Serif</string>
-    <string name="settings_font_sans_serif">Sans serif</string>
-    <string name="settings_font_monospace">Monospace</string>
-    <string name="settings_font_scale">Font size</string>
-    <string name="settings_line_height">Line spacing</string>
-    <!-- Multiplier readout next to the sliders, e.g. "1.5×". -->
-    <string name="settings_scale_value">%1$s×</string>
-    <string name="settings_page_fit">Page fit</string>
-    <string name="settings_fit_width">Width</string>
-    <string name="settings_fit_page">Page</string>
-    <string name="settings_fit_actual">Actual size</string>
-    <string name="settings_reading_direction">Reading direction</string>
-    <string name="settings_direction_system">Automatic</string>
-    <string name="settings_direction_ltr">Left to right</string>
-    <string name="settings_direction_rtl">Right to left</string>
-    <string name="settings_keep_screen_on">Keep the screen on</string>
-    <string name="settings_keep_screen_on_summary">Stop the screen from sleeping while reading.</string>
-    <string name="settings_show_progress">Show progress</string>
-    <string name="settings_show_progress_summary">Show the page number or percentage while reading.</string>
-    <string name="settings_page_turn_effect">Page turn effect</string>
-    <string name="settings_page_turn_curl">Page curl</string>
-    <string name="settings_page_turn_slide">Slide</string>
-    <string name="settings_page_turn_fade">Fade</string>
-    <string name="settings_bubble_zoom">Zoom into speech bubbles</string>
-    <string name="settings_bubble_zoom_summary">A double-tap on a speech bubble or panel in a comic zooms into it.</string>
-    <string name="settings_layout">Layout</string>
-    <string name="settings_layout_scroll">Continuous scroll</string>
-    <string name="settings_layout_paged">Pages</string>
-    <string name="settings_tap_to_turn">Tap the sides to turn pages</string>
-    <string name="settings_tap_to_turn_summary">The sides turn the page; the middle of the screen shows the toolbar.</string>
-    <string name="settings_reverse_tap">Reverse the sides taps go to</string>
-    <string name="settings_reverse_tap_summary">Swaps the two edges: the one that went forward now goes back.</string>
 
     <!-- About -->
     <string name="settings_about_version_title">Version</string>
@@ -74,22 +33,21 @@
     <!-- Content descriptions -->
     <string name="settings_show_options">Show options</string>
 
-    <!-- Reset -->
-    <string name="settings_reset">Reset to defaults</string>
-    <string name="settings_reset_summary">Restores appearance, language, library and reading settings to their defaults.</string>
-    <string name="settings_reset_dialog_title">Reset to defaults?</string>
-    <string name="settings_reset_dialog_message">Your current preferences will be lost: theme, language, library view mode and reading settings.</string>
+    <!-- Reset. Interface settings only: the reading ones have their own reset in the reader. -->
+    <string name="settings_reset">Reset interface settings</string>
+    <string name="settings_reset_summary">Restores the theme, the colour and the language to their defaults. The reading settings have their own reset inside the reader.</string>
+    <string name="settings_reset_dialog_title">Reset interface settings?</string>
+    <string name="settings_reset_dialog_message">Your current preferences will be lost: the theme, the colour and the language. Your reading settings and your library are not changed.</string>
     <string name="settings_reset_confirm">Reset</string>
-    <string name="settings_reset_done">Settings reset to their defaults.</string>
+    <string name="settings_reset_done">Interface settings reset.</string>
     <string name="settings_appearance_colour">Colour</string>
-    <string name="settings_appearance_colour_summary">The app\'s colour, theme and interface font.</string>
+    <string name="settings_appearance_colour_summary">The app\'s colour and theme.</string>
 
     <!-- Colour setup. Shown on a first launch and reopened from Appearance. -->
     <string name="settings_color_title">Colour and theme</string>
     <string name="settings_color_message">Choose how MyLibrary looks. You can change this at any time in Settings.</string>
     <string name="settings_color_theme">Theme</string>
     <string name="settings_color_colour">Colour</string>
-    <string name="settings_color_ui_font">Interface font</string>
     <string name="settings_color_done">Get started</string>
     <string name="settings_color_theme_system">System</string>
     <string name="settings_color_theme_light">Light</string>
@@ -101,10 +59,6 @@
     <string name="settings_color_green">Green</string>
     <string name="settings_color_amber">Amber</string>
     <string name="settings_color_rose">Rose</string>
-    <string name="settings_color_font_system">Default</string>
-    <string name="settings_color_font_amiri">Amiri</string>
-    <string name="settings_color_font_plex">IBM Plex Arabic</string>
-    <string name="settings_color_font_reem">Reem Kufi</string>
     <string name="settings_color_preview_title">Preview</string>
     <string name="settings_color_preview_body">This is how the app looks in the colours you chose.</string>
     <string name="settings_color_preview_button">Button</string>

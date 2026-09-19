@@ -52,10 +52,12 @@ import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReadingLocator
 import com.mylibrary.core.domain.model.ReaderLayout
+import com.mylibrary.core.domain.model.ProgressScope
 import com.mylibrary.core.domain.model.ReadingDirection
 import com.mylibrary.core.domain.model.SearchHit
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.TocEntry
+import com.mylibrary.core.domain.usecase.UpdateSettingsUseCase
 import com.mylibrary.core.ui.component.ChoiceRow
 import com.mylibrary.core.ui.component.EmptyState
 import com.mylibrary.core.ui.theme.Spacing
@@ -231,6 +233,14 @@ internal data class ReaderSettingsScope(
      * full size. Gating this with [pageFit] would hide a control the scroll layout honours.
      */
     val panels: Boolean,
+    /**
+     * Whether the page counter can be asked to count the whole book.
+     *
+     * Reflowed text laid out as pages — the only presentation whose progress bar can number its
+     * pages book-wide, because it is the only one that *measures* its pages: a PDF's `currentUnit`
+     * is already a global page index and counts the book whatever this says.
+     */
+    val numbering: Boolean,
 )
 
 /** The scope for [state]'s current document and layout. */
@@ -239,6 +249,7 @@ internal fun readerSettingsScope(state: ReaderUiState): ReaderSettingsScope = Re
     pages = state.hasPages,
     pageFit = state.isPageImages && state.hasPages,
     panels = state.isPageImages,
+    numbering = !state.isPageImages && state.hasPages,
 )
 
 /**
@@ -249,8 +260,13 @@ internal fun readerSettingsScope(state: ReaderUiState): ReaderSettingsScope = Re
  *
  * The groups are ordered by how much of the document they apply to: the layout every document
  * obeys, then the controls only reflowed text has, then the ones only page images have, and last
- * the two that are true whatever is open. The same three questions, in the same order, are asked in
- * the app's own settings screen, so neither surface can teach the reader a different mental model.
+ * the ones that are true whatever is open.
+ *
+ * **This panel is the only place reading settings are offered.** The app's own settings screen used
+ * to keep a second copy of most of them — the font, its size, the leading, the page fit, the turn
+ * effect — which meant the same decision had two homes, one of them behind a navigation trip away
+ * from the page it changed and neither able to claim to be the real one. That screen is the
+ * interface's now; this one is the book's.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -333,6 +349,33 @@ private fun ReaderSettingsPanel(
                 onValueChange = { onIntent(ReaderIntent.SetLineHeight(it)) },
                 valueLabel = String.format(java.util.Locale.ROOT, "%.2f", state.settings.lineHeightScale),
             )
+
+            // The three controls below are the page's own proportions rather than the type's: how
+            // much white sits at the sides, how much between one paragraph and the next, and whether
+            // the first line of a paragraph is set in. A reader who has just made the text larger
+            // usually wants to give it more room rather than fewer words per line, and until these
+            // existed the margin was a constant they could do nothing about.
+            LabelledSlider(
+                label = stringResource(R.string.reader_settings_margins),
+                value = state.settings.marginScale,
+                valueRange = MARGIN_RANGE,
+                onValueChange = { onIntent(ReaderIntent.SetMargins(it)) },
+                valueLabel = multiplierLabel(state.settings.marginScale),
+            )
+
+            LabelledSlider(
+                label = stringResource(R.string.reader_settings_paragraph_spacing),
+                value = state.settings.paragraphSpacingScale,
+                valueRange = PARAGRAPH_SPACING_RANGE,
+                onValueChange = { onIntent(ReaderIntent.SetParagraphSpacing(it)) },
+                valueLabel = multiplierLabel(state.settings.paragraphSpacingScale),
+            )
+
+            SwitchSetting(
+                title = stringResource(R.string.reader_settings_first_line_indent),
+                checked = state.settings.firstLineIndent,
+                onCheckedChange = { onIntent(ReaderIntent.SetFirstLineIndent(it)) },
+            )
         }
 
         if (scope.pages) {
@@ -347,6 +390,26 @@ private fun ReaderSettingsPanel(
                     selected = state.settings.pageTurnEffect,
                     onSelect = { onIntent(ReaderIntent.SetPageTurnEffect(it)) },
                     label = { effect -> Text(pageTurnEffectLabel(effect)) },
+                )
+            }
+        }
+
+        // The unit the bar and the counter count in — the whole book's pages, or the chapter's.
+        // Offered only where a book-wide count exists to choose: a reflowed book laid out as pages.
+        // A PDF already counts its own pages book-wide and this setting has nothing to add, and a
+        // scrolling reflowable book has no pages for a counter to count at all.
+        if (scope.numbering) {
+            HorizontalDivider()
+
+            SettingGroup(
+                title = stringResource(R.string.reader_settings_progress_scope),
+                summary = stringResource(R.string.reader_settings_progress_scope_summary),
+            ) {
+                ChoiceRow(
+                    options = ProgressScope.entries,
+                    selected = state.settings.progressScope,
+                    onSelect = { onIntent(ReaderIntent.SetProgressScope(it)) },
+                    label = { unit -> Text(progressScopeLabel(unit)) },
                 )
             }
         }
@@ -534,6 +597,14 @@ private fun layoutLabel(layout: ReaderLayout): String = stringResource(
     when (layout) {
         ReaderLayout.SCROLL -> R.string.reader_layout_scroll
         ReaderLayout.PAGED -> R.string.reader_layout_paged
+    },
+)
+
+@Composable
+private fun progressScopeLabel(scope: ProgressScope): String = stringResource(
+    when (scope) {
+        ProgressScope.BOOK -> R.string.reader_progress_scope_book
+        ProgressScope.CHAPTER -> R.string.reader_progress_scope_chapter
     },
 )
 
@@ -761,5 +832,28 @@ private fun pageFitLabel(mode: PageFitMode): String = stringResource(
     },
 )
 
-private val FONT_SCALE_RANGE = 0.7f..3.0f
-private val LINE_HEIGHT_RANGE = 0.8f..2.5f
+/**
+ * The sliders' bounds, taken from the domain rather than typed out again.
+ *
+ * The store clamps every one of these on the way in, so a range that disagreed with it would give
+ * the slider a stretch of travel where the value it shows and the value that is saved come apart —
+ * the thumb would sit at 3.0 while the book was set at 2.5. Named once, in `UpdateSettingsUseCase`,
+ * is what makes that impossible to get wrong in one place and not the other.
+ */
+private val FONT_SCALE_RANGE =
+    UpdateSettingsUseCase.MIN_FONT_SCALE..UpdateSettingsUseCase.MAX_FONT_SCALE
+private val LINE_HEIGHT_RANGE =
+    UpdateSettingsUseCase.MIN_LINE_HEIGHT..UpdateSettingsUseCase.MAX_LINE_HEIGHT
+private val MARGIN_RANGE = UpdateSettingsUseCase.MIN_MARGIN..UpdateSettingsUseCase.MAX_MARGIN
+private val PARAGRAPH_SPACING_RANGE =
+    UpdateSettingsUseCase.MIN_PARAGRAPH_SPACING..UpdateSettingsUseCase.MAX_PARAGRAPH_SPACING
+
+/**
+ * `1.5×`-style text for the sliders that are multipliers.
+ *
+ * Formatted with `Locale.ROOT`, like the line-height readout above it: the reader's panel is drawn
+ * in the app's language, and an Arabic device would otherwise render these as Arabic-Indic digits
+ * against the Latin numerals every other number in the panel uses.
+ */
+private fun multiplierLabel(value: Float): String =
+    String.format(java.util.Locale.ROOT, "%.1f×", value)

@@ -92,6 +92,16 @@ class ReaderSettingsScopeTest {
     }
 
     @Test
+    fun `book-wide page counting is offered only to reflowed text laid out as pages`() {
+        // The one presentation whose progress bar can count the *book's* pages is the one that
+        // measures them. A PDF's page counter is already book-wide whatever this says, and a
+        // scrolling reflowable book has no pages for a counter to count.
+        assertTrue(scopeOf(pageImages = false, layout = ReaderLayout.PAGED).numbering)
+        assertFalse(scopeOf(pageImages = false, layout = ReaderLayout.SCROLL).numbering)
+        assertFalse(scopeOf(pageImages = true, layout = ReaderLayout.PAGED).numbering)
+    }
+
+    @Test
     fun `hasPages follows the layout, not the file`() {
         assertEquals(
             true,

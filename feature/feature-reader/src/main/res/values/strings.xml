@@ -33,10 +33,11 @@
     <string name="reader_direction_first_left">الأولى من اليسار</string>
     <string name="reader_direction_first_right">الأولى من اليمين</string>
     <string name="reader_settings_reset">إعادة ضبط إعدادات القراءة</string>
-    <string name="reader_settings_reset_message">سيُعاد ضبط الخط وحجمه وتباعد الأسطر وطريقة العرض وملاءمة الصفحة واتجاه القراءة. لن يتغيّر مظهر التطبيق ولا لغته ولا ترتيب مكتبتك.</string>
+    <string name="reader_settings_reset_message">سيُعاد ضبط الخط وحجمه وتباعد الأسطر والهوامش وتباعد الفقرات وإزاحة السطر الأول وطريقة العرض وملاءمة الصفحة واتجاه القراءة. لن يتغيّر مظهر التطبيق ولا لغته ولا ترتيب مكتبتك.</string>
     <string name="reader_settings_reset_done">أُعيد ضبط إعدادات القراءة</string>
-    <string name="reader_page_of_chapter">صفحة %1$d من %2$d</string>
-    <string name="reader_next_chapter">الفصل التالي</string>
+    <!-- One string for both counters: the sentence is the same and only the total it counts to
+         differs, so naming it after one of them would be the thing that is wrong. -->
+    <string name="reader_page_of">صفحة %1$d من %2$d</string>
     <string name="reader_theme_system">النظام</string>
     <string name="reader_theme_light">فاتح</string>
     <string name="reader_theme_dark">داكن</string>
@@ -47,6 +48,10 @@
     <string name="reader_page_turn_curl">تقليب الورقة</string>
     <string name="reader_page_turn_slide">انزلاق</string>
     <string name="reader_page_turn_fade">تلاشٍ</string>
+    <string name="reader_settings_progress_scope">عدّ الصفحات</string>
+    <string name="reader_settings_progress_scope_summary">الرقم في شريط التقدم: هل يَعُدّ صفحات الكتاب كله أم صفحات الفصل الحالي.</string>
+    <string name="reader_progress_scope_book">الكتاب كله</string>
+    <string name="reader_progress_scope_chapter">الفصل الحالي</string>
     <string name="reader_settings_bubble_zoom">التكبير إلى فقاعة الحوار</string>
     <string name="reader_settings_bubble_zoom_summary">النقر المزدوج على فقاعة كلام أو إطار يكبّر إليه في القصص المصورة.</string>
     <string name="reader_font_system">الافتراضي</string>
@@ -55,6 +60,9 @@
     <string name="reader_font_mono">ثابت العرض</string>
     <string name="reader_settings_font_size">حجم الخط</string>
     <string name="reader_settings_line_height">تباعد الأسطر</string>
+    <string name="reader_settings_margins">الهوامش</string>
+    <string name="reader_settings_paragraph_spacing">تباعد الفقرات</string>
+    <string name="reader_settings_first_line_indent">إزاحة السطر الأول</string>
     <string name="reader_settings_page_fit">ملاءمة الصفحة</string>
     <string name="reader_fit_width">العرض</string>
     <string name="reader_fit_page">الصفحة كاملة</string>

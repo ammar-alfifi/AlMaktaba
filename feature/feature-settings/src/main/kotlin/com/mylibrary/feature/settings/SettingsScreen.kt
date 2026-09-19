@@ -3,35 +3,25 @@ package com.mylibrary.feature.settings
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -41,37 +31,23 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.mylibrary.core.domain.model.AppFont
 import com.mylibrary.core.domain.model.AppLanguage
 import com.mylibrary.core.domain.model.BookFormat
 import com.mylibrary.core.domain.model.ColorSource
-import com.mylibrary.core.domain.model.PageFitMode
-import com.mylibrary.core.domain.model.PageTurnEffect
-import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
-import com.mylibrary.core.domain.model.ReadingDirection
-import com.mylibrary.core.domain.model.ReaderLayout
 import com.mylibrary.core.domain.model.ThemeMode
-import com.mylibrary.core.domain.usecase.UpdateSettingsUseCase
 import com.mylibrary.core.ui.component.ChoiceRow
 import com.mylibrary.core.ui.component.FeatureScaffold
 import com.mylibrary.core.ui.component.SectionHeader
-import com.mylibrary.core.ui.format.appLocale
 import com.mylibrary.core.ui.mvi.ObserveEffects
 import com.mylibrary.core.ui.theme.Spacing
-import com.mylibrary.core.ui.theme.appFontFamily
 import kotlinx.coroutines.launch
-import java.util.Locale
 import com.mylibrary.core.ui.R as CoreUiR
 
 /**
@@ -153,6 +129,14 @@ fun SettingsScreen(
  * about: the library and the search screen each had one, so settings opened straight into a list of
  * switches with nothing naming the screen. Coming back from the reader to a page whose first line is
  * "Appearance" reads as a lost place rather than as a destination.
+ *
+ * **This screen is the interface's, and only the interface's.** It holds the theme, the colour, the
+ * language and the version — the things that are true of MyLibrary itself, whatever is open. Every
+ * preference that decides what a *book* looks like while it is being read lives in the reader's own
+ * settings panel, which is where the reader is when they want it, and where a change is visible on
+ * the page behind the sheet as it is made. The two lists used to overlap — this screen offered the
+ * reading font, its size, the leading, the page fit and the page-turn effect — which meant the same
+ * decision had two homes and neither could claim to be the one that mattered.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -187,7 +171,6 @@ private fun SettingsContent(
         ) {
             item { AppearanceSection(state.settings, onIntent, onOpenColorSetup) }
             item { LanguageSection(state.settings, onIntent) }
-            item { ReadingSection(state.settings, onIntent) }
             item { AboutSection(state.appVersionName) }
             item { ResetSection(onClick = { confirmingReset = true }) }
         }
@@ -216,7 +199,15 @@ internal fun SettingsTopBar(modifier: Modifier = Modifier) {
     )
 }
 
-/** Theme mode, the app's colour, and the face the interface is set in. */
+/**
+ * Theme mode and the app's colour — everything this screen says about how MyLibrary looks.
+ *
+ * A face for the interface used to be offered here as well, and it is gone: the app's own chrome is
+ * set in the platform's stack, which resolves per script and is the arrangement that cannot get
+ * Arabic wrong, while the three bundled Arabic faces remain where a face is genuinely a choice —
+ * the *reader's* font setting, applied to the text of a book. One font picker, in the place a
+ * reader is looking at the type.
+ */
 @Composable
 private fun AppearanceSection(
     settings: ReaderSettings,
@@ -253,11 +244,6 @@ private fun AppearanceSection(
             },
             modifier = Modifier.clickable(onClick = onOpenColorSetup),
         )
-        SectionDivider()
-        UiFontSettingRow(
-            selected = settings.uiFont,
-            onSelect = { onIntent(SettingsIntent.UiFontChanged(it)) },
-        )
     }
 }
 
@@ -271,134 +257,6 @@ private fun LanguageSection(settings: ReaderSettings, onIntent: (SettingsIntent)
             selected = settings.language,
             labelRes = AppLanguage::labelRes,
             onSelect = { onIntent(SettingsIntent.LanguageChanged(it)) },
-        )
-    }
-}
-
-/**
- * The reading defaults, in three groups rather than one list.
- *
- * The list used to be flat, which offered the reading font to someone who only reads comics and
- * page fit to someone who only reads novels, with nothing saying which was which. The groups are
- * the reader's own rule — a control belongs where it is honoured — so the same three questions are
- * answered in the same order here as in the reader's settings sheet.
- */
-@Composable
-private fun ReadingSection(settings: ReaderSettings, onIntent: (SettingsIntent) -> Unit) {
-    TextReadingSection(settings, onIntent)
-    PageReadingSection(settings, onIntent)
-    SharedReadingSection(settings, onIntent)
-}
-
-/** Settings that only mean something for reflowable text. */
-@Composable
-private fun TextReadingSection(settings: ReaderSettings, onIntent: (SettingsIntent) -> Unit) {
-    SettingsSection(title = stringResource(R.string.settings_section_reading_text)) {
-        DropdownSettingRow(
-            title = stringResource(R.string.settings_reader_font),
-            options = ReaderFont.entries,
-            selected = settings.readerFont,
-            labelRes = ReaderFont::labelRes,
-            onSelect = { onIntent(SettingsIntent.ReaderFontChanged(it)) },
-        )
-        SectionDivider()
-        SliderSettingRow(
-            title = stringResource(R.string.settings_font_scale),
-            value = settings.fontScale,
-            valueRange = UpdateSettingsUseCase.MIN_FONT_SCALE..UpdateSettingsUseCase.MAX_FONT_SCALE,
-            onValueChange = { onIntent(SettingsIntent.FontScaleChanged(it)) },
-        )
-        SectionDivider()
-        SliderSettingRow(
-            title = stringResource(R.string.settings_line_height),
-            value = settings.lineHeightScale,
-            valueRange = UpdateSettingsUseCase.MIN_LINE_HEIGHT..UpdateSettingsUseCase.MAX_LINE_HEIGHT,
-            onValueChange = { onIntent(SettingsIntent.LineHeightChanged(it)) },
-        )
-    }
-}
-
-/** Settings that only mean something for a document made of page images. */
-@Composable
-private fun PageReadingSection(settings: ReaderSettings, onIntent: (SettingsIntent) -> Unit) {
-    SettingsSection(title = stringResource(R.string.settings_section_reading_pages)) {
-        ChoiceSettingRow(
-            title = stringResource(R.string.settings_page_fit),
-            options = PageFitMode.entries,
-            selected = settings.pageFitMode,
-            labelRes = PageFitMode::labelRes,
-            onSelect = { onIntent(SettingsIntent.PageFitChanged(it)) },
-        )
-        SectionDivider()
-        // Three options, so this renders as a scrolling chip row rather than a segmented one: the
-        // English labels ("Page curl", "Slide", "Fade") are the widest set on this screen, and a
-        // segmented row would give each of them a third of a phone.
-        ChoiceSettingRow(
-            title = stringResource(R.string.settings_page_turn_effect),
-            options = PageTurnEffect.entries,
-            selected = settings.pageTurnEffect,
-            labelRes = PageTurnEffect::labelRes,
-            onSelect = { onIntent(SettingsIntent.PageTurnEffectChanged(it)) },
-        )
-        SectionDivider()
-        SwitchRow(
-            title = stringResource(R.string.settings_bubble_zoom),
-            summary = stringResource(R.string.settings_bubble_zoom_summary),
-            checked = settings.bubbleZoom,
-            onCheckedChange = { onIntent(SettingsIntent.BubbleZoomToggled(it)) },
-        )
-    }
-}
-
-/** Settings every document obeys, whichever format it is in. */
-@Composable
-private fun SharedReadingSection(settings: ReaderSettings, onIntent: (SettingsIntent) -> Unit) {
-    SettingsSection(title = stringResource(R.string.settings_section_reading_all)) {
-        ChoiceSettingRow(
-            title = stringResource(R.string.settings_layout),
-            options = ReaderLayout.entries,
-            selected = settings.layout,
-            labelRes = ReaderLayout::labelRes,
-            onSelect = { onIntent(SettingsIntent.LayoutChanged(it)) },
-        )
-        SectionDivider()
-        ChoiceSettingRow(
-            title = stringResource(R.string.settings_reading_direction),
-            options = ReadingDirection.entries,
-            selected = settings.readingDirection,
-            labelRes = ReadingDirection::labelRes,
-            onSelect = { onIntent(SettingsIntent.ReadingDirectionChanged(it)) },
-        )
-        SectionDivider()
-        SwitchRow(
-            title = stringResource(R.string.settings_tap_to_turn),
-            summary = stringResource(R.string.settings_tap_to_turn_summary),
-            checked = settings.tapToTurnPages,
-            onCheckedChange = { onIntent(SettingsIntent.TapToTurnToggled(it)) },
-        )
-        // Absent while side taps do nothing at all, matching the reader's own panel.
-        if (settings.tapToTurnPages) {
-            SectionDivider()
-            SwitchRow(
-                title = stringResource(R.string.settings_reverse_tap),
-                summary = stringResource(R.string.settings_reverse_tap_summary),
-                checked = settings.reverseTapZones,
-                onCheckedChange = { onIntent(SettingsIntent.ReverseTapZonesToggled(it)) },
-            )
-        }
-        SectionDivider()
-        SwitchRow(
-            title = stringResource(R.string.settings_keep_screen_on),
-            summary = stringResource(R.string.settings_keep_screen_on_summary),
-            checked = settings.keepScreenOn,
-            onCheckedChange = { onIntent(SettingsIntent.KeepScreenOnToggled(it)) },
-        )
-        SectionDivider()
-        SwitchRow(
-            title = stringResource(R.string.settings_show_progress),
-            summary = stringResource(R.string.settings_show_progress_summary),
-            checked = settings.showProgressIndicator,
-            onCheckedChange = { onIntent(SettingsIntent.ShowProgressToggled(it)) },
         )
     }
 }
@@ -544,148 +402,6 @@ private fun <T> ChoiceSettingRow(
 }
 
 /**
- * The interface's own typeface.
- *
- * Each option is drawn *in the face it names*. A font menu that lists "Amiri" in the system font
- * makes the user choose blind, which is the one thing a font picker must not do.
- */
-@Composable
-private fun UiFontSettingRow(selected: AppFont, onSelect: (AppFont) -> Unit) {
-    Column(modifier = Modifier.padding(horizontal = Spacing.Large, vertical = Spacing.Medium)) {
-        Text(
-            text = stringResource(R.string.settings_ui_font),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(modifier = Modifier.height(Spacing.Small))
-        ChoiceRow(
-            options = AppFont.entries,
-            selected = selected,
-            onSelect = onSelect,
-            label = { font ->
-                Text(
-                    text = stringResource(font.labelRes()),
-                    style = TextStyle(fontFamily = appFontFamily(font) ?: FontFamily.Default),
-                )
-            },
-        )
-    }
-}
-
-/** A row whose value is picked from a menu — for sets too large to sit side by side. */
-@Composable
-private fun <T> DropdownSettingRow(
-    title: String,
-    options: List<T>,
-    selected: T,
-    @StringRes labelRes: (T) -> Int,
-    onSelect: (T) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Box(modifier = modifier) {
-        ListItem(
-            headlineContent = { Text(text = title) },
-            supportingContent = { Text(text = stringResource(labelRes(selected))) },
-            trailingContent = {
-                IconButton(onClick = { expanded = true }) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = stringResource(R.string.settings_show_options),
-                    )
-                }
-            },
-            // The whole row opens the menu, not just the arrow: a full-width row that only responds
-            // on a 48dp target is the kind of thing users read as "the tap did not register".
-            modifier = Modifier.clickable { expanded = true },
-        )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(text = stringResource(labelRes(option))) },
-                    onClick = {
-                        expanded = false
-                        onSelect(option)
-                    },
-                )
-            }
-        }
-    }
-}
-
-/**
- * A row whose value is a continuous multiplier.
- *
- * The current value is shown next to the title because a slider's thumb is not a readout: without
- * it, "slightly larger" and "much larger" look the same once the row scrolls away from the default.
- */
-@Composable
-private fun SliderSettingRow(
-    title: String,
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    onValueChange: (Float) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val locale = appLocale()
-    Column(modifier = modifier.padding(horizontal = Spacing.Large, vertical = Spacing.Medium)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            // SpaceBetween rather than absolute alignment: in RTL the title belongs on the right,
-            // and Compose flips the row's main axis for the ambient layout direction.
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                // A weighted, ellipsised title rather than an intrinsic one: "Line spacing" and
-                // "Keep screen awake" are long enough in English that the pair used to squeeze the
-                // value beside them, and a readout pushed against its label is unreadable at a
-                // glance — which is the only way a readout is ever read.
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            Text(
-                text = stringResource(R.string.settings_scale_value, formatScale(value, locale)),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                modifier = Modifier.padding(start = Spacing.Medium),
-            )
-        }
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
-}
-
-/** A row with an on/off value; the whole row toggles, not just the switch. */
-@Composable
-private fun SwitchRow(
-    title: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    summary: String? = null,
-) {
-    ListItem(
-        headlineContent = { Text(text = title) },
-        supportingContent = { summary?.let { Text(text = it) } },
-        trailingContent = {
-            Switch(checked = checked, onCheckedChange = onCheckedChange)
-        },
-        modifier = modifier.clickable { onCheckedChange(!checked) },
-    )
-}
-
-/**
  * The formats the app opens, taken from the domain so the list and the decoders cannot drift.
  *
  * Formatted here rather than in the ViewModel because it is presentation — the same data would be a
@@ -694,17 +410,6 @@ private fun SwitchRow(
  */
 private val SUPPORTED_FORMATS: String =
     BookFormat.entries.joinToString(separator = " · ") { format -> format.displayName }
-
-/**
- * `1.0`-style multiplier text.
- *
- * Formatted with the *app's* locale, not the device's. `Locale.getDefault()` follows the system, so
- * an Arabic device running the app in English produced Arabic-Indic digits — "١٫٥×" — inside an
- * otherwise English screen, which the comment here used to claim was the desired behaviour. The
- * locale is passed in from the composition, where the in-app language has already been applied.
- */
-private fun formatScale(scale: Float, locale: Locale): String =
-    String.format(locale, "%.1f", scale)
 
 @StringRes
 private fun ThemeMode.labelRes(): Int = when (this) {
@@ -721,21 +426,6 @@ private fun AppLanguage.labelRes(): Int = when (this) {
 }
 
 @StringRes
-private fun ReaderFont.labelRes(): Int = when (this) {
-    ReaderFont.SYSTEM -> R.string.settings_font_system
-    ReaderFont.SERIF -> R.string.settings_font_serif
-    ReaderFont.SANS_SERIF -> R.string.settings_font_sans_serif
-    ReaderFont.MONOSPACE -> R.string.settings_font_monospace
-
-    // The bundled Arabic faces, named once in `:core:core-ui` and shared with the reader's panel:
-    // the same three names are offered in both places, and a second copy of them here is a second
-    // thing to keep in step for no benefit.
-    ReaderFont.AMIRI -> CoreUiR.string.ui_font_amiri
-    ReaderFont.PLEX_ARABIC -> CoreUiR.string.ui_font_plex_arabic
-    ReaderFont.REEM_KUFI -> CoreUiR.string.ui_font_reem_kufi
-}
-
-@StringRes
 private fun ColorSource.labelRes(): Int = when (this) {
     ColorSource.WALLPAPER -> R.string.settings_color_wallpaper
     ColorSource.TEAL -> R.string.settings_color_teal
@@ -744,39 +434,4 @@ private fun ColorSource.labelRes(): Int = when (this) {
     ColorSource.GREEN -> R.string.settings_color_green
     ColorSource.AMBER -> R.string.settings_color_amber
     ColorSource.ROSE -> R.string.settings_color_rose
-}
-
-@StringRes
-private fun AppFont.labelRes(): Int = when (this) {
-    AppFont.SYSTEM -> CoreUiR.string.ui_font_system
-    AppFont.AMIRI -> CoreUiR.string.ui_font_amiri
-    AppFont.PLEX_ARABIC -> CoreUiR.string.ui_font_plex_arabic
-    AppFont.REEM_KUFI -> CoreUiR.string.ui_font_reem_kufi
-}
-
-@StringRes
-private fun PageTurnEffect.labelRes(): Int = when (this) {
-    PageTurnEffect.CURL -> R.string.settings_page_turn_curl
-    PageTurnEffect.SLIDE -> R.string.settings_page_turn_slide
-    PageTurnEffect.FADE -> R.string.settings_page_turn_fade
-}
-
-@StringRes
-private fun PageFitMode.labelRes(): Int = when (this) {
-    PageFitMode.WIDTH -> R.string.settings_fit_width
-    PageFitMode.PAGE -> R.string.settings_fit_page
-    PageFitMode.ACTUAL_SIZE -> R.string.settings_fit_actual
-}
-
-@StringRes
-private fun ReaderLayout.labelRes(): Int = when (this) {
-    ReaderLayout.SCROLL -> R.string.settings_layout_scroll
-    ReaderLayout.PAGED -> R.string.settings_layout_paged
-}
-
-@StringRes
-private fun ReadingDirection.labelRes(): Int = when (this) {
-    ReadingDirection.SYSTEM -> R.string.settings_direction_system
-    ReadingDirection.LEFT_TO_RIGHT -> R.string.settings_direction_ltr
-    ReadingDirection.RIGHT_TO_LEFT -> R.string.settings_direction_rtl
 }

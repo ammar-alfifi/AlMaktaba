@@ -33,6 +33,45 @@ class PlainTextDocumentTest {
         assertEquals("second chapter", textOf(document, 1))
     }
 
+    /**
+     * The shape a converter writes when a book has a title page: the title, a blank line, a form
+     * feed, then the first chapter.
+     *
+     * A title standing alone as the first chapter is a page with one line on it, and it is what the
+     * reader opens the book on. It is carried by the chapter after it instead, so the reader reaches
+     * the first chapter's own text from the first page.
+     */
+    @Test
+    fun `a title before the first form feed is carried by the first chapter`() {
+        val document = open("مكتبة الاختبار\n\nالفصل الأول\n\nنص الفصل الأول.الفصل الثاني")
+
+        assertEquals("the title page must not stand as a chapter of its own", 2, document.chapterCount)
+        assertEquals(
+            "مكتبة الاختبار\n\nالفصل الأول\n\nنص الفصل الأول.",
+            textOf(document, 0),
+        )
+        assertEquals("الفصل الثاني", textOf(document, 1))
+    }
+
+    @Test
+    fun `an opening section that is more than one paragraph keeps its own chapter`() {
+        val document = open("عنوان الفصل\n\nوهذا نصه الأول.الفصل الثاني")
+
+        assertEquals(2, document.chapterCount)
+        assertEquals("عنوان الفصل\n\nوهذا نصه الأول.", textOf(document, 0))
+    }
+
+    @Test
+    fun `a long opening section keeps its own chapter`() {
+        // Past the length a title is allowed, however few paragraphs it has: a converter that puts a
+        // form feed after every page must not have its first page of prose joined to the second.
+        val opening = "ا".repeat(201)
+        val document = open("$openingالفصل الثاني")
+
+        assertEquals(2, document.chapterCount)
+        assertEquals(opening, textOf(document, 0))
+    }
+
     @Test
     fun `a long file without form feeds is cut at paragraph boundaries`() {
         val document = open(paragraphs(count = 1_000))

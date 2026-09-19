@@ -103,10 +103,13 @@ class PlainTextSearchTest {
     @Test
     fun `does not report a match that runs across the break between two chapters`() {
         // The break is not part of either chapter's text, so there would be no offset to highlight.
-        val document = open("alphabeta")
+        // The first section is written as two paragraphs on purpose: one short paragraph before the
+        // first form feed is a title page, carried by the chapter after it, and this test is about a
+        // chapter break rather than about that.
+        val document = open("alpha one\n\ntwo\u000Cbeta")
 
-        assertTrue(searchIn(document, "alphabet").isEmpty())
-        assertEquals("alpha", textOf(document, 0))
+        assertTrue(searchIn(document, "twobeta").isEmpty())
+        assertEquals("alpha one\n\ntwo", textOf(document, 0))
         assertEquals("beta", textOf(document, 1))
     }
 

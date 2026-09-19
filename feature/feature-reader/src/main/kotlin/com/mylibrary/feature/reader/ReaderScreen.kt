@@ -40,11 +40,13 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mylibrary.core.common.AppError
 import com.mylibrary.core.domain.model.ReadingDirection
+import com.mylibrary.core.domain.model.ReadingLocator
 import com.mylibrary.core.ui.component.ErrorState
 import com.mylibrary.core.ui.component.LoadingState
 import com.mylibrary.core.ui.mvi.ObserveEffects
 import com.mylibrary.core.ui.theme.ProvideLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection as ComposeLayoutDirection
+import kotlin.math.roundToInt
 
 /**
  * The reader destination.
@@ -289,13 +291,55 @@ private fun ReaderBottomBar(
                 )
             }
 
-            Slider(
-                value = state.currentUnit.toFloat(),
-                onValueChange = { value -> onIntent(ReaderIntent.PageChanged(value.toInt())) },
-                valueRange = 0f..((state.totalUnits - 1).coerceAtLeast(1)).toFloat(),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            ProgressSlider(state = state, onIntent = onIntent)
         }
+    }
+}
+
+/**
+ * The slider under the bar.
+ *
+ * It measures whatever the bar above it measures. Without a measured book that is the chapter index,
+ * as it has always been — the only scale available for a reflowable document, and the right one for a
+ * PDF, where a chapter is a page. Once the book has been measured it is the book's *pages*, which
+ * makes the slider the same instrument as the percentage beside it: dragging it to the middle of the
+ * track puts the reader in the middle of the book, rather than at the start of whichever chapter
+ * happens to sit there.
+ *
+ * A drag sends the reader to the page it lands on through its character offset, which is the only
+ * kind of position that survives the text being laid out again — so the jump is handled by the same
+ * path a bookmark and a search result take, and lands as precisely as they do.
+ */
+@Composable
+private fun ProgressSlider(
+    state: ReaderUiState,
+    onIntent: (ReaderIntent) -> Unit,
+) {
+    val index = state.bookIndex
+    val page = state.bookPageNumber
+    val total = state.bookPageCount
+    if (index != null && page != null && total != null) {
+        Slider(
+            value = (page - 1).toFloat(),
+            onValueChange = { value ->
+                index.locate(value.roundToInt() + 1)?.let { target ->
+                    onIntent(
+                        ReaderIntent.JumpTo(
+                            ReadingLocator.Reflowable(target.chapterIndex, target.charOffset),
+                        ),
+                    )
+                }
+            },
+            valueRange = 0f..(total - 1).coerceAtLeast(1).toFloat(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    } else {
+        Slider(
+            value = state.currentUnit.toFloat(),
+            onValueChange = { value -> onIntent(ReaderIntent.PageChanged(value.toInt())) },
+            valueRange = 0f..((state.totalUnits - 1).coerceAtLeast(1)).toFloat(),
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

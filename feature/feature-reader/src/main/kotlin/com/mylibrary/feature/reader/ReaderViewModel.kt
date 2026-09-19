@@ -199,6 +199,11 @@ class ReaderViewModel @Inject constructor(
                         totalUnits = unitCountOf(opened),
                         currentUnit = restored,
                         reflowOffset = restoredOffset,
+                        // The previous book's measurement, if one was open. Its chapter count and its
+                        // layout are not this book's, and nothing would ever overwrite it: the paged
+                        // view clears it before measuring, but only once it is composed — a scrolling
+                        // reader would carry the old book's page count into the new one.
+                        bookIndex = null,
                         outline = opened.outline,
                         isRtlContent = opened.metadata.language?.startsWith("ar")
                             ?: currentState.isRtlContent,
@@ -465,12 +470,20 @@ class ReaderViewModel @Inject constructor(
             is ReaderIntent.SetFont -> launch { updateSettings.setReaderFont(intent.font) }
             is ReaderIntent.SetFontScale -> launch { updateSettings.setFontScale(intent.scale) }
             is ReaderIntent.SetLineHeight -> launch { updateSettings.setLineHeightScale(intent.scale) }
+            is ReaderIntent.SetMargins -> launch { updateSettings.setMarginScale(intent.scale) }
+            is ReaderIntent.SetParagraphSpacing -> launch {
+                updateSettings.setParagraphSpacingScale(intent.scale)
+            }
+            is ReaderIntent.SetFirstLineIndent -> launch {
+                updateSettings.setFirstLineIndent(intent.enabled)
+            }
             is ReaderIntent.SetPageFit -> launch { updateSettings.setPageFitMode(intent.mode) }
             is ReaderIntent.SetKeepScreenOn -> launch { updateSettings.setKeepScreenOn(intent.enabled) }
             is ReaderIntent.SetShowProgressIndicator -> launch {
                 updateSettings.setShowProgressIndicator(intent.enabled)
             }
             is ReaderIntent.SetLayout -> launch { updateSettings.setLayout(intent.layout) }
+            is ReaderIntent.SetProgressScope -> launch { updateSettings.setProgressScope(intent.scope) }
             is ReaderIntent.SetTapToTurnPages -> launch { updateSettings.setTapToTurnPages(intent.enabled) }
             is ReaderIntent.SetReadingDirection -> launch {
                 updateSettings.setReadingDirection(intent.direction)
@@ -481,6 +494,12 @@ class ReaderViewModel @Inject constructor(
             is ReaderIntent.SetPageTurnEffect -> launch { updateSettings.setPageTurnEffect(intent.effect) }
             is ReaderIntent.SetHapticsEnabled -> launch { updateSettings.setHapticsEnabled(intent.enabled) }
             is ReaderIntent.SetBubbleZoom -> launch { updateSettings.setBubbleZoom(intent.enabled) }
+
+            // The book's own length, from the one place that can measure it. Not persisted: every
+            // number in it belongs to the layout it was measured at, so a stored one would be wrong
+            // the moment the reader changed the font size or turned the phone.
+            ReaderIntent.BookPageIndexCleared -> setState { copy(bookIndex = null) }
+            is ReaderIntent.BookPageIndexReady -> setState { copy(bookIndex = intent.index) }
 
             ReaderIntent.RequestResetSettings -> launch {
                 updateSettings.resetReaderDefaults()
@@ -500,25 +519,37 @@ class ReaderViewModel @Inject constructor(
     }
 
     /**
-     * Moves to [unit], clamped to the document.
+     * Moves to [unit], clamped to the document, and to [offset] within it where one is known.
      *
      * Progress is saved through a debounce: dragging a page slider across a 900-page PDF would
      * otherwise issue a database write per page crossed.
+     *
+     * [offset] is what makes a jump land where it was aimed rather than at the beginning of a
+     * chapter. Most callers have no better aim than the chapter — an outline entry names a chapter
+     * and nothing finer — but a bookmark, a search hit and the progress bar all name a *position*,
+     * and going through this with only the chapter would put the reader at the top of it every time.
+     * The paged view is what turns the offset into a page: it is the only side that knows how the
+     * chapter was laid out, and it finds the page the offset falls in.
      */
-    private fun moveTo(unit: Int) {
+    private fun moveTo(unit: Int, offset: Int = 0) {
         val total = currentState.totalUnits
         val clamped = unit.coerceIn(0, (total - 1).coerceAtLeast(0))
-        if (clamped == currentState.currentUnit && !currentState.isLoading) return
+        // Both have to match to be a no-op. A jump within the chapter the reader is already in is
+        // still a move — it is how a search hit on this page is followed — and comparing the chapter
+        // alone would swallow it.
+        val alreadyThere = clamped == currentState.currentUnit && offset == currentState.reflowOffset
+        if (alreadyThere && !currentState.isLoading) return
 
         setState {
             copy(
                 currentUnit = clamped,
-                // A chapter that has not been laid out yet has no pages and no offset. Carrying the
-                // previous chapter's across would put the reader's saved position — and the page
-                // count in the toolbar — inside a chapter they have only just arrived in.
+                // A chapter that has not been laid out yet has no pages. Carrying the previous
+                // chapter's count across would put the page count in the toolbar inside a chapter the
+                // reader has only just arrived in; the offset is the opposite case, and is the one
+                // thing here that is known before the chapter is laid out.
                 reflowPage = 0,
                 reflowPageCount = 0,
-                reflowOffset = 0,
+                reflowOffset = offset,
             )
         }
         refreshPositionLabel()
@@ -526,30 +557,51 @@ class ReaderViewModel @Inject constructor(
     }
 
     /**
-     * Takes the paged view's word for where the reader is.
+     * Takes the paged view's word for where the reader is — chapter included.
+     *
+     * The chapter comes from the report rather than from the position slider, because a page turn
+     * now crosses from one chapter into the next: the pager is the authority on which chapter the
+     * reader is in, and it says so from the page it settled on, so the chapter and the page number
+     * inside it always agree.
+     *
+     * Deliberately not [moveTo], which clears the page fields — correct for a jump *into* a chapter,
+     * and it would erase the very position being reported here.
      *
      * The offset is stored, not just displayed, because it is what the position is saved as: a page
      * number means nothing once the font size changes, while the character the page began at is
      * still in the same place.
      */
     private fun reportReflowPosition(intent: ReaderIntent.ReflowPositionChanged) {
+        val chapter = intent.chapterIndex.coerceIn(0, (currentState.totalUnits - 1).coerceAtLeast(0))
+        val enteredChapter = chapter != currentState.currentUnit
+
         setState {
             copy(
+                currentUnit = chapter,
                 reflowPage = intent.pageIndex.coerceAtLeast(0),
                 reflowPageCount = intent.pageCount.coerceAtLeast(0),
                 reflowOffset = intent.offset.coerceAtLeast(0),
             )
         }
+        if (enteredChapter) refreshPositionLabel()
         scheduleProgressSave()
     }
 
+    /**
+     * Goes where a locator points.
+     *
+     * A reflowable locator names a chapter *and* a character in it, and both are used: the chapter is
+     * where the reader goes and the offset is where in it they arrive. Dropping the offset — which is
+     * what this did — meant every jump landed at the top of a chapter, so a bookmark opened its
+     * chapter rather than the bookmarked passage, a search result opened the chapter it was found in
+     * rather than the hit, and a hit inside the chapter already being read did not move at all.
+     */
     private fun jumpTo(locator: ReadingLocator) {
-        val index = when (locator) {
-            is ReadingLocator.Paged -> locator.pageIndex
-            is ReadingLocator.Reflowable -> locator.chapterIndex
-        }
         setState { copy(openPanel = null) }
-        moveTo(index)
+        when (locator) {
+            is ReadingLocator.Paged -> moveTo(locator.pageIndex)
+            is ReadingLocator.Reflowable -> moveTo(locator.chapterIndex, locator.charOffset)
+        }
     }
 
     private fun scheduleProgressSave() {
@@ -567,9 +619,26 @@ class ReaderViewModel @Inject constructor(
         saveProgress(
             bookId = bookId,
             locator = locator,
-            percent = progressCalculator(locator, document ?: return, state.chapterFraction),
+            percent = percentOf(state, locator),
             excerpt = excerpt,
         )
+    }
+
+    /**
+     * Where the reader is, as a percentage of the book.
+     *
+     * The number the bar is showing, and deliberately the same one: `ReaderUiState.progress` mirrors
+     * this arithmetic the way it has always mirrored [ReadingProgressUseCase]'s, so the shelf cannot
+     * report a position the reader was never at. Once the book has been measured its *pages* are
+     * counted, which is [ReadingProgressUseCase.fromPage] and not the chapter's share — the two
+     * differ, and a saved percentage computed from the chapter while the bar showed the page would be
+     * exactly the drift the mirroring exists to prevent.
+     */
+    private fun percentOf(state: ReaderUiState, locator: ReadingLocator): Float {
+        val page = state.bookPageNumber
+        val total = state.bookPageCount
+        if (page != null && total != null) return progressCalculator.fromPage(page - 1, total)
+        return progressCalculator(locator, document ?: return 0f, state.chapterFraction)
     }
 
     /**
@@ -619,9 +688,16 @@ class ReaderViewModel @Inject constructor(
     /**
      * Returns to where the reader was before following a link.
      *
-     * Restores the chapter, not the exact scroll position within it: the back stack holds a
-     * [ReadingLocator] whose offset is not yet meaningful in scroll mode. Once pagination lands, the
-     * stored offset will place the reader back on the exact page they left.
+     * Restores the chapter *and* the offset within it, so a footnote is a round trip in the paged
+     * reader rather than a one-way jump to the top of the page the note was on — the same chapter
+     * included, which is where most notes are and where the offset is the only thing that moves. The
+     * scroll reader ignores the offset: it restores the chapter and the reader finds their place on
+     * it.
+     *
+     * The page number and its count are deliberately left as they are. They are chapter-relative, so
+     * the paged view replaces them the moment it settles where this sends it — and zeroing them
+     * instead would hide the page indicator until the reader turned a page, while saying nothing
+     * truer in the meantime.
      */
     private fun returnFromLink() {
         val stack = currentState.linkBackStack
@@ -636,6 +712,7 @@ class ReaderViewModel @Inject constructor(
         setState {
             copy(
                 currentUnit = clamped,
+                reflowOffset = (target as? ReadingLocator.Reflowable)?.charOffset ?: 0,
                 linkBackStack = stack.dropLast(1),
                 pendingAnchor = null,
             )

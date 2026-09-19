@@ -1,11 +1,11 @@
 package com.mylibrary.core.domain.usecase
 
-import com.mylibrary.core.domain.model.AppFont
 import com.mylibrary.core.domain.model.AppLanguage
 import com.mylibrary.core.domain.model.ColorSource
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.PageTurnEffect
+import com.mylibrary.core.domain.model.ProgressScope
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderLayout
 import com.mylibrary.core.domain.model.ReaderSettings
@@ -56,6 +56,17 @@ class UpdateSettingsUseCase @Inject constructor(
     suspend fun setLineHeightScale(scale: Float) =
         settingsRepository.update { it.copy(lineHeightScale = scale.coerceIn(MIN_LINE_HEIGHT, MAX_LINE_HEIGHT)) }
 
+    suspend fun setMarginScale(scale: Float) =
+        settingsRepository.update { it.copy(marginScale = scale.coerceIn(MIN_MARGIN, MAX_MARGIN)) }
+
+    suspend fun setParagraphSpacingScale(scale: Float) =
+        settingsRepository.update {
+            it.copy(paragraphSpacingScale = scale.coerceIn(MIN_PARAGRAPH_SPACING, MAX_PARAGRAPH_SPACING))
+        }
+
+    suspend fun setFirstLineIndent(enabled: Boolean) =
+        settingsRepository.update { it.copy(firstLineIndent = enabled) }
+
     suspend fun setPageFitMode(mode: PageFitMode) = settingsRepository.update { it.copy(pageFitMode = mode) }
 
     suspend fun setReadingDirection(direction: ReadingDirection) =
@@ -67,6 +78,9 @@ class UpdateSettingsUseCase @Inject constructor(
         settingsRepository.update { it.copy(showProgressIndicator = enabled) }
 
     suspend fun setLayout(layout: ReaderLayout) = settingsRepository.update { it.copy(layout = layout) }
+
+    suspend fun setProgressScope(scope: ProgressScope) =
+        settingsRepository.update { it.copy(progressScope = scope) }
 
     suspend fun setTapToTurnPages(enabled: Boolean) =
         settingsRepository.update { it.copy(tapToTurnPages = enabled) }
@@ -83,28 +97,33 @@ class UpdateSettingsUseCase @Inject constructor(
     suspend fun setBubbleZoom(enabled: Boolean) =
         settingsRepository.update { it.copy(bubbleZoom = enabled) }
 
-    /** The face the app's own interface is set in. Part of appearance, not of reading. */
-    suspend fun setUiFont(font: AppFont) = settingsRepository.update { it.copy(uiFont = font) }
-
     /**
-     * Everything back to its default, except the answer to the first-run setup.
+     * The app's own settings back to their defaults — the interface, and nothing of the reader.
      *
-     * That one is kept deliberately. Resetting the app's appearance is something a reader does *to*
-     * the app, and being sent through a welcome screen the next time they open it would read as the
-     * reset having broken something.
+     * This is what the settings screen offers, and that screen is the interface's own: it holds the
+     * theme, the colour and the language. Everything that decides how a *book* is read is reset from
+     * [resetReaderDefaults] instead, in the reader's own panel, which is the surface that offers it
+     * and the only one where the result is visible on the page behind it.
+     *
+     * The answer to the first-run setup is kept deliberately. Resetting the app's appearance is
+     * something a reader does *to* the app, and being sent through a welcome screen the next time
+     * they open it would read as the reset having broken something.
+     *
+     * The library's view mode and sort are left alone for the same reason the reading settings are:
+     * they are not on this screen, they are on the shelf, and a button labelled "reset interface
+     * settings" has no business rearranging a library the reader is not looking at.
      */
-    suspend fun resetToDefaults() = settingsRepository.update { settings ->
-        ReaderSettings.Default.copy(setupComplete = settings.setupComplete)
-    }
+    suspend fun resetToDefaults() = settingsRepository.update { it.resetInterfaceDefaults() }
 
     /**
      * Puts back everything that decides how a book is *read*, and nothing else.
      *
-     * Deliberately narrower than [resetToDefaults], which is the app's own "reset everything" and
-     * takes the language and the library's layout with it. Someone who has made a book unreadable —
-     * a font size they cannot see past, a leading that has run lines together — wants *that* undone,
-     * in the screen where they did it; resetting the app's language at the same time turns a small
-     * fix into a scare.
+     * Deliberately the mirror of [resetToDefaults], and disjoint from it: that one is the interface's
+     * and this is the book's, so between them every field has exactly one home and neither can undo
+     * the other's work. Someone who has made a book unreadable — a font size they cannot see past, a
+     * leading that has run lines together, margins that leave no column — wants *that* undone, in the
+     * screen where they did it; resetting the app's language at the same time turns a small fix into
+     * a scare.
      *
      * The theme is left alone for the same reason: it is offered in the reader's panel, but it is
      * the app's appearance setting, and flipping a dark-mode user to light is not what "reset the
@@ -115,16 +134,20 @@ class UpdateSettingsUseCase @Inject constructor(
             readerFont = ReaderSettings.Default.readerFont,
             fontScale = ReaderSettings.Default.fontScale,
             lineHeightScale = ReaderSettings.Default.lineHeightScale,
+            marginScale = ReaderSettings.Default.marginScale,
+            paragraphSpacingScale = ReaderSettings.Default.paragraphSpacingScale,
+            firstLineIndent = ReaderSettings.Default.firstLineIndent,
             pageFitMode = ReaderSettings.Default.pageFitMode,
             readingDirection = ReaderSettings.Default.readingDirection,
             keepScreenOn = ReaderSettings.Default.keepScreenOn,
             showProgressIndicator = ReaderSettings.Default.showProgressIndicator,
             layout = ReaderSettings.Default.layout,
+            progressScope = ReaderSettings.Default.progressScope,
             tapToTurnPages = ReaderSettings.Default.tapToTurnPages,
             reverseTapZones = ReaderSettings.Default.reverseTapZones,
             // All three of these decide what happens when a page is turned, so they belong to
-            // reading rather than to appearance — unlike `uiFont`, which the reader's panel does not
-            // offer.
+            // reading rather than to appearance — which is also why the reader's panel is where
+            // they are offered.
             pageTurnEffect = ReaderSettings.Default.pageTurnEffect,
             hapticsEnabled = ReaderSettings.Default.hapticsEnabled,
             bubbleZoom = ReaderSettings.Default.bubbleZoom,
@@ -139,6 +162,21 @@ class UpdateSettingsUseCase @Inject constructor(
         /** Arabic script needs noticeably more leading than Latin, hence the generous ceiling. */
         const val MIN_LINE_HEIGHT = 0.8f
         const val MAX_LINE_HEIGHT = 2.5f
+
+        /**
+         * The margins' own range, as a multiplier on the reader's base margin.
+         *
+         * The floor is not zero: a line that touches both edges of the display is unreadable rather
+         * than merely tight, and a reader who dragged the slider to the end would have no way to tell
+         * that from the app having broken. The ceiling is where the column gets so narrow on a phone
+         * that a word stops fitting on a line.
+         */
+        const val MIN_MARGIN = 0.5f
+        const val MAX_MARGIN = 2.5f
+
+        /** Zero is allowed on purpose — see `ReaderSettings.paragraphSpacingScale`. */
+        const val MIN_PARAGRAPH_SPACING = 0f
+        const val MAX_PARAGRAPH_SPACING = 3f
     }
 }
 

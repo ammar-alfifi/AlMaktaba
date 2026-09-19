@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.mylibrary.core.domain.model.ProgressScope
 
 /**
  * A panel the toolbar can open, in the order the overflow lists them.
@@ -229,18 +230,29 @@ internal fun ReaderUiState.positionDescription(): String = when {
  * into pages has a position *inside* it, and that is the number worth showing next to a progress
  * bar, because it is the one that changes as the reader turns a page. The toolbar keeps the
  * chapter's name, where there is room for it.
+ *
+ * A page number is shown against whichever total the reader is counting — the whole book's once the
+ * book has been measured, which is the default, or the chapter's otherwise. See [ProgressScope]. Both
+ * are true and the reader can ask for either; what would be untrue is a page counted within a chapter
+ * beside a bar drawn against the book.
  */
 @Composable
-internal fun ReaderUiState.progressDescription(): String =
-    if (!isPageImages && reflowPageCount > 0) {
-        stringResource(
-            R.string.reader_page_of_chapter,
+internal fun ReaderUiState.progressDescription(): String {
+    val bookPage = bookPageNumber
+    val bookTotal = bookPageCount
+    return when {
+        bookPage != null && bookTotal != null ->
+            stringResource(R.string.reader_page_of, bookPage, bookTotal)
+
+        !isPageImages && reflowPageCount > 0 -> stringResource(
+            R.string.reader_page_of,
             (reflowPage + 1).coerceAtMost(reflowPageCount),
             reflowPageCount,
         )
-    } else {
-        positionDescription()
+
+        else -> positionDescription()
     }
+}
 
 @Composable
 private fun readerMenuActionLabel(action: ReaderMenuAction): String = stringResource(

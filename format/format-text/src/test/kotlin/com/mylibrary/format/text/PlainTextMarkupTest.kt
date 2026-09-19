@@ -68,6 +68,32 @@ class PlainTextMarkupTest {
         assertFalse(englishHtml.contains("كان يا ما كان"))
     }
 
+    /**
+     * The one place a form feed falls inside a chapter: the title page is carried by the chapter that
+     * follows it, so the break the two were joined by is interior to chapter 0.
+     *
+     * It must become a paragraph break rather than reaching the page. A control character written
+     * into the HTML is one the parser may quietly turn into a space, and the paragraph's text then no
+     * longer matches the chapter text it is supposed to be found in — which is the one thing a
+     * reading position, a search hit and a highlight are all expressed in.
+     */
+    @Test
+    fun `the form feed a title page is joined by becomes a paragraph break`() {
+        val document = open("مكتبة الاختبار\n\nالفصل الأول\n\nكان يا ما كان.")
+
+        assertEquals(
+            "<div dir=\"rtl\"><p>مكتبة الاختبار</p><p>الفصل الأول</p><p>كان يا ما كان.</p></div>",
+            htmlOf(document, 0),
+        )
+    }
+
+    @Test
+    fun `a form feed directly between two lines breaks the paragraph all the same`() {
+        val document = open("titlebody")
+
+        assertEquals("<div dir=\"ltr\"><p>title</p><p>body</p></div>", htmlOf(document, 0))
+    }
+
     @Test
     fun `a chapter is a well formed fragment`() {
         val document = open("first line\nsecond line\n\nsecond paragraph & more <text>")

@@ -8,6 +8,7 @@ import com.mylibrary.core.domain.model.Bookmark
 import com.mylibrary.core.domain.model.EngineCapabilities
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.PageTurnEffect
+import com.mylibrary.core.domain.model.ProgressScope
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
@@ -85,6 +86,16 @@ data class ReaderUiState(
      */
     val reflowOffset: Int = 0,
 
+    /**
+     * How long every chapter of the open book is in pages, or `null` while it is being measured.
+     *
+     * Nothing here is counted from this until it is complete enough to be true: the reader falls back
+     * to counting chapters, which is what it did before the book could be counted at all. It is
+     * discarded the moment the text is laid out differently, because every number in it belongs to a
+     * pagination that no longer exists — a font size, a margin, a rotation all replace it.
+     */
+    val bookIndex: BookPageIndex? = null,
+
     val outline: List<TocEntry> = emptyList(),
     val bookmarks: List<Bookmark> = emptyList(),
 
@@ -157,15 +168,58 @@ data class ReaderUiState(
      * and the bookmarks list show: if the reader's progress bar says 40% the shelf must not say 12%.
      * That is why the two kinds differ by one unit — a page index is a position the reader has
      * arrived at and finished (*n* of *N* is honest), while a chapter index is one they have only
-     * just entered, so the chapters behind them are the ones that count. The reader has no
-     * within-chapter scroll fraction to refine it with, and neither does the saved value.
+     * just entered, so the chapters behind them are the ones that count.
+     *
+     * Once the book has been measured, a reflowable book counts its pages the same way a paged one
+     * counts its own — *n* of *N*, the page being read counted as read — because it now has the same
+     * thing to count with. It is a better answer than the chapter's: a book whose chapters are of
+     * very different lengths advances by a whole chapter at every seam, so a hundred-page chapter and
+     * a two-page one move the number by the same amount. Until the measurement is done, and whenever
+     * the reader has asked to count chapters, the chapter's answer is given instead — which is
+     * exactly the value this property had before a book could be measured at all. A scrolling column
+     * gets that answer too, and has no within-chapter fraction to refine it with: a scroll offset is
+     * not a fraction of anything until the text has been laid out into pages.
      */
     val progress: Float
-        get() = when {
-            totalUnits <= 0 -> 0f
-            isPageImages -> (currentUnit + 1).toFloat() / totalUnits
-            else -> (currentUnit + chapterFraction) / totalUnits
+        get() {
+            if (totalUnits <= 0) return 0f
+            val page = bookPageNumber
+            val count = bookPageCount
+            return when {
+                page != null && count != null -> page.toFloat() / count
+                isPageImages -> (currentUnit + 1).toFloat() / totalUnits
+                else -> (currentUnit + chapterFraction) / totalUnits
+            }
         }
+
+    /**
+     * Whether the reader is counting the book's pages rather than the current chapter's.
+     *
+     * Only ever true where there are pages to count and a setting asking for the book's: a paged
+     * document counts the book already and has nothing to opt into, and a scrolling column has no
+     * pages at all.
+     */
+    val countsBookPages: Boolean
+        get() = hasPages && !isPageImages && settings.progressScope == ProgressScope.BOOK
+
+    /**
+     * The page's number in the whole book, counting from one, or `null` when it cannot be said.
+     *
+     * Both this and [bookPageCount] are `null` together — the pass measures the chapters behind the
+     * reader before the ones ahead, so a number could be shown before the book's length is known, but
+     * "page 124" with nothing after it is a different sentence from "page 124 of 340" and the reader
+     * would watch it change. One answer, once it is whole. A chapter that paginated to nothing has no
+     * page to number either, and answers `null` rather than the chapter's first.
+     */
+    val bookPageNumber: Int?
+        get() = bookPageCount?.let { bookIndex?.pageNumber(currentUnit, reflowPage) }
+
+    /** How many pages the whole book holds, or `null` until every chapter has been measured. */
+    val bookPageCount: Int?
+        get() = bookIndex
+            ?.takeIf { countsBookPages && it.isComplete }
+            ?.totalPages
+            ?.takeIf { it > 0 }
 
     /**
      * How far through the current chapter the reader is, in 0f..1f.
@@ -202,14 +256,20 @@ sealed interface ReaderIntent {
     data class ChapterChanged(val chapterIndex: Int) : ReaderIntent
 
     /**
-     * A reflowable chapter was re-paginated, or the reader moved within it.
+     * A reflowable chapter was re-paginated, or the reader moved within it — including *across* into
+     * the chapter next to it, which is a turn like any other now.
      *
-     * The paged view reports all three together because they are only meaningful together: the count
+     * The paged view reports all four together because they are only meaningful together: the count
      * changes whenever the text is re-laid out, and the offset is where the page it just settled on
-     * begins. Splitting them into three intents would let the state hold a page index from one
-     * pagination beside a count from another.
+     * begins. Splitting them into separate intents would let the state hold a page index from one
+     * pagination beside a count from another, or a page of one chapter beside another chapter's
+     * number.
+     *
+     * [pageIndex] and [pageCount] are positions **within** [chapterIndex], not within the book: they
+     * are what the toolbar's "page three of twenty" counts, and what the progress bar fills by.
      */
     data class ReflowPositionChanged(
+        val chapterIndex: Int,
         val pageIndex: Int,
         val pageCount: Int,
         val offset: Int,
@@ -218,6 +278,18 @@ sealed interface ReaderIntent {
     data class JumpTo(val locator: ReadingLocator) : ReaderIntent
     data object NextUnit : ReaderIntent
     data object PreviousUnit : ReaderIntent
+
+    /**
+     * The whole book has been measured, or the measurement that was running is no longer about the
+     * layout on screen.
+     *
+     * Sent by the paged view, which is the only thing that knows the width, the height and the text
+     * styles a page is laid out at — and so the only thing that can say how long the book is in
+     * pages. Clearing comes *first*, before the pass starts, so a font-size change leaves the reader
+     * counting chapters rather than counting the pages of a layout that is gone.
+     */
+    data object BookPageIndexCleared : ReaderIntent
+    data class BookPageIndexReady(val index: BookPageIndex) : ReaderIntent
 
     data object ToggleBookmark : ReaderIntent
     data class DeleteBookmark(val bookmarkId: Long) : ReaderIntent
@@ -241,10 +313,14 @@ sealed interface ReaderIntent {
     data class SetFont(val font: ReaderFont) : ReaderIntent
     data class SetFontScale(val scale: Float) : ReaderIntent
     data class SetLineHeight(val scale: Float) : ReaderIntent
+    data class SetMargins(val scale: Float) : ReaderIntent
+    data class SetParagraphSpacing(val scale: Float) : ReaderIntent
+    data class SetFirstLineIndent(val enabled: Boolean) : ReaderIntent
     data class SetPageFit(val mode: PageFitMode) : ReaderIntent
     data class SetKeepScreenOn(val enabled: Boolean) : ReaderIntent
     data class SetShowProgressIndicator(val enabled: Boolean) : ReaderIntent
     data class SetLayout(val layout: ReaderLayout) : ReaderIntent
+    data class SetProgressScope(val scope: ProgressScope) : ReaderIntent
     data class SetTapToTurnPages(val enabled: Boolean) : ReaderIntent
     data class SetReadingDirection(val direction: ReadingDirection) : ReaderIntent
     data class SetReverseTapZones(val enabled: Boolean) : ReaderIntent

@@ -45,12 +45,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.mylibrary.core.domain.model.AppFont
 import com.mylibrary.core.domain.model.ColorSource
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ThemeMode
@@ -58,7 +55,6 @@ import com.mylibrary.core.ui.component.ChoiceRow
 import com.mylibrary.core.ui.component.FeatureScaffold
 import com.mylibrary.core.ui.theme.MyLibraryTheme
 import com.mylibrary.core.ui.theme.Spacing
-import com.mylibrary.core.ui.theme.appFontFamily
 import com.mylibrary.core.ui.theme.colorSchemeForSource
 
 /**
@@ -114,7 +110,6 @@ fun ColorSetupScreen(
     MyLibraryTheme(
         themeMode = settings.themeMode,
         colorSource = settings.colorSource,
-        uiFont = settings.uiFont,
     ) {
         FeatureScaffold(modifier = modifier) { padding ->
             Column(
@@ -146,22 +141,6 @@ fun ColorSetupScreen(
                             Swatches(
                                 selected = settings.colorSource,
                                 onSelect = { onIntent(SettingsIntent.ColorSourceChanged(it)) },
-                            )
-                        }
-
-                        Section(title = stringResource(R.string.settings_color_ui_font)) {
-                            ChoiceRow(
-                                options = AppFont.entries,
-                                selected = settings.uiFont,
-                                onSelect = { onIntent(SettingsIntent.UiFontChanged(it)) },
-                                label = { font ->
-                                    Text(
-                                        text = stringResource(font.setupLabelRes()),
-                                        style = TextStyle(
-                                            fontFamily = appFontFamily(font) ?: FontFamily.Default,
-                                        ),
-                                    )
-                                },
                             )
                         }
 
@@ -389,14 +368,6 @@ private fun ColorSource.labelRes(): Int = when (this) {
     ColorSource.GREEN -> R.string.settings_color_green
     ColorSource.AMBER -> R.string.settings_color_amber
     ColorSource.ROSE -> R.string.settings_color_rose
-}
-
-@androidx.annotation.StringRes
-private fun AppFont.setupLabelRes(): Int = when (this) {
-    AppFont.SYSTEM -> R.string.settings_color_font_system
-    AppFont.AMIRI -> R.string.settings_color_font_amiri
-    AppFont.PLEX_ARABIC -> R.string.settings_color_font_plex
-    AppFont.REEM_KUFI -> R.string.settings_color_font_reem
 }
 
 /** Big enough to compare hues at a glance, small enough that seven fit a phone's width. */

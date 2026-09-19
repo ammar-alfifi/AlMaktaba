@@ -14,10 +14,6 @@
     <string name="settings_title">الإعدادات</string>
     <string name="settings_section_appearance">المظهر</string>
     <string name="settings_section_language">اللغة</string>
-    <string name="settings_section_reading">القراءة</string>
-    <string name="settings_section_reading_text">قراءة النصوص</string>
-    <string name="settings_section_reading_pages">قراءة الصور والصفحات</string>
-    <string name="settings_section_reading_all">كل الملفات</string>
     <string name="settings_section_about">عن التطبيق</string>
 
     <!-- Appearance -->
@@ -25,49 +21,12 @@
     <string name="settings_theme_system">النظام</string>
     <string name="settings_theme_light">فاتح</string>
     <string name="settings_theme_dark">داكن</string>
-    <string name="settings_ui_font">خط الواجهة</string>
 
     <!-- Language -->
     <string name="settings_language">لغة التطبيق</string>
     <string name="settings_language_arabic">العربية</string>
     <string name="settings_language_english">الإنجليزية</string>
     <string name="settings_language_system">لغة النظام</string>
-
-    <!-- Reading -->
-    <string name="settings_reader_font">خط القراءة</string>
-    <string name="settings_font_system">خط النظام</string>
-    <string name="settings_font_serif">مذيّل</string>
-    <string name="settings_font_sans_serif">بسيط</string>
-    <string name="settings_font_monospace">أحادي المسافة</string>
-    <string name="settings_font_scale">حجم الخط</string>
-    <string name="settings_line_height">تباعد الأسطر</string>
-    <!-- Multiplier readout next to the sliders, e.g. "1.5×". -->
-    <string name="settings_scale_value">%1$s×</string>
-    <string name="settings_page_fit">ملاءمة الصفحة</string>
-    <string name="settings_fit_width">العرض</string>
-    <string name="settings_fit_page">الصفحة</string>
-    <string name="settings_fit_actual">حجم فعلي</string>
-    <string name="settings_reading_direction">اتجاه القراءة</string>
-    <string name="settings_direction_system">تلقائي</string>
-    <string name="settings_direction_ltr">من اليسار</string>
-    <string name="settings_direction_rtl">من اليمين</string>
-    <string name="settings_keep_screen_on">إبقاء الشاشة مضاءة</string>
-    <string name="settings_keep_screen_on_summary">منع إطفاء الشاشة تلقائيًا أثناء القراءة.</string>
-    <string name="settings_show_progress">إظهار مؤشر التقدم</string>
-    <string name="settings_show_progress_summary">عرض رقم الصفحة أو نسبة التقدم أثناء القراءة.</string>
-    <string name="settings_page_turn_effect">تأثير قلب الصفحة</string>
-    <string name="settings_page_turn_curl">تقليب الورقة</string>
-    <string name="settings_page_turn_slide">انزلاق</string>
-    <string name="settings_page_turn_fade">تلاشٍ</string>
-    <string name="settings_bubble_zoom">التكبير إلى فقاعة الحوار</string>
-    <string name="settings_bubble_zoom_summary">النقر المزدوج على فقاعة كلام أو إطار في القصص المصورة يكبّر إليه.</string>
-    <string name="settings_layout">طريقة العرض</string>
-    <string name="settings_layout_scroll">تمرير متصل</string>
-    <string name="settings_layout_paged">صفحات</string>
-    <string name="settings_tap_to_turn">النقر على الجانبين لقلب الصفحات</string>
-    <string name="settings_tap_to_turn_summary">يقلّب الجانبان الصفحة، ويُظهر وسط الشاشة شريط الأدوات.</string>
-    <string name="settings_reverse_tap">اعكس اتجاه النقر على الجانبين</string>
-    <string name="settings_reverse_tap_summary">يقلب الجانبين: ما كان يقدّم صار يؤخّر، والعكس.</string>
 
     <!-- About -->
     <string name="settings_about_version_title">الإصدار</string>
@@ -79,22 +38,21 @@
     <!-- Content descriptions -->
     <string name="settings_show_options">عرض الخيارات</string>
 
-    <!-- Reset -->
-    <string name="settings_reset">إعادة التعيين إلى الإعدادات الافتراضية</string>
-    <string name="settings_reset_summary">تُستعاد إعدادات المظهر واللغة والمكتبة والقراءة جميعها إلى قيمها الافتراضية.</string>
-    <string name="settings_reset_dialog_title">إعادة التعيين إلى الإعدادات الافتراضية؟</string>
-    <string name="settings_reset_dialog_message">ستفقد تفضيلاتك الحالية: السمة واللغة وطريقة عرض المكتبة وإعدادات القراءة.</string>
+    <!-- Reset. Interface settings only: the reading ones have their own reset in the reader. -->
+    <string name="settings_reset">إعادة تعيين إعدادات الواجهة</string>
+    <string name="settings_reset_summary">تُستعاد السمة والألوان واللغة إلى قيمها الافتراضية. إعدادات القراءة لها زر إعادة خاص في قارئ الكتب.</string>
+    <string name="settings_reset_dialog_title">إعادة تعيين إعدادات الواجهة؟</string>
+    <string name="settings_reset_dialog_message">ستفقد تفضيلاتك الحالية: السمة والألوان واللغة. لن تتغيّر إعدادات القراءة ولا مكتبتك.</string>
     <string name="settings_reset_confirm">إعادة التعيين</string>
-    <string name="settings_reset_done">تمت إعادة التعيين إلى الإعدادات الافتراضية.</string>
+    <string name="settings_reset_done">تمت إعادة تعيين إعدادات الواجهة.</string>
     <string name="settings_appearance_colour">الألوان</string>
-    <string name="settings_appearance_colour_summary">لون التطبيق وسمته وخط واجهته.</string>
+    <string name="settings_appearance_colour_summary">لون التطبيق وسمته.</string>
 
     <!-- Colour setup. Shown on a first launch and reopened from Appearance. -->
     <string name="settings_color_title">الألوان والمظهر</string>
     <string name="settings_color_message">اختر لون التطبيق وسمته. يمكنك تغيير ذلك في أي وقت من الإعدادات.</string>
     <string name="settings_color_theme">السمة</string>
     <string name="settings_color_colour">اللون</string>
-    <string name="settings_color_ui_font">خط الواجهة</string>
     <string name="settings_color_done">ابدأ</string>
     <string name="settings_color_theme_system">النظام</string>
     <string name="settings_color_theme_light">فاتح</string>
@@ -106,10 +64,6 @@
     <string name="settings_color_green">أخضر</string>
     <string name="settings_color_amber">عنبري</string>
     <string name="settings_color_rose">وردي</string>
-    <string name="settings_color_font_system">الافتراضي</string>
-    <string name="settings_color_font_amiri">أميري (نسخ)</string>
-    <string name="settings_color_font_plex">Plex العربي</string>
-    <string name="settings_color_font_reem">ريم كوفي</string>
     <string name="settings_color_preview_title">معاينة</string>
     <string name="settings_color_preview_body">هكذا تبدو الواجهة بالألوان التي اخترتها.</string>
     <string name="settings_color_preview_button">زر</string>
