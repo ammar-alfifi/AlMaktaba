@@ -106,6 +106,10 @@ class EpubEngine : DocumentEngine {
                 stylesheets = StylesheetSources.of(epubPackage),
                 metadata = epubPackage.metadata,
                 outline = outline,
+                // Resolved against the archive here, exactly as the chapter paths are: a manifest that
+                // names a cover the zip never shipped is common, and the library should fall back to
+                // its placeholder rather than be handed a path that reads as nothing.
+                coverPath = epubPackage.coverPath?.let { archive.findEntry(it) },
             ),
         )
     }

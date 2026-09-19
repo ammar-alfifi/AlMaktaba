@@ -23,7 +23,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
 import com.mylibrary.core.domain.model.Book
 import com.mylibrary.core.domain.model.LibraryItem
 import com.mylibrary.core.ui.R
@@ -64,6 +68,12 @@ fun BookCover(
     val coverUri = remember(book.coverPath) {
         book.coverPath?.let { path -> runCatching { Uri.fromFile(java.io.File(path)) }.getOrNull() }
     }
+    // A cover the library cannot read falls back to the placeholder rather than to an empty frame.
+    // The path is a *cache* file — Android may evict it, and the row keeps pointing at it — so a
+    // shelf whose covers were cleared by the system has to degrade to the stand-ins it started with
+    // instead of to blank spines. Reset whenever the path changes, because a re-extracted cover is
+    // worth another attempt.
+    var coverFailed by remember(book.coverPath) { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -71,12 +81,15 @@ fun BookCover(
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest),
     ) {
-        if (coverUri != null) {
+        if (coverUri != null && !coverFailed) {
             AsyncImage(
                 model = coverUri,
                 contentDescription = contentDescription ?: stringResource(R.string.ui_cd_book_cover),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
+                onState = { state ->
+                    if (state is AsyncImagePainter.State.Error) coverFailed = true
+                },
             )
         } else {
             CoverPlaceholder(book = book, modifier = Modifier.fillMaxSize())

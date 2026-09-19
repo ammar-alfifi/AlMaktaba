@@ -41,6 +41,8 @@ class EpubDocument internal constructor(
     private val stylesheets: StylesheetSources,
     override val metadata: DocumentMetadata,
     override val outline: List<TocEntry>,
+    /** Archive path of the declared cover image, when the package names one the archive contains. */
+    private val coverPath: String? = null,
 ) : ReflowableDocument {
 
     override val format: BookFormat = BookFormat.EPUB
@@ -96,6 +98,19 @@ class EpubDocument internal constructor(
 
     override suspend fun chapterText(index: Int): String =
         withContext(Dispatchers.IO) { loadChapter(index)?.text.orEmpty() }
+
+    /**
+     * The cover the package document declared, as it was written.
+     *
+     * Returned as raw bytes rather than as a bitmap: decoding, downscaling and caching a cover is the
+     * library's job, and this engine deliberately holds no Android graphics. An EPUB that declares no
+     * cover — or one whose declared file the zip does not contain — answers `null`, and the library
+     * draws its placeholder instead.
+     */
+    override suspend fun coverImage(): ByteArray? = withContext(Dispatchers.IO) {
+        if (closed) return@withContext null
+        coverPath?.let { archive.readEntry(it) }
+    }
 
     /**
      * Reads a resource by the path a chapter's markup names.

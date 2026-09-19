@@ -332,15 +332,24 @@ position — the index the column reports is mapped through the document's own l
 the state, or the panel would be clamped away and the reader dragged back to the last page before
 they could reach it.
 
+**A shelf shows every format's own cover, and says so honestly when there is none.** An EPUB's cover
+is the artwork its package document declares — read from the manifest property EPUB 3 uses, from the
+`<meta name="cover">` indirection EPUB 2 uses, or from the one image a book only names as a cover —
+and is used verbatim, because rendering page one of an EPUB is not even meaningful. A PDF, CBZ or CBR
+has no declared cover and *is* its pages, so page one rendered at cover size is exactly what its cover
+is in practice. A plain text file has neither, and gets the deterministic coloured stand-in the shelf
+uses for anything coverless rather than a blank frame — as does any book whose cover file has gone,
+since covers live in `cacheDir` and Android is entitled to evict it.
+
 **Room generates Java here, deliberately.** See [§7](#7-engineering-findings-worth-knowing).
 
 ## 6. Testing
 
-**577 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
+**582 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
 
 | Module | Tests | Covers |
 |---|---:|---|
-| `format-epub` | 84 | container/OPF parsing, nav + NCX, sanitiser, path resolution, traversal refusal, embedded fonts, links |
+| `format-epub` | 89 | container/OPF parsing, nav + NCX, sanitiser, path resolution, traversal refusal, embedded fonts, links, **the declared cover** (the EPUB 3 manifest property, the EPUB 2 metadata indirection, a cover named only as one, and the two ways a book has none) |
 | `feature-reader` | 237 | **the margins and paragraph spacing the two readers share** (that the settings reach both, and that a spacing of zero means none), HTML → block parsing, chapter text offsets and link anchors, which toolbar actions a document supports, tap-zone mirroring and its reversal, page-fit geometry, **page-breaking arithmetic** (line boundaries, spacing, atomic blocks, degenerate pages), progress agreement with the library, **the speech-bubble detector** (enclosed regions, specks, slivers, resolution independence, and — against whole drawn comic pages rather than hand-written pixel arrays — that a broken outline does not hand back the panel, and that a tap on the lettering finds the balloon), **the tap-to-page geometry**, the page-turn effects, **the zoom handover from the column to the opened page**, **the cache's byte accounting**, **the size a zoom is measured against**, **the curl** (that the fold runs diagonally rather than along an edge, that it sweeps the whole page over a turn, that every band is foreshortened and placed on the chord its angle subtends, that it never wraps past half a turn, and that it rolls far enough for the sheet to show its back), and **which settings a reader is offered** (the four document-and-layout combinations, and that page fit and bubble zoom do not gate on the same thing) |
 | `format-text` | 52 | Windows-1256/UTF-16/BOM decoding, chapter splitting, escaping, search offsets |
 | `core-domain` | 63 | format resolution, progress arithmetic, library join, import rules, **folder import and re-scan** (adoption, missing files, revoked grants, deleting with or without contents), **what "continue reading" offers** (the open folder rather than the whole library, a book nobody has opened, a folder with nothing unfinished left), **the next volume of a series** (natural order, the last volume, an unfiled book, a folder that has gone), and **the range of every slider** (both ends clamped, the middle untouched, and a floor of zero that is genuinely reachable) |

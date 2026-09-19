@@ -1,10 +1,12 @@
 package com.mylibrary.feature.library
 
 import androidx.lifecycle.viewModelScope
+import com.mylibrary.core.common.DispatcherProvider
 import com.mylibrary.core.domain.engine.FolderScanner
 import com.mylibrary.core.domain.model.Book
 import com.mylibrary.core.domain.model.BookFormat
 import com.mylibrary.core.domain.model.Folder
+import com.mylibrary.core.domain.model.FolderSummary
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.ViewMode
 import com.mylibrary.core.domain.repository.LibraryRepository
@@ -28,6 +30,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -58,6 +61,7 @@ class LibraryViewModel @Inject constructor(
     private val deleteFolder: DeleteFolderUseCase,
     private val moveBookToFolder: MoveBookToFolderUseCase,
     private val folderScanner: FolderScanner,
+    private val dispatchers: DispatcherProvider,
 ) : MviViewModel<LibraryUiState, LibraryIntent, LibraryEffect>(LibraryUiState()) {
 
     init {
@@ -158,20 +162,28 @@ class LibraryViewModel @Inject constructor(
      */
     private fun observeFolderList() {
         launch {
-            observeFolders().collect { folders ->
-                setState {
-                    val available = folders.filterNot { folderScanner.hasPermission(it.folder.uri) }
-                    copy(
-                        folders = folders,
-                        unavailableFolderIds = available.map { it.folder.id }.toSet(),
-                        // The same rule the format chips follow: a filter that can no longer match
-                        // anything is dropped rather than left selected over an empty list.
-                        folderFilter = folderFilter?.takeIf { id -> folders.any { it.folder.id == id } },
-                    )
+            observeFolders()
+                // Asked off the main thread, and asked outside the reducer below: `hasPermission`
+                // is a call into the system, and a state reducer that performs I/O is a reducer that
+                // can stall the frame that applies it — or run twice under a compare-and-set retry.
+                .map { folders -> folders to folders.filterNot { isUnavailable(it) }.map { it.folder.id }.toSet() }
+                .flowOn(dispatchers.io)
+                .collect { (folders, unavailable) ->
+                    setState {
+                        copy(
+                            folders = folders,
+                            unavailableFolderIds = unavailable,
+                            // The same rule the format chips follow: a filter that can no longer match
+                            // anything is dropped rather than left selected over an empty list.
+                            folderFilter = folderFilter?.takeIf { id -> folders.any { it.folder.id == id } },
+                        )
+                    }
                 }
-            }
         }
     }
+
+    private fun isUnavailable(summary: FolderSummary): Boolean =
+        !folderScanner.hasPermission(summary.folder.uri)
 
     override fun onIntent(intent: LibraryIntent) {
         when (intent) {

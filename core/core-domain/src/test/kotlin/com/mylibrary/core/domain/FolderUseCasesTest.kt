@@ -268,7 +268,7 @@ class FolderUseCasesTest {
         val folderId = folders.folders.value.first().id
         library.books.value = library.books.value + book(id = 99, uri = "content://standalone.epub")
 
-        val observeLibrary = ObserveLibraryUseCase(library, progress)
+        val observeLibrary = ObserveLibraryUseCase(library, progress, DefaultDispatcherProvider())
         val all = observeLibrary(sort = com.mylibrary.core.domain.model.LibrarySort.TITLE_ASC).first()
         val inFolder = observeLibrary(
             sort = com.mylibrary.core.domain.model.LibrarySort.TITLE_ASC,

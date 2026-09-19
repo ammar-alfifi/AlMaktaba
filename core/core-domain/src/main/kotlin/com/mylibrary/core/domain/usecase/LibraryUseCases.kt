@@ -18,6 +18,7 @@ import com.mylibrary.core.domain.repository.LibraryRepository
 import com.mylibrary.core.domain.repository.ReadingProgressRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -32,6 +33,7 @@ import javax.inject.Inject
 class ObserveLibraryUseCase @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val progressRepository: ReadingProgressRepository,
+    private val dispatchers: DispatcherProvider,
 ) {
     operator fun invoke(
         sort: LibrarySort = LibrarySort.RECENTLY_ADDED,
@@ -54,6 +56,10 @@ class ObserveLibraryUseCase @Inject constructor(
                 .map { book -> LibraryItem(book, progressByBook[book.id]) }
                 .toList()
         }
+            // The join runs off the main thread, for the same reason the repository's row-to-model
+            // mapping does: it walks the whole library on every emission, and every emission is
+            // triggered by something the user just did — a filter, a folder chip, a progress save.
+            .flowOn(dispatchers.io)
 
     /**
      * The book to offer next: the most recently read one in scope that the reader has not finished.
@@ -263,10 +269,17 @@ class ObserveNextBookUseCase @Inject constructor(
         val folderId = current?.folderId ?: return null
 
         val siblings = books
+            .asSequence()
             .filter { it.folderId == folderId }
+            // The key is computed once per book and then used as the sort key, rather than being a
+            // comparator selector: a selector is re-evaluated on every comparison, which turns a
+            // sort of a series into `n log n` string normalisations of the same `n` titles.
+            .map { book -> naturalSortKey(book.title) to book }
             // The id breaks a tie between two volumes whose titles sort identically, so the order is
             // stable rather than dependent on the order the rows came back in.
-            .sortedWith(compareBy({ naturalSortKey(it.title) }, { it.id }))
+            .sortedWith(compareBy({ it.first }, { it.second.id }))
+            .map { it.second }
+            .toList()
 
         val index = siblings.indexOfFirst { it.id == current.id }
         val next = if (index < 0) null else siblings.getOrNull(index + 1)

@@ -145,7 +145,7 @@ class ObserveLibraryUseCaseTest {
 
     private val library = FakeLibraryRepository()
     private val progress = FakeProgressRepository()
-    private val useCase = ObserveLibraryUseCase(library, progress)
+    private val useCase = ObserveLibraryUseCase(library, progress, DefaultDispatcherProvider())
 
     private fun book(
         id: Long,

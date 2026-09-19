@@ -29,6 +29,9 @@ internal data class ManifestItem(
      */
     val isStylesheet: Boolean get() = mediaType.equals(CSS_MEDIA_TYPE, ignoreCase = true)
 
+    /** True for an image, which is what a cover has to be. */
+    val isImage: Boolean get() = mediaType.orEmpty().trim().lowercase().startsWith(IMAGE_PREFIX)
+
     /**
      * True when the item is a document the reader can pull text out of.
      *
@@ -51,6 +54,7 @@ internal data class ManifestItem(
         const val NAVIGATION_PROPERTY = "nav"
         const val NCX_MEDIA_TYPE = "application/x-dtbncx+xml"
         const val CSS_MEDIA_TYPE = "text/css"
+        const val IMAGE_PREFIX = "image/"
         val NON_FLOWABLE_PREFIXES = listOf("image/", "audio/", "video/", "font/")
     }
 }
@@ -72,6 +76,13 @@ internal data class EpubPackage(
     val navigationPath: String?,
     /** Archive path of the EPUB 2 NCX, when the book has one. */
     val ncxPath: String?,
+    /**
+     * Archive path of the cover image the package declares, when it declares one.
+     *
+     * Read here rather than guessed at in the library: an EPUB's cover is publisher artwork, and the
+     * only place its file is named is the package document.
+     */
+    val coverPath: String?,
     /**
      * CSS written inside a `<style>` element of the package document.
      *
@@ -129,6 +140,7 @@ internal object OpfParser {
             spine = parseSpine(packageElement, manifest),
             navigationPath = manifest.values.firstOrNull { it.isNavigationDocument }?.path,
             ncxPath = (manifest.values.firstOrNull { it.isNcx } ?: ncxById)?.path,
+            coverPath = parseCoverPath(packageElement, manifest),
             // Every descendant, not just a direct child: producers put `<style>` in the places the
             // schema of their day allowed it, which was not always the same place.
             inlineStyles = packageElement.descendantsNamed("style")
@@ -154,6 +166,40 @@ internal object OpfParser {
             description = metadata.descendantsNamed("description").firstOrNull()?.textOrNull(),
             identifier = metadata.descendantsNamed("identifier").firstOrNull()?.textOrNull(),
         )
+    }
+
+    /**
+     * The cover the package document declares, in the three ways books actually declare one.
+     *
+     * EPUB 3 marks it on the manifest item (`properties="cover-image"`), which is authoritative.
+     * EPUB 2 names it indirectly, as `<meta name="cover" content="item-id"/>`, so the id has to be
+     * resolved through the manifest. Anything else — the majority of books in the wild, produced by
+     * tools that never wrote either — is found by name: an image whose id or file name says "cover".
+     * That last guess is only ever made about a file the manifest already calls an image, so the
+     * worst it can do is pick the wrong picture rather than pick a chapter.
+     *
+     * The path is *not* checked against the archive here: this is the package document's own
+     * statement, and whether the zip actually contains the file is the engine's business.
+     */
+    private fun parseCoverPath(
+        packageElement: Element,
+        manifest: Map<String, ManifestItem>,
+    ): String? {
+        manifest.values.firstOrNull { COVER_IMAGE_PROPERTY in it.properties }?.path?.let { return it }
+
+        val declaredId = packageElement.firstChildNamed("metadata")
+            ?.childrenNamed("meta")
+            ?.firstOrNull { it.attrNamed("name").equals("cover", ignoreCase = true) }
+            ?.attrNamed("content")
+            ?.trim()
+        manifest[declaredId]?.path?.let { return it }
+
+        return manifest.values.firstOrNull { item ->
+            item.isImage && item.path != null && (
+                item.id.contains("cover", ignoreCase = true) ||
+                    item.href.substringAfterLast('/').contains("cover", ignoreCase = true)
+                )
+        }?.path
     }
 
     private fun parseManifest(packageElement: Element, opfDir: String): Map<String, ManifestItem> {
@@ -196,4 +242,7 @@ internal object OpfParser {
             SpineItem(item = item, linear = !element.attrNamed("linear").equals("no", ignoreCase = true))
         }
     }
+
+    /** The manifest property EPUB 3 marks a cover image with. */
+    private const val COVER_IMAGE_PROPERTY = "cover-image"
 }
