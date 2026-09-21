@@ -497,6 +497,54 @@ def make_cbz() -> None:
     write(OUT / "comic.cbz", buffer.getvalue())
 
 
+# --------------------------- a folder of volumes, for reading across the seam
+
+# Each volume's pages carry a numeral only it can produce: `volume * 10 + page`. The reader's whole
+# claim across a seam is that the pages come from *different* files in the folder's own order, so a
+# check that cannot tell one volume's page 1 from another's proves nothing. `11, 12, 13` then
+# `21, 22, 23, 24` then `101, 102` is a sequence a screenshot can be read against.
+SERIES = (("Vol 01", 1, 3), ("Vol 02", 2, 4), ("Vol 10", 10, 2))
+
+
+def make_series() -> None:
+    """
+    A folder of volumes, which is what the reader reads *through* rather than one file at a time.
+
+    The order matters as much as the pages: `Vol 10` is in the folder and sorts last by natural
+    order, which is also the order the reader carries on in — a plain string sort would put it second
+    and make the sequence wrong in a way that looks like a working feature.
+
+    The volumes have different page counts on purpose. Equal ones hide the interesting failures: a
+    hand-off that keeps the page *index* instead of the page is invisible when every volume is the
+    same length, and an off-by-one at the seam lands on a page that looks like the one intended.
+    """
+    for name, volume, pages in SERIES:
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as z:
+            for page in range(1, pages + 1):
+                shade = 40 + ((volume * 10 + page) * 15) % 200
+                z.writestr(
+                    f"page{page}.png",
+                    png_labelled(700, 1000, (shade, 70, 140), volume * 10 + page),
+                )
+        write(OUT / "series" / f"{name}.cbz", buffer.getvalue())
+
+
+def make_text_series() -> None:
+    """
+    The same series in the other family, so the seam is exercised in a column of text as well.
+
+    Form feeds split these into chapters, so each volume has more than one chapter and the seam lands
+    after the last one of a volume rather than after the only one — which is where a reader would
+    otherwise see the difference between "the chapter ended" and "the book ended".
+    """
+    for name, volume, chapters in (("الجزء 1", 1, 2), ("الجزء 2", 2, 3)):
+        body = "\n\n".join(
+            f"\fالفصل {index}\n\n{('من ' + name + ' ') * 40}" for index in range(1, chapters + 1)
+        )
+        write(OUT / "series-text" / f"{name}.txt", body.encode("utf-8"))
+
+
 # ----------------------------------------------------------------------------------------- main
 
 README = """# test-books — ملفات الاختبار
@@ -514,6 +562,8 @@ Each one exists to exercise something specific, so a failure points at a feature
 | `arabic-utf8.txt` | UTF-8 detection and form-feed chapter splitting |
 | `arabic-windows1256.txt` | the Windows-1256 fingerprint — the detector reports MacCyrillic for this file, so it is the one that proves the fingerprint runs first |
 | `comic.cbz` | natural page ordering (`page10` after `page2`), junk-entry filtering (`__MACOSX/`, `.DS_Store`) and — on page 1 — **speech-bubble zoom**: two balloons, one solid-outlined with two lines and one hairline with four |
+| `series/` | **reading on across a folder's seam**: `Vol 01` (3 pages), `Vol 02` (4) and `Vol 10` (2) in one folder, every page carrying a numeral only its own volume can produce (`11, 12, 13` then `21, …`). Different page counts on purpose: equal volumes hide a hand-off that keeps the page index instead of the page |
+| `series-text/` | the same seam in reflowed text: `الجزء 1` (2 chapters) and `الجزء 2` (3), so each volume ends on a chapter boundary that is not the end of its only chapter |
 
 **CBR has no fixture.** Creating a RAR archive requires a RAR encoder, and this machine has none
 (7z can extract RAR but not create it). Test CBR with a real comic archive.
@@ -535,6 +585,8 @@ def main() -> None:
     make_epub()
     make_txt()
     make_cbz()
+    make_series()
+    make_text_series()
     write(OUT / "README.md", README.encode("utf-8"))
 
     if "--push" in sys.argv:

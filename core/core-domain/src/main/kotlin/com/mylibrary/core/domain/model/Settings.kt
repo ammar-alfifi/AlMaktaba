@@ -189,6 +189,15 @@ enum class ProgressScope {
  */
 enum class ReadingDirection { SYSTEM, LEFT_TO_RIGHT, RIGHT_TO_LEFT }
 
+/**
+ * How the lines of reflowable body text are aligned against the column.
+ *
+ * [START] follows the column's own direction — the right edge in an RTL column, the left in an LTR
+ * one — which is what a book is normally set in and so is the default. [JUSTIFY] sets every line but
+ * the last to the full column width, the printed-book look a reader may prefer on a narrow phone.
+ */
+enum class TextAlignment { START, CENTER, JUSTIFY }
+
 /** How the library is laid out. */
 enum class ViewMode { GRID, LIST }
 
@@ -270,6 +279,9 @@ data class ReaderSettings(
      * so it stays a proportional indent at every font size.
      */
     val firstLineIndent: Boolean = false,
+
+    /** How body text lines are aligned in the column. See [TextAlignment]. */
+    val textAlign: TextAlignment = TextAlignment.START,
 
     val pageFitMode: PageFitMode = PageFitMode.PAGE,
     val readingDirection: ReadingDirection = ReadingDirection.SYSTEM,

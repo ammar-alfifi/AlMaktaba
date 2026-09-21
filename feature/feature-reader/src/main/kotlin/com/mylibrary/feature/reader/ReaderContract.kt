@@ -15,12 +15,31 @@ import com.mylibrary.core.domain.model.ReadingDirection
 import com.mylibrary.core.domain.model.ReadingLocator
 import com.mylibrary.core.domain.model.ReaderLayout
 import com.mylibrary.core.domain.model.SearchHit
+import com.mylibrary.core.domain.model.TextAlignment
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.TocEntry
-import com.mylibrary.core.domain.usecase.NextBookInFolder
+import com.mylibrary.core.domain.usecase.FolderSequence
 
 /** Which panel is open over the page, if any. Exactly one can be open at a time. */
 enum class ReaderPanel { TABLE_OF_CONTENTS, BOOKMARKS, SETTINGS, SEARCH }
+
+/**
+ * A book of the open one's folder that the reader has opened ahead of needing it.
+ *
+ * It is a *book plus what its open document can say about itself* — how many units it has, and which
+ * family it is drawn by — and deliberately not the document handle: the handle holds native state
+ * (a pdfium document, an open archive) and belongs to the ViewModel, which is also the only thing
+ * that can close it. The screen is handed the three facts it needs to draw the book's units and to
+ * name it at a seam.
+ */
+@Immutable
+data class ReaderSegment(
+    val book: Book,
+    /** Pages for a page-image book, chapters for a reflowed one — the unit its own reader counts. */
+    val unitCount: Int,
+    /** Whether this book is drawn as page images, and so which of the four presentations draws it. */
+    val isPageImages: Boolean,
+)
 
 /**
  * The reader's single state object.
@@ -153,14 +172,37 @@ data class ReaderUiState(
     val documentFont: FontFamily? = null,
 
     /**
-     * The next volume in this book's device folder, offered at the end of the book.
+     * The books either side of the open one, in the folder's own order.
      *
-     * `null` for a book filed on its own, for the last volume of a series, and for a book whose
-     * folder is no longer in the library — the scroll readers simply end, as they always did, when
-     * there is nothing to continue into. It is a *folder* question rather than a format or a layout
-     * one: a series is a shelf the reader pointed at, and the panel exists to carry them along it.
+     * `null` for a book filed on its own, or one whose folder is no longer in the library — such a
+     * reader simply ends where it always did, at the end of the document. What it *is* decides the
+     * reader's order: a volume before this one and a volume after it are both drawn, above and
+     * below, so the seam can be crossed in either direction rather than only forwards.
      */
-    val nextBook: NextBookInFolder? = null,
+    val sequence: FolderSequence? = null,
+
+    /**
+     * The book before the open one, open and ready to be drawn above it.
+     *
+     * Loaded before the reader reaches the seam rather than when they arrive at it, because a
+     * document that has to be opened, parsed and decoded on the frame the reader crosses into it is
+     * a stall in the middle of the one gesture this feature exists to make continuous.
+     */
+    val previousSegment: ReaderSegment? = null,
+
+    /** The book after the open one, open and ready to be drawn below it. */
+    val nextSegment: ReaderSegment? = null,
+
+    /**
+     * Neighbours the reader could not carry on into, by book id.
+     *
+     * A next volume waiting for a password, a file that will not open, or one this reader draws with
+     * different machinery — a page of text inside a column of comic pages, or the reverse. All three
+     * are things the reader learns only by trying, and all three end the same way: the seam between
+     * the two books names the book and offers to open it as a book of its own, which is what the
+     * reader would have done without any of this.
+     */
+    val unavailableNeighbours: Set<Long> = emptySet(),
 ) {
     /**
      * Whether the reader is showing discrete pages right now, whatever the document is made of.
@@ -291,12 +333,30 @@ sealed interface ReaderIntent {
     data object PreviousUnit : ReaderIntent
 
     /**
-     * The reader asked to carry on into the next book of the folder, from the panel at the end.
+     * The reader has settled on a page of a book other than the open one.
      *
-     * An intent rather than navigation at the panel: the position in the book being left has to be
-     * written first, and only the ViewModel owns that.
+     * Sent by every presentation, in both directions, when the entry under the reader belongs to a
+     * neighbour of the folder sequence — which can only happen after a seam, because the seam is the
+     * only place two books meet. The ViewModel answers it by *becoming* that book: the file it is
+     * drawing has been open since shortly before the reader got there, so the handover is a change of
+     * which document the state describes rather than a second reader being started.
+     *
+     * [locator] is where in the new book the reader arrived, in the only form that survives that book
+     * being laid out again — a page for a page-image book, a chapter and a character for a reflowed
+     * one. A page *number* would have to be recomputed after a font-size change; the position does
+     * not.
      */
-    data object OpenNextBook : ReaderIntent
+    data class EnteredBook(val bookId: Long, val locator: ReadingLocator) : ReaderIntent
+
+    /**
+     * The reader asked to open a neighbouring book that could not be continued into.
+     *
+     * Only ever raised by the seam of a book the reader could not open ahead of time — one waiting
+     * for a password, one whose file will not open, one drawn by different machinery. The position
+     * in the book being left has to be written before the screen navigates away, and only the
+     * ViewModel owns that, which is why this is an intent rather than navigation at the seam.
+     */
+    data class OpenNeighbour(val bookId: Long) : ReaderIntent
 
     /**
      * The whole book has been measured, or the measurement that was running is no longer about the
@@ -335,6 +395,7 @@ sealed interface ReaderIntent {
     data class SetMargins(val scale: Float) : ReaderIntent
     data class SetParagraphSpacing(val scale: Float) : ReaderIntent
     data class SetFirstLineIndent(val enabled: Boolean) : ReaderIntent
+    data class SetTextAlignment(val alignment: TextAlignment) : ReaderIntent
     data class SetPageFit(val mode: PageFitMode) : ReaderIntent
     data class SetKeepScreenOn(val enabled: Boolean) : ReaderIntent
     data class SetShowProgressIndicator(val enabled: Boolean) : ReaderIntent

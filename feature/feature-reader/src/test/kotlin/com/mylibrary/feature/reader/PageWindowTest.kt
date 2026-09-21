@@ -104,74 +104,33 @@ class PageWindowTest {
 
     // endregion
 
-    // region Finding a page again
+    // region The key the pager is given
 
     /**
-     * The key the pager is given, in the one form it accepts. A `Bundle` holds no data classes, so a
-     * key that is not a number the platform knows throws as soon as a chapter is composed — and a key
-     * that is a number but collides gives two pages one page's state.
+     * The key the pager is given: an entry's own identity, which names its book as well as its page.
+     *
+     * A key that collides gives two entries one entry's saved state, and the pager now holds two
+     * books at once — so "chapter 1, page 0" is no longer an identity on its own, and the key is
+     * what the reader's place is kept by when a handoff renumbers everything under it.
      */
     @Test
-    fun `the pager's key of a page is that page and no other`() {
+    fun `the key of a page is that page and no other`() {
         val pages = windowPages(
             chapters = listOf(0, 1, 2),
             pageCounts = mapOf(0 to 40, 1 to 1, 2 to 3),
         )
 
-        val keys = pages.map { it.pagerKey() }
+        val keys = pages.map { ref ->
+            ReadingEntry.TextPage(bookId = 1, ref.chapterIndex, ref.pageIndexInChapter).readingKey()
+        }
 
         assertEquals("no two pages may share a key", pages.size, keys.toSet().size)
-        // The pairs a flat page number would confuse with one another, in both directions.
-        assertTrue(PageRef(1, 0).pagerKey() != PageRef(0, 0).pagerKey())
-        assertTrue(PageRef(0, 1).pagerKey() != PageRef(1, 0).pagerKey())
-    }
 
-    /**
-     * The identity the pager's key is built on, and the reason it can be given one: a page found by
-     * its own `(chapter, page)` is the page it was, whatever the list around it now looks like.
-     */
-    @Test
-    fun `every page of the window is found again at its own index`() {
-        val pages = windowPages(
-            chapters = listOf(0, 1, 2),
-            pageCounts = mapOf(0 to 1, 1 to 3, 2 to 2),
+        // The next volume's page 0 and the open volume's page 0 are both in the pager, and the reader
+        // crosses from one to the other.
+        assertTrue(
+            ReadingEntry.TextPage(1, 0, 0).readingKey() != ReadingEntry.TextPage(2, 0, 0).readingKey(),
         )
-
-        pages.forEachIndexed { index, ref ->
-            assertEquals(
-                "$ref must be found where it is",
-                index,
-                indexOfPage(pages, ref.chapterIndex, ref.pageIndexInChapter),
-            )
-        }
-    }
-
-    /**
-     * A remembered character offset can be past the end of a chapter once the font has changed and
-     * the chapter has fewer pages. The reader must land on its last page rather than nowhere.
-     */
-    @Test
-    fun `a page past the end of a chapter lands on its last page`() {
-        val pages = windowPages(listOf(0, 1), mapOf(0 to 4, 1 to 2))
-
-        assertEquals(3, indexOfPage(pages, chapterIndex = 0, pageIndexInChapter = 9))
-        assertEquals(3, indexOfPage(pages, chapterIndex = 0, pageIndexInChapter = 3))
-    }
-
-    @Test
-    fun `a chapter with no pages has no page to land on`() {
-        val pages = windowPages(listOf(0, 1), mapOf(0 to 2, 1 to 0))
-
-        assertEquals(-1, indexOfPage(pages, chapterIndex = 1, pageIndexInChapter = 0))
-    }
-
-    /** Two chapters may each have a first page; neither may answer for the other. */
-    @Test
-    fun `a page is not found in the chapter beside it`() {
-        val pages = windowPages(listOf(0, 1), mapOf(0 to 3, 1 to 3))
-
-        assertEquals(0, indexOfPage(pages, chapterIndex = 0, pageIndexInChapter = 0))
-        assertEquals(3, indexOfPage(pages, chapterIndex = 1, pageIndexInChapter = 0))
     }
 
     // endregion

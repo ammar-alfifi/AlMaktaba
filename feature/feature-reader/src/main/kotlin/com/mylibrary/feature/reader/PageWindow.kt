@@ -6,24 +6,11 @@ package com.mylibrary.feature.reader
  * The pager is one flat sequence of pages, and with several chapters in it at once a flat index says
  * almost nothing — it changes when a chapter is added to either end, and the page it names is only
  * meaningful next to the list it came from. A `(chapter, page)` pair does not: it survives the list
- * being rebuilt, which makes it the key the pager can be given so that it keeps its place across a
- * change of window. See [windowChapters].
+ * being rebuilt, which is the identity the pager is given — carried as a [ReadingEntry.TextPage],
+ * whose key names the book as well, because the list now holds the pages of more than one book. See
+ * [windowChapters].
  */
 internal data class PageRef(val chapterIndex: Int, val pageIndexInChapter: Int)
-
-/**
- * The page's identity as one number, which is the form the pager can be given it in.
- *
- * Compose files a page's saved state under the key and *stores that key in a `Bundle`*, which holds
- * only the types the platform knows — so the pair itself is not a legal key, however unique it is.
- * `PageRef` as a key compiles, and throws the moment a paged chapter is first composed.
- *
- * Packing the two halves into a `Long` keeps the identity exact rather than hashing it: a collision
- * would give two pages one page's state, and neither a chapter index nor a page number comes near
- * the 32 bits each half is given.
- */
-internal fun PageRef.pagerKey(): Long =
-    (chapterIndex.toLong() shl 32) or (pageIndexInChapter.toLong() and 0xFFFFFFFFL)
 
 /**
  * The chapters a paged reader holds at once: the one being read, and one on each side of it.
@@ -91,16 +78,3 @@ internal fun landingPageIn(
     if (pages.isEmpty()) return -1
     return pages.indices.lastOrNull { pageOffset(pages[it], offsets) <= anchorOffset } ?: 0
 }
-
-/**
- * The pager index showing page [pageIndexInChapter] of [chapterIndex] — or the last page of that
- * chapter before it, when there is no such page.
- *
- * Both callers want that rounding rather than an error. A remembered character offset is the reason:
- * it is where the reader was reading, and after the font has changed it can land past the end of a
- * chapter that now has fewer pages, which must put them on the last page rather than nowhere. The
- * same call answers for a jump into the middle of a chapter, and for one into a chapter with no
- * pages at all — which is `-1`, and means the reader is to be left where they are.
- */
-internal fun indexOfPage(pages: List<PageRef>, chapterIndex: Int, pageIndexInChapter: Int): Int =
-    pages.indexOfLast { it.chapterIndex == chapterIndex && it.pageIndexInChapter <= pageIndexInChapter }

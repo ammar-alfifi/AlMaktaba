@@ -62,6 +62,10 @@
     <string name="reader_settings_margins">Margins</string>
     <string name="reader_settings_paragraph_spacing">Paragraph spacing</string>
     <string name="reader_settings_first_line_indent">Indent the first line</string>
+    <string name="reader_settings_text_align">Text alignment</string>
+    <string name="reader_text_align_start">Edge</string>
+    <string name="reader_text_align_center">Center</string>
+    <string name="reader_text_align_justify">Justify</string>
     <string name="reader_settings_page_fit">Page fit</string>
     <string name="reader_fit_width">Width</string>
     <string name="reader_fit_page">Whole page</string>
@@ -89,8 +93,7 @@
     <string name="reader_link_unavailable">That link could not be opened.</string>
     <string name="reader_return_from_link">Return to where you were reading</string>
 
-    <!-- The end of a book that has a next volume in the same device folder -->
-    <string name="reader_end_of_book">End of book</string>
-    <string name="reader_next_book">Next book</string>
-    <string name="reader_next_book_in_folder">Next book in “%1$s”</string>
+    <!-- The page between two books of the same device folder -->
+    <string name="reader_seam_finished">Finished:</string>
+    <string name="reader_seam_next">Next:</string>
 </resources>

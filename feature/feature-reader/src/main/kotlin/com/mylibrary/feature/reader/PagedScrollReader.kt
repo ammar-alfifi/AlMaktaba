@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.PageSize
 import com.mylibrary.core.domain.model.PageTurnEffect
-import com.mylibrary.core.ui.theme.Spacing
+import com.mylibrary.core.domain.model.ReadingLocator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -64,6 +64,12 @@ import kotlinx.coroutines.launch
  * pager sends, which is why progress, bookmarks and restore work here without knowing this file
  * exists.
  *
+ * **Where it ends.** A device folder is a series, so the column no longer holds one book: the volume
+ * before the open one is drawn above it, the volume after it below, and the blank page where two
+ * books meet is an entry of the column like any other. What those entries are, and how a column index
+ * turns back into a page of the open book, is [readingOrder]'s business — decided once for all four
+ * presentations — and this file only has to say what a unit of a page-image book is.
+ *
  * **Inspection.** A page in a scrolling column is only as wide as the screen, which is too small to
  * read a speech bubble in. A double-tap or a pinch opens that page over the column at full size,
  * where the paged reader's whole zoom vocabulary applies: pinch to magnify, drag to pan, double-tap
@@ -77,8 +83,44 @@ internal fun PagedScrollReaderContent(
     onIntent: (ReaderIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // The book the column is anchored on: its pages sit between its neighbours', and its id is what
+    // tells a page of a neighbour from a page of the open book. `!!` because this presentation is only
+    // ever composed with a document open — see the empty-document case in ReaderScreen.
+    val bookId = state.book!!.id
+
+    // The order the column scrolls, rather than the open book's pages. A folder is a series, so the
+    // volume before this one is drawn above it and the volume after it below, with the blank seam
+    // wherever two books meet; [readingOrder] does that once for all four presentations, and this one
+    // only has to say what a unit of a page-image book is. Remembered on the ids and the lengths of
+    // the books involved, because those are what the order is made of: rebuilt per frame it would
+    // hand the list a new list every frame, and `readingKey` — not the index — is what keeps the
+    // reader's place through that.
+    val order = remember(
+        bookId,
+        state.totalUnits,
+        state.previousSegment?.book?.id,
+        state.previousSegment?.unitCount,
+        state.nextSegment?.book?.id,
+        state.nextSegment?.unitCount,
+        state.sequence?.previous?.id,
+        state.sequence?.next?.id,
+    ) {
+        readingOrder(
+            primaryBookId = bookId,
+            primary = List(state.totalUnits) { ReadingEntry.Page(bookId, it) },
+            previous = state.previousNeighbour { id, count ->
+                List(count) { ReadingEntry.Page(id, it) }
+            },
+            next = state.nextNeighbour { id, count ->
+                List(count) { ReadingEntry.Page(id, it) }
+            },
+        )
+    }
+
     val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = state.currentUnit.coerceAtLeast(0),
+        // Opened where the reader left off, resolved through the order: the volume above the open book
+        // is part of the column too, so the page they were on is not the index they were on.
+        initialFirstVisibleItemIndex = order.indexOfPage(bookId, state.currentUnit).coerceAtLeast(0),
     )
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
@@ -92,24 +134,62 @@ internal fun PagedScrollReaderContent(
     val currentBubbleZoom by rememberUpdatedState(state.settings.bubbleZoom)
     val currentHapticsEnabled by rememberUpdatedState(state.settings.hapticsEnabled)
 
-    // Column -> state. The index is mapped through `contentIndex` because the column can end in an
-    // item that is not part of the document — the next-book panel — and a reader who has scrolled
-    // onto it is still on the last page. `distinctUntilChanged` keeps the effect below from
-    // ping-ponging with it.
-    LaunchedEffect(listState, state.totalUnits) {
+    // Column -> state. The index is mapped through `readingOrder` before it reaches the ViewModel —
+    // the same reasoning the old `contentIndex` clamping carried, with the order in its place: a
+    // column index no longer names a page of the open book. The column holds the pages of the volume
+    // above and below as well, and the seam between two books belongs to neither — a reader who has
+    // scrolled onto one of those has not moved *within* the open book at all, and sending the index on
+    // as a page number would step the progress bar by a volume and carry the reader into a book they
+    // have not crossed into. Naming the book instead is what turns the crossing into a handover.
+    // `distinctUntilChanged` keeps the effect below from ping-ponging with it.
+    LaunchedEffect(listState, order) {
         snapshotFlow { listState.firstVisibleItemIndex }
-            .map { index -> contentIndex(index, state.totalUnits) }
+            .map { index -> order.entryAt(index) }
             .distinctUntilChanged()
-            .collect { page -> onIntent(ReaderIntent.PageChanged(page)) }
+            .collect { entry ->
+                when (entry) {
+                    is ReadingEntry.Page ->
+                        if (entry.bookId == bookId) {
+                            onIntent(ReaderIntent.PageChanged(entry.pageIndex))
+                        } else {
+                            onIntent(
+                                ReaderIntent.EnteredBook(
+                                    bookId = entry.bookId,
+                                    locator = ReadingLocator.Paged(entry.pageIndex),
+                                ),
+                            )
+                        }
+
+                    // Nothing to report. A seam belongs to neither book, and past either end of the
+                    // order there is no entry at all — in both cases the open book's position has not
+                    // moved, which is the truthful answer for the progress bar. The remaining unit
+                    // kinds cannot be in a page-image book's order.
+                    else -> Unit
+                }
+            }
     }
 
-    // State -> column, for a jump that did not come from scrolling: an outline entry, a search
-    // result, a bookmark, or the slider in the bottom bar. Compared through the same mapping, so
-    // scrolling onto the panel is not mistaken for a position the reader did not ask for and undone.
-    LaunchedEffect(state.currentUnit, state.totalUnits) {
-        if (state.totalUnits > 0 && state.currentUnit != contentIndex(listState.firstVisibleItemIndex, state.totalUnits)) {
-            listState.scrollToItem(state.currentUnit)
+    // State -> column, for a jump that did not come from scrolling: an outline entry, a search result,
+    // a bookmark, or the slider in the bottom bar. Both sides are resolved through the order before
+    // they are compared — the state names a page of the open book, while the column sits on an entry
+    // that is the same thing only while it belongs to the open book. The seam and the neighbour
+    // either side of it are credited with the open book's nearest page instead, which is the rounding
+    // `contentIndex` used to do for the end-of-book panel and for the same reason: a renumbered list
+    // must not be mistaken for a jump the reader did not ask for. Without it, a neighbour finishing
+    // its move into the column would drag the reader off the seam they were reading, or back out of
+    // the volume they had just crossed into.
+    LaunchedEffect(state.currentUnit, order) {
+        val target = order.indexOfPage(bookId, state.currentUnit)
+        if (target < 0) return@LaunchedEffect
+
+        val onScreen = listState.firstVisibleItemIndex
+        val visible = order.entryAt(onScreen) as? ReadingEntry.Page
+        val reading = when {
+            visible != null && visible.bookId == bookId -> visible.pageIndex
+            onScreen < target -> 0
+            else -> state.totalUnits - 1
         }
+        if (reading != state.currentUnit) listState.scrollToItem(target)
     }
 
     // The page opened over the column to be looked at closely, and the magnification it is being
@@ -125,12 +205,15 @@ internal fun PagedScrollReaderContent(
             // the same gesture and the same physical direction as the paged reader, which is what
             // keeps the two layouts feeling like one reader. Mirrored in Arabic, so the left-hand
             // tap is the one that moves forward.
-            .pointerInput(inspection.page) {
+            // The order is a key as well as the opened page: the double-tap resolves what it landed on
+            // through it, and a gesture held across a handover must not read a column of the list
+            // that no longer exists.
+            .pointerInput(inspection.page, order) {
                 detectTapGestures(
                     onDoubleTap = { position ->
                         if (inspection.page == null) {
-                            pageAt(position, listState)?.let { (index, fraction) ->
-                                inspection.frame(index, fraction)
+                            pageAt(position, listState, order)?.let { (page, fraction) ->
+                                inspection.frame(page, fraction)
                             }
                         }
                     },
@@ -180,40 +263,57 @@ internal fun PagedScrollReaderContent(
             // page" cannot also drag the page out from under the finger.
             userScrollEnabled = inspection.page == null,
         ) {
-            items(count = state.totalUnits, key = { index -> index }) { index ->
-                ScrollPage(
-                    pageIndex = index,
-                    listState = listState,
-                    viewModel = viewModel,
-                    onIntent = onIntent,
-                    onMagnify = { pinch -> inspection.magnify(index, pinch) },
-                )
-            }
-
-            // The end of the file, and what comes after it in the folder. Only ever present for a
-            // book that has a next volume; see [NextBookFooter].
-            state.nextBook?.let { next ->
-                item(key = NEXT_BOOK_ITEM_KEY) {
-                    NextBookFooter(
-                        next = next,
-                        onOpen = { onIntent(ReaderIntent.OpenNextBook) },
-                        // The pages themselves are full-bleed and may run under the chrome, but the
-                        // panel's button has to be reachable with the chrome showing — so this is
-                        // the one item in the column that leaves room for it, which the reflowable
-                        // reader gets instead from its own content padding.
-                        modifier = Modifier.padding(
-                            start = Spacing.Large,
-                            end = Spacing.Large,
-                            bottom = ReaderChromeClearance,
-                        ),
+            items(count = order.size, key = { index -> order[index].readingKey() }) { index ->
+                when (val entry = order[index]) {
+                    is ReadingEntry.Page -> ScrollPage(
+                        bookId = entry.bookId,
+                        pageIndex = entry.pageIndex,
+                        listState = listState,
+                        viewModel = viewModel,
+                        onIntent = onIntent,
+                        onMagnify = { page, pinch -> inspection.magnify(page, pinch) },
                     )
+
+                    // The end of one book and the start of the next, as the page between them. Every
+                    // book of the folder gets one of these on the side it has a neighbour — the seam
+                    // is what makes the column continuous rather than a document with a panel stuck
+                    // on the end of it, and it is read from both directions.
+                    is ReadingEntry.Seam -> ReaderSeamPage(
+                        fromTitle = state.titleOf(entry.fromBookId).orEmpty(),
+                        toTitle = state.titleOf(entry.toBookId).orEmpty(),
+                        // Only the seam *into* the next volume ever offers the fallback, and only when
+                        // that volume could not be opened ahead of time — a password, a file that will
+                        // not open, machinery this reader draws differently. The book behind the reader
+                        // is already behind them, and its saved position rather than its first page is
+                        // where they would want to arrive.
+                        onOpenNext = if (entry.fromBookId == bookId &&
+                            entry.toBookId in state.unavailableNeighbours
+                        ) {
+                            { onIntent(ReaderIntent.OpenNeighbour(entry.toBookId)) }
+                        } else {
+                            null
+                        },
+                        // A page of the column, so a whole viewport of it: a seam is where the reader
+                        // arrives between two books and has to be able to rest while the next one
+                        // opens, not a strip under the last page of the volume. The chrome's own
+                        // height comes off the bottom of that so the fallback button stays reachable
+                        // with the toolbars showing — the clearance the end-of-book panel used to
+                        // carry, now that the seam is the only thing at the end of a book.
+                        modifier = Modifier
+                            .fillParentMaxHeight()
+                            .padding(bottom = ReaderChromeClearance),
+                    )
+
+                    // The order of a page-image book holds its pages and the seams between books;
+                    // nothing else can be in it.
+                    else -> Unit
                 }
             }
         }
 
-        inspection.page?.let { index ->
+        inspection.page?.let { page ->
             PageInspection(
-                pageIndex = index,
+                page = page,
                 viewModel = viewModel,
                 onIntent = onIntent,
                 inspection = inspection,
@@ -228,6 +328,11 @@ internal fun PagedScrollReaderContent(
 /**
  * Which page of the column [position] fell on, and where on that page, as a fraction of it.
  *
+ * The page itself and not the column index it was drawn at: the column holds the pages of the volumes
+ * either side of the open one as well, so the index is only a place in the list until the order says
+ * what is at it — and page three of the volume below the open book is not page three of the open book.
+ * A seam answers with nothing, because it is not a page of anything and has nothing to magnify.
+ *
  * The fraction rather than the point, because the page opened over the column is fitted differently:
  * "the place under the finger" is a different coordinate in each of the two rectangles.
  *
@@ -235,14 +340,19 @@ internal fun PagedScrollReaderContent(
  * page would sit above the list's own and swallow every single tap — which is how a version of this
  * briefly stopped tap-to-turn and the toolbar from working anywhere over a page.
  */
-private fun pageAt(position: Offset, listState: LazyListState): Pair<Int, Offset>? {
+private fun pageAt(
+    position: Offset,
+    listState: LazyListState,
+    order: List<ReadingEntry>,
+): Pair<ReadingEntry.Page, Offset>? {
     val layout = listState.layoutInfo
     val y = position.y + layout.viewportStartOffset
     val item = layout.visibleItemsInfo.firstOrNull { info ->
         y >= info.offset && y < info.offset + info.size
     } ?: return null
     if (item.size <= 0) return null
-    return item.index to Offset(
+    val page = order.entryAt(item.index) as? ReadingEntry.Page ?: return null
+    return page to Offset(
         x = (position.x / layout.viewportSize.width).coerceIn(0f, 1f),
         y = ((y - item.offset) / item.size.toFloat()).coerceIn(0f, 1f),
     )
@@ -257,14 +367,18 @@ private fun pageAt(position: Offset, listState: LazyListState): Pair<Int, Offset
  */
 @Composable
 private fun ScrollPage(
+    bookId: Long,
     pageIndex: Int,
     listState: LazyListState,
     viewModel: ReaderViewModel,
     onIntent: (ReaderIntent) -> Unit,
-    onMagnify: (ColumnMagnify) -> Unit,
+    onMagnify: (ReadingEntry.Page, ColumnMagnify) -> Unit,
 ) {
-    val pageSize by produceState<PageSize?>(initialValue = null, pageIndex) {
-        value = viewModel.pageSize(pageIndex)
+    // The entry this item stands for, built once: a pinch names it on every frame of the gesture, and
+    // the page's identity now has a book in it as well as a number.
+    val page = remember(bookId, pageIndex) { ReadingEntry.Page(bookId, pageIndex) }
+    val pageSize by produceState<PageSize?>(initialValue = null, bookId, pageIndex) {
+        value = viewModel.pageSize(bookId, pageIndex)
     }
     val ratio = pageSize
         ?.takeIf { it.width > 0 && it.height > 0 }
@@ -284,6 +398,7 @@ private fun ScrollPage(
         // container, the drawn page and the item's own box are one rectangle, so the scale a pinch
         // reports is already the scale of the page.
         ReaderPage(
+            bookId = bookId,
             pageIndex = pageIndex,
             pageOffset = { 0f },
             isCurrentPage = false,
@@ -301,7 +416,9 @@ private fun ScrollPage(
                 // A page only ever leaves the column on a pinch, and a pinch is only ever two
                 // fingers: one finger on a page belongs to the column and must keep scrolling it.
                 // The same rule the paged reader applies to its pager, for the same reason.
-                .pointerInput(pageIndex) {
+                // Keyed on the entry rather than the page number: the column holds pages of more than
+                // one book, and this node belongs to one of them.
+                .pointerInput(page) {
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
                         var zoom = 1f
@@ -330,13 +447,13 @@ private fun ScrollPage(
                                     ),
                                     anchorView = Offset(
                                         centroid.x,
-                                        centroid.y + viewportOffsetOf(pageIndex, listState),
+                                        centroid.y + viewportOffsetOf(page, listState),
                                     ),
                                     zoom = 1f,
                                     columnDrawn = drawn,
                                 )
                             }
-                            anchor?.let { onMagnify(it.copy(zoom = zoom)) }
+                            anchor?.let { onMagnify(page, it.copy(zoom = zoom)) }
 
                             if (zoom > ZOOMED_THRESHOLD) {
                                 event.changes.forEach { change ->
@@ -346,7 +463,7 @@ private fun ScrollPage(
                         } while (event.changes.any { it.pressed })
                         // Back to a single page-width and the page returns to the column, which is
                         // how a reader says they have finished with it.
-                        if (zoom <= ZOOMED_THRESHOLD) anchor?.let { onMagnify(it.copy(zoom = zoom)) }
+                        if (zoom <= ZOOMED_THRESHOLD) anchor?.let { onMagnify(page, it.copy(zoom = zoom)) }
                     }
                 }
         )
@@ -361,9 +478,13 @@ private fun ScrollPage(
  * in the viewport's coordinates, so the two have to be reconciled before a pinch point can be handed
  * from one to the other.
  */
-private fun viewportOffsetOf(pageIndex: Int, listState: LazyListState): Float {
+private fun viewportOffsetOf(page: ReadingEntry.Page, listState: LazyListState): Float {
     val layout = listState.layoutInfo
-    val item = layout.visibleItemsInfo.firstOrNull { info -> info.index == pageIndex } ?: return 0f
+    // Found by the entry's own key rather than by its index: a page number no longer names an item
+    // once the column holds the pages of more than one book, while the key the column files it under
+    // does — see [ReadingEntry.readingKey].
+    val key = page.readingKey()
+    val item = layout.visibleItemsInfo.firstOrNull { info -> info.key == key } ?: return 0f
     return (item.offset - layout.viewportStartOffset).toFloat()
 }
 
@@ -375,7 +496,7 @@ private fun viewportOffsetOf(pageIndex: Int, listState: LazyListState): Float {
  */
 @Composable
 private fun PageInspection(
-    pageIndex: Int,
+    page: ReadingEntry.Page,
     viewModel: ReaderViewModel,
     onIntent: (ReaderIntent) -> Unit,
     inspection: Inspection,
@@ -480,7 +601,7 @@ private fun PageInspection(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
-            .pointerInput(pageIndex) {
+            .pointerInput(page) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
                     do {
@@ -519,7 +640,7 @@ private fun PageInspection(
                     if (inspection.transform.scale <= ZOOMED_THRESHOLD) inspection.close()
                 }
             }
-            .pointerInput(pageIndex) {
+            .pointerInput(page) {
                 detectTapGestures(
                     onTap = { inspection.close() },
                     onDoubleTap = { position ->
@@ -555,7 +676,8 @@ private fun PageInspection(
             },
     ) {
         ReaderPage(
-            pageIndex = pageIndex,
+            bookId = page.bookId,
+            pageIndex = page.pageIndex,
             pageOffset = { 0f },
             isCurrentPage = true,
             layerTransform = layerTransform,
@@ -564,7 +686,7 @@ private fun PageInspection(
             pageTurnEffect = PageTurnEffect.CURL,
             viewModel = viewModel,
             onIntent = onIntent,
-            onGeometry = { measured: PageGeometry -> inspection.report(pageIndex, measured) },
+            onGeometry = { measured: PageGeometry -> inspection.report(page, measured) },
         )
     }
 }
@@ -579,8 +701,14 @@ private fun PageInspection(
  * happen if the opened page tried to take over the gesture that opened it.
  */
 private class Inspection {
-    /** The page opened over the column, or `null` while the reader is scrolling. */
-    var page by mutableStateOf<Int?>(null)
+    /**
+     * The page opened over the column, or `null` while the reader is scrolling.
+     *
+     * An entry rather than a page number, because the column holds the pages of more than one book:
+     * page three of the volume below the open one and page three of the open one are different pages,
+     * and the overlay has to draw the one the reader put their fingers on.
+     */
+    var page by mutableStateOf<ReadingEntry.Page?>(null)
         private set
 
     var transform by mutableStateOf(PageTransform.Identity)
@@ -596,15 +724,15 @@ private class Inspection {
      * frames the geometry still belongs to whatever was open before. Aiming a zoom at it would aim
      * at the wrong page's size.
      */
-    private var geometryPage by mutableStateOf<Int?>(null)
+    private var geometryPage by mutableStateOf<ReadingEntry.Page?>(null)
 
     /** Whether a double-tap looks for a speech bubble first. Read from settings by the caller. */
     var bubbleZoom by mutableStateOf(true)
 
     /** The opened page reporting where it is drawn and how big. */
-    fun report(pageIndex: Int, measured: PageGeometry) {
+    fun report(page: ReadingEntry.Page, measured: PageGeometry) {
         geometry = measured
-        geometryPage = pageIndex
+        geometryPage = page
     }
 
     /** Whether the opened page has said enough for a zoom to be aimed at it. */
@@ -639,15 +767,15 @@ private class Inspection {
         get() = transform.scale.coerceIn(1f, MAX_RENDER_SCALE).toInt().coerceAtLeast(1)
 
     /**
-     * Opens [index] over the column, carrying on from the pinch that asked for it.
+     * Opens [entry] over the column, carrying on from the pinch that asked for it.
      *
      * The page must not move or change size as it is handed over, which is why the transform is
      * built from [ColumnMagnify] — what the column was showing — rather than from the pinch's own
      * magnification applied to the overlay's quite different idea of "unzoomed".
      */
-    fun magnify(index: Int, pinch: ColumnMagnify) {
-        if (page != index) {
-            page = index
+    fun magnify(entry: ReadingEntry.Page, pinch: ColumnMagnify) {
+        if (page != entry) {
+            page = entry
             reference = Size.Zero
             transform = PageTransform.Identity
             pendingFrame = null
@@ -692,10 +820,10 @@ private class Inspection {
         reference = geometry.reference
     }
 
-    /** Opens [index] over the column at fit, asking for [fraction] of it to be framed. */
-    fun frame(index: Int, fraction: Offset) {
-        if (page != index) {
-            page = index
+    /** Opens [entry] over the column at fit, asking for [fraction] of it to be framed. */
+    fun frame(entry: ReadingEntry.Page, fraction: Offset) {
+        if (page != entry) {
+            page = entry
             reference = Size.Zero
             transform = PageTransform.Identity
             pendingMagnify = null

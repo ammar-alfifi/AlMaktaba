@@ -54,6 +54,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mylibrary.core.domain.model.ReaderFont
+import com.mylibrary.core.domain.model.ReadingLocator
+import com.mylibrary.core.domain.model.TextAlignment
 import com.mylibrary.core.ui.theme.readerFontFamily
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -62,11 +64,17 @@ import kotlinx.coroutines.launch
 /**
  * The reader for reflowable documents: EPUB and TXT.
  *
- * Chapters are laid out lazily by a `LazyColumn` keyed on chapter index, so a book with 300 chapters
- * composes the one being read plus the next. Within a chapter, content is rendered from the block
- * list produced by [parseChapterHtml] rather than from an HTML view: that is what lets the reader
- * apply its own typography, font scale and theme to the text instead of inheriting whatever the
- * publisher's stylesheet demanded.
+ * Chapters are laid out lazily by a `LazyColumn` keyed on the entry it draws, so a book with 300
+ * chapters composes the one being read plus the next. Within a chapter, content is rendered from the
+ * block list produced by [parseChapterHtml] rather than from an HTML view: that is what lets the
+ * reader apply its own typography, font scale and theme to the text instead of inheriting whatever
+ * the publisher's stylesheet demanded.
+ *
+ * What the column draws is a folder's reading order rather than one file's chapters: a device folder
+ * is a series, so the volume before the open one lies above it and the volume after it below, each
+ * pair meeting at the blank seam that names the book that has ended and the book that begins. The
+ * reader crosses that seam by scrolling, the same gesture that crosses a chapter boundary — which is
+ * why the column is keyed on entries and not on chapter numbers.
  *
  * Scroll position is the chapter index, not a pixel offset, which is what makes the position survive
  * a font-size change — the text re-flows, and the reader stays on the same chapter rather than
@@ -79,25 +87,92 @@ fun ReflowableReaderContent(
     onIntent: (ReaderIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = state.currentUnit.coerceAtLeast(0),
-    )
+    val bookId = state.book?.id
 
-    // Column -> state. The index is mapped through `contentIndex` because the column can end in an
-    // item that is not part of the document — the next-book panel — and a reader who has scrolled
-    // onto it is still on the last chapter.
-    LaunchedEffect(listState, state.totalUnits) {
-        snapshotFlow { listState.firstVisibleItemIndex }
-            .map { index -> contentIndex(index, state.totalUnits) }
-            .distinctUntilChanged()
-            .collect { chapterIndex -> onIntent(ReaderIntent.ChapterChanged(chapterIndex)) }
+    // The order the column draws: the open book's chapters, the volume before it above and the volume
+    // after it below, with the blank seam wherever two books meet. A chapter's place in the column
+    // therefore says nothing about which document it belongs to, which is why every entry carries its
+    // book id and why the position below is read as an entry rather than as a chapter number.
+    //
+    // Remembered on the books and their unit counts rather than rebuilt per frame: the column
+    // renumbers whenever the list under it changes — and keeps the reader's place by key when it does
+    // — so a list built fresh on every recomposition would renumber on every scroll.
+    val order = remember(
+        bookId,
+        state.totalUnits,
+        state.previousSegment?.book?.id ?: state.sequence?.previous?.id,
+        state.previousSegment?.unitCount,
+        state.nextSegment?.book?.id ?: state.sequence?.next?.id,
+        state.nextSegment?.unitCount,
+    ) {
+        if (bookId == null) {
+            emptyList()
+        } else {
+            readingOrder(
+                primaryBookId = bookId,
+                primary = List(state.totalUnits) { ReadingEntry.Chapter(bookId, it) },
+                previous = state.previousNeighbour { id, count ->
+                    List(count) { ReadingEntry.Chapter(id, it) }
+                },
+                next = state.nextNeighbour { id, count ->
+                    List(count) { ReadingEntry.Chapter(id, it) }
+                },
+            )
+        }
     }
 
-    // Compared through the same mapping, so scrolling onto the panel is not mistaken for a position
-    // the reader did not ask for and immediately undone.
-    LaunchedEffect(state.currentUnit, state.totalUnits) {
-        if (state.totalUnits > 0 && state.currentUnit != contentIndex(listState.firstVisibleItemIndex, state.totalUnits)) {
-            listState.animateScrollToItem(state.currentUnit)
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = bookId
+            ?.let { order.indexOfChapter(it, state.currentUnit) }
+            ?.coerceAtLeast(0)
+            ?: 0,
+    )
+
+    // Column -> state. The index is mapped through the order rather than read as a chapter number: the
+    // column no longer begins and ends with the open book, so its first items can be the previous
+    // volume's chapters and its last the next volume's. An entry of the open book is a position in it;
+    // an entry of a neighbour is not a position in the open book at all but a crossing into that book;
+    // and a seam is reported as nothing, because the reader is between the two and the open book's
+    // position has not moved — the progress bar keeps naming the book they have just finished, which
+    // is the truthful answer.
+    //
+    // `distinctUntilChanged` is what stops the effect re-reporting itself after a handoff: the order is
+    // rebuilt around the entry the reader is on, and that entry maps to the same intent it did a frame
+    // earlier.
+    LaunchedEffect(listState, bookId, order) {
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .map { index ->
+                when (val entry = order.entryAt(index)) {
+                    is ReadingEntry.Chapter -> if (entry.bookId == bookId) {
+                        ReaderIntent.ChapterChanged(entry.chapterIndex)
+                    } else {
+                        // The column has scrolled onto a chapter of another book: the reader has
+                        // crossed the seam, and what carries over is the start of that chapter
+                        // rather than anything of the book being left behind.
+                        ReaderIntent.EnteredBook(
+                            bookId = entry.bookId,
+                            locator = ReadingLocator.Reflowable(
+                                chapterIndex = entry.chapterIndex,
+                                charOffset = 0,
+                            ),
+                        )
+                    }
+
+                    // A seam, or an entry of a presentation this column does not draw.
+                    else -> null
+                }
+            }
+            .distinctUntilChanged()
+            .collect { intent -> intent?.let(onIntent) }
+    }
+
+    // Compared through the order for the same reason, and so that a renumbered column — a handoff, or
+    // a neighbour's chapters arriving — is not mistaken for a jump the reader did not ask for and
+    // immediately undone.
+    LaunchedEffect(state.currentUnit, state.totalUnits, bookId) {
+        val target = bookId?.let { order.indexOfChapter(it, state.currentUnit) } ?: -1
+        if (target >= 0 && target != listState.firstVisibleItemIndex) {
+            listState.animateScrollToItem(target)
         }
     }
 
@@ -163,40 +238,68 @@ fun ReflowableReaderContent(
                 end = margin,
                 top = 24.dp,
                 // Room for the reader's own bottom chrome, which the column is drawn under — and so
-                // also room to scroll the end-of-book panel clear of it.
+                // also room to scroll a seam clear of it.
                 bottom = ReaderChromeClearance,
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(count = state.totalUnits, key = { index -> index }) { chapterIndex ->
-                ChapterContentView(
-                    chapterIndex = chapterIndex,
-                    // Only the chapter being read can be a link target, and handing the anchor to
-                    // any other one would scroll a chapter the reader is not looking at.
-                    pendingAnchor = state.pendingAnchor.takeIf { chapterIndex == state.currentUnit },
-                    viewModel = viewModel,
-                    state = state,
-                    onIntent = onIntent,
-                )
-            }
-
-            // The end of the file, and what comes after it in the folder. Only ever present for a
-            // book that has a next volume; see [NextBookFooter].
-            state.nextBook?.let { next ->
-                item(key = NEXT_BOOK_ITEM_KEY) {
-                    NextBookFooter(
-                        next = next,
-                        onOpen = { onIntent(ReaderIntent.OpenNextBook) },
+            items(count = order.size, key = { index -> order[index].readingKey() }) { index ->
+                when (val entry = order[index]) {
+                    is ReadingEntry.Chapter -> ChapterContentView(
+                        bookId = entry.bookId,
+                        chapterIndex = entry.chapterIndex,
+                        // Only the chapter being read of the book being read can be a link target, and
+                        // handing the anchor to any other one — a chapter of a neighbouring book
+                        // above all — would scroll a chapter the reader is not looking at.
+                        pendingAnchor = state.pendingAnchor.takeIf {
+                            entry.bookId == state.book?.id && entry.chapterIndex == state.currentUnit
+                        },
+                        viewModel = viewModel,
+                        state = state,
+                        onIntent = onIntent,
                     )
+
+                    // The blank page where two books of the folder meet, in place of the end-of-book
+                    // panel: it is scrolled through into the next volume rather than offering a way
+                    // back to the shelf for it. A full viewport of height, because it is a page to
+                    // pass rather than a line to read past.
+                    is ReadingEntry.Seam -> ReaderSeamPage(
+                        fromTitle = state.titleOf(entry.fromBookId).orEmpty(),
+                        toTitle = state.titleOf(entry.toBookId).orEmpty(),
+                        // Offering to open it as a book of its own is for the seam ahead of the
+                        // reader, and only when carrying on past it failed — a volume waiting for a
+                        // password, or one this reader draws with other machinery. The seam behind
+                        // them never offers it: that book is already behind them, and the place they
+                        // would want in it is their saved position, not its first page.
+                        onOpenNext = if (
+                            entry.fromBookId == state.book?.id &&
+                            state.unavailableNeighbours.contains(entry.toBookId)
+                        ) {
+                            { onIntent(ReaderIntent.OpenNeighbour(entry.toBookId)) }
+                        } else {
+                            null
+                        },
+                        modifier = Modifier.fillParentMaxHeight(),
+                    )
+
+                    // A page or a page-of-text entry belongs to another presentation.
+                    else -> Unit
                 }
             }
         }
     }
 }
 
-/** One chapter: its title, then its blocks. */
+/**
+ * One chapter of one book: its title, then its blocks.
+ *
+ * [bookId] rather than an assumption that the open book is the only one drawn, because it is not: the
+ * column holds the books either side of it as well, and a chapter of the volume below is parsed — and
+ * its images decoded — exactly as a chapter of the open book is.
+ */
 @Composable
 private fun ChapterContentView(
+    bookId: Long,
     chapterIndex: Int,
     pendingAnchor: String?,
     viewModel: ReaderViewModel,
@@ -208,12 +311,14 @@ private fun ChapterContentView(
 
     val content by produceState<ChapterContent>(
         initialValue = ChapterContent.Empty,
+        bookId,
         chapterIndex,
         // Re-parsed when the theme changes so links take the new accent colour rather than keeping
         // the one they were first drawn with.
         linkColor,
     ) {
         value = viewModel.chapterContent(
+            bookId = bookId,
             chapterIndex = chapterIndex,
             links = LinkStyling(color = linkColor) { href ->
                 currentOnIntent(ReaderIntent.FollowLink(href))
@@ -250,7 +355,7 @@ private fun ChapterContentView(
                 }
 
             Box(modifier = blockModifier) {
-                BlockView(block = block, viewModel = viewModel, state = state)
+                BlockView(bookId = bookId, block = block, viewModel = viewModel, state = state)
             }
         }
     }
@@ -262,9 +367,14 @@ private fun ChapterContentView(
  * Only the paged view produces partial blocks — a scrolling chapter always passes a slice covering
  * the whole thing — so this deliberately falls straight through to [BlockView] in that case, and the
  * scrolling reader's rendering stays exactly what it was.
+ *
+ * [bookId] names the document the block came from, because a slice is no longer always a slice of the
+ * open book: the pages either side of it belong to the neighbouring volumes, and an image among them
+ * has to be read from the document that holds it rather than from the one being read.
  */
 @Composable
 internal fun BlockSliceView(
+    bookId: Long,
     block: ContentBlock,
     slice: BlockSlice,
     viewModel: ReaderViewModel,
@@ -272,7 +382,7 @@ internal fun BlockSliceView(
 ) {
     val text = block.bodyText()
     if (!block.isSplittable() || (slice.start <= 0 && slice.end >= text.length)) {
-        BlockView(block = block, viewModel = viewModel, state = state)
+        BlockView(bookId = bookId, block = block, viewModel = viewModel, state = state)
         return
     }
 
@@ -309,13 +419,14 @@ internal fun BlockSliceView(
         )
 
         is ContentBlock.Image, is ContentBlock.Table, ContentBlock.Divider ->
-            BlockView(block = block, viewModel = viewModel, state = state)
+            BlockView(bookId = bookId, block = block, viewModel = viewModel, state = state)
     }
 }
 
 /** Draws one block. Split out so the anchor wrapper above stays readable. */
 @Composable
 private fun BlockView(
+    bookId: Long,
     block: ContentBlock,
     viewModel: ReaderViewModel,
     state: ReaderUiState,
@@ -340,6 +451,7 @@ private fun BlockView(
         )
 
         is ContentBlock.Image -> ChapterImage(
+            bookId = bookId,
             path = block.path,
             alt = block.alt,
             caption = block.caption,
@@ -488,14 +600,19 @@ private fun ListItemText(
  */
 @Composable
 private fun ChapterImage(
+    bookId: Long,
     path: String,
     alt: String?,
     caption: AnnotatedString?,
     viewModel: ReaderViewModel,
     state: ReaderUiState,
 ) {
-    val image by produceState<ImageBitmap?>(initialValue = null, path) {
-        value = viewModel.chapterImage(path, targetWidthPx = IMAGE_TARGET_WIDTH_PX)
+    val image by produceState<ImageBitmap?>(initialValue = null, bookId, path) {
+        value = viewModel.chapterImage(
+            bookId = bookId,
+            path = path,
+            targetWidthPx = IMAGE_TARGET_WIDTH_PX,
+        )
     }
 
     Column(
@@ -605,6 +722,7 @@ internal fun ReaderUiState.bodyTextStyle(): TextStyle {
         fontFamily = readingFontFamily(),
         fontSize = size.sp,
         lineHeight = (size * settings.lineHeightScale * LINE_HEIGHT_RATIO).sp,
+        textAlign = settings.textAlign.toCompose(),
     )
 }
 
@@ -648,6 +766,19 @@ internal fun ReaderUiState.headingStyle(level: Int): TextStyle {
 
 /** 1.5 is a comfortable default for running text; the user's line-height slider scales it. */
 private const val LINE_HEIGHT_RATIO = 1.5f
+
+/**
+ * The reader's own alignment setting as Compose sees it.
+ *
+ * `START` rather than a fixed edge, so the setting follows the column's direction: in a
+ * right-to-left book, "the start" is the right edge, which is what a reader means by the text
+ * being "normal".
+ */
+internal fun TextAlignment.toCompose(): TextAlign = when (this) {
+    TextAlignment.START -> TextAlign.Start
+    TextAlignment.CENTER -> TextAlign.Center
+    TextAlignment.JUSTIFY -> TextAlign.Justify
+}
 
 /**
  * The reader's side margins, scaled by the setting.

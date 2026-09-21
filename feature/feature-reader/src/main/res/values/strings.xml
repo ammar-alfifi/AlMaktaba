@@ -33,7 +33,7 @@
     <string name="reader_direction_first_left">الأولى من اليسار</string>
     <string name="reader_direction_first_right">الأولى من اليمين</string>
     <string name="reader_settings_reset">إعادة ضبط إعدادات القراءة</string>
-    <string name="reader_settings_reset_message">سيُعاد ضبط الخط وحجمه وتباعد الأسطر والهوامش وتباعد الفقرات وإزاحة السطر الأول وطريقة العرض وملاءمة الصفحة واتجاه القراءة. لن يتغيّر مظهر التطبيق ولا لغته ولا ترتيب مكتبتك.</string>
+    <string name="reader_settings_reset_message">سيُعاد ضبط الخط وحجمه وتباعد الأسطر والهوامش وتباعد الفقرات وإزاحة السطر الأول ومحاذاة النص وطريقة العرض وملاءمة الصفحة واتجاه القراءة. لن يتغيّر مظهر التطبيق ولا لغته ولا ترتيب مكتبتك.</string>
     <string name="reader_settings_reset_done">أُعيد ضبط إعدادات القراءة</string>
     <!-- One string for both counters: the sentence is the same and only the total it counts to
          differs, so naming it after one of them would be the thing that is wrong. -->
@@ -63,6 +63,10 @@
     <string name="reader_settings_margins">الهوامش</string>
     <string name="reader_settings_paragraph_spacing">تباعد الفقرات</string>
     <string name="reader_settings_first_line_indent">إزاحة السطر الأول</string>
+    <string name="reader_settings_text_align">محاذاة النص</string>
+    <string name="reader_text_align_start">من الحافة</string>
+    <string name="reader_text_align_center">من الوسط</string>
+    <string name="reader_text_align_justify">ضبط الحواف</string>
     <string name="reader_settings_page_fit">ملاءمة الصفحة</string>
     <string name="reader_fit_width">العرض</string>
     <string name="reader_fit_page">الصفحة كاملة</string>
@@ -90,8 +94,7 @@
     <string name="reader_link_unavailable">تعذّر فتح الرابط.</string>
     <string name="reader_return_from_link">الرجوع إلى موضع القراءة</string>
 
-    <!-- The end of a book that has a next volume in the same device folder -->
-    <string name="reader_end_of_book">نهاية الكتاب</string>
-    <string name="reader_next_book">الكتاب التالي</string>
-    <string name="reader_next_book_in_folder">الكتاب التالي في «%1$s»</string>
+    <!-- The page between two books of the same device folder -->
+    <string name="reader_seam_finished">تم الانتهاء من:</string>
+    <string name="reader_seam_next">التالي:</string>
 </resources>

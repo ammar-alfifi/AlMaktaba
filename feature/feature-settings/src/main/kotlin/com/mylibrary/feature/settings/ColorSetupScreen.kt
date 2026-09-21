@@ -2,8 +2,6 @@ package com.mylibrary.feature.settings
 
 import android.os.Build
 import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,12 +9,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -32,15 +31,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
@@ -51,7 +47,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mylibrary.core.domain.model.ColorSource
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ThemeMode
-import com.mylibrary.core.ui.component.ChoiceRow
 import com.mylibrary.core.ui.component.FeatureScaffold
 import com.mylibrary.core.ui.theme.MyLibraryTheme
 import com.mylibrary.core.ui.theme.Spacing
@@ -129,11 +124,10 @@ fun ColorSetupScreen(
                         Heading()
 
                         Section(title = stringResource(R.string.settings_color_theme)) {
-                            ChoiceRow(
-                                options = ThemeMode.entries,
+                            ThemeModeCards(
                                 selected = settings.themeMode,
+                                colorSource = settings.colorSource,
                                 onSelect = { onIntent(SettingsIntent.ThemeModeChanged(it)) },
-                                label = { mode -> Text(stringResource(mode.setupLabelRes())) },
                             )
                         }
 
@@ -181,12 +175,193 @@ private fun Heading() {
 }
 
 /**
- * One colour of the app.
+ * One card per theme mode, each showing a miniature of the app in that mode.
  *
- * A filled circle rather than a labelled chip, because the name of a colour is not the colour: no
- * label distinguishes the blue from the purple as quickly as the two of them side by side do. The
- * name is kept for anyone using a screen reader, which is the one place a swatch cannot speak for
- * itself.
+ * This is how the professional Material pickers answer the question: not with the word "داكن",
+ * which every reader has already seen a hundred times, but with the app itself in dark. The text
+ * stays for screen readers and for anyone who still wants it; the picture is doing the work.
+ */
+@Composable
+private fun ThemeModeCards(
+    selected: ThemeMode,
+    colorSource: ColorSource,
+    onSelect: (ThemeMode) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.Medium),
+    ) {
+        ThemeMode.entries.forEach { mode ->
+            val chosen = mode == selected
+            val label = stringResource(mode.setupLabelRes())
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(Spacing.Small),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(0.82f)
+                        .clip(MaterialTheme.shapes.medium)
+                        .border(
+                            width = if (chosen) SELECTED_RING else 1.dp,
+                            color = if (chosen) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.outlineVariant
+                            },
+                            shape = MaterialTheme.shapes.medium,
+                        )
+                        .selectable(
+                            selected = chosen,
+                            role = Role.RadioButton,
+                            onClick = { onSelect(mode) },
+                        )
+                        .semantics { contentDescription = label },
+                ) {
+                    MiniAppPreview(colorSource = colorSource, mode = mode)
+
+                    if (chosen) {
+                        // A small filled badge rather than a corner tick, so the retina reads it
+                        // before the finger even asks which card was tapped.
+                        Box(
+                            modifier = Modifier
+                                .padding(Spacing.Small)
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                                .align(Alignment.TopEnd),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (chosen) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * A miniature of the app in [mode], real colours rather than sketches.
+ *
+ * Four elements and nothing more — a top bar, two lines of reading, a chip and a FAB — but each
+ * drawn from the actual [ColorScheme] that machine would run in, including the split of light and
+ * dark that SYSTEM implies. `surfaceContainer` marks the furniture, `primaryContainer` the
+ * emphasis; those two pairings are most of what a theme is.
+ */
+@Composable
+private fun MiniAppPreview(colorSource: ColorSource, mode: ThemeMode) {
+    val dark = mode == ThemeMode.DARK
+    val scheme = colorSchemeForSource(colorSource, dark)
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(scheme.surface),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(scheme.surfaceContainer)
+                .padding(horizontal = Spacing.Medium, vertical = Spacing.Small),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(56.dp)
+                    .height(LINE)
+                    .clip(CircleShape)
+                    .background(scheme.primaryContainer),
+            )
+            Box(
+                modifier = Modifier
+                    .width(28.dp)
+                    .height(LINE)
+                    .clip(CircleShape)
+                    .background(scheme.onSurfaceVariant.copy(alpha = 0.5f)),
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = Spacing.Medium, vertical = Spacing.Small),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Small),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(LINE)
+                    .clip(CircleShape)
+                    .background(scheme.onSurface.copy(alpha = 0.85f)),
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.72f)
+                    .height(LINE)
+                    .clip(CircleShape)
+                    .background(scheme.onSurface.copy(alpha = 0.5f)),
+            )
+            Box(
+                modifier = Modifier
+                    .clip(MaterialTheme.shapes.small)
+                    .background(scheme.secondaryContainer)
+                    .padding(horizontal = Spacing.Small, vertical = LINE_HALF),
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(24.dp)
+                    .height(LINE)
+                    .clip(CircleShape)
+                    .background(scheme.onSecondaryContainer.copy(alpha = 0.7f)),
+            )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.End)
+                .padding(Spacing.Medium)
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(scheme.primary),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(14.dp)
+                    .height(3.dp)
+                    .clip(CircleShape)
+                    .background(scheme.onPrimary),
+            )
+        }
+    }
+}
+
+/**
+ * One colour of the app, as a two-tone Material You swatch.
+ *
+ * A single filled circle says what the primary will be; a half-and-half of primary and tertiary
+ * says what the *pairing* will be, which is the thing the reader is actually choosing.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -211,7 +386,7 @@ private fun Swatches(selected: ColorSource, onSelect: (ColorSource) -> Unit) {
                     modifier = Modifier
                         .size(SWATCH_SIZE)
                         .clip(CircleShape)
-                        .background(swatchBrush(source))
+                        .background(scheme.primary)
                         .border(
                             width = if (chosen) SELECTED_RING else 1.dp,
                             color = if (chosen) {
@@ -232,11 +407,23 @@ private fun Swatches(selected: ColorSource, onSelect: (ColorSource) -> Unit) {
                         .semantics { contentDescription = name },
                     contentAlignment = Alignment.Center,
                 ) {
+                    // The tertiary half: one circle can say "blue", two tones can say "blue and
+                    // gold together", which is the pairing the reader is really choosing. The
+                    // wallpaper swatch stays a single tone, since it has no fixed pairing to show.
+                    if (source != ColorSource.WALLPAPER) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .size(SWATCH_SIZE / 2, SWATCH_SIZE)
+                                .background(scheme.tertiary),
+                        )
+                    }
+
                     if (chosen) {
                         Icon(
                             imageVector = Icons.Filled.Check,
-                            // Drawn in the scheme's own `onPrimary`, so the tick stays legible on a
-                            // light palette as well as a dark one without a second rule.
+                            // Drawn against the lighter of the two tones, so the tick stays
+                            // legible over the primary half without a per-colour rule.
                             tint = scheme.onPrimary,
                             contentDescription = null,
                             modifier = Modifier.size(20.dp),
@@ -253,6 +440,8 @@ private fun Swatches(selected: ColorSource, onSelect: (ColorSource) -> Unit) {
         )
     }
 }
+
+
 
 /**
  * What the interface will look like, in the colour being chosen right now.
@@ -332,23 +521,9 @@ private fun Section(title: String, content: @Composable () -> Unit) {
  * which is the honest answer to "what will this look like" — and on a device with no wallpaper
  * palette to read, the picker does not offer this choice at all.
  */
-@Composable
-private fun swatchBrush(source: ColorSource): Brush {
-    val fallback = colorSchemeForSource(source, dark = false).primary
-    if (source != ColorSource.WALLPAPER) return SolidColor(fallback)
-
-    val context = LocalContext.current
-    val colour = remember(context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            runCatching { dynamicLightColorScheme(context).primary }.getOrDefault(fallback)
-        } else {
-            fallback
-        }
-    }
-    return SolidColor(colour)
-}
-
-/** Android 12 introduced the wallpaper palette; below it the choice does not exist to be made. */
+/**
+ * Android 12 introduced the wallpaper palette; below it the choice does not exist to be made.
+ */
 private val supportsWallpaperColors: Boolean
     get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
@@ -374,3 +549,8 @@ private fun ColorSource.labelRes(): Int = when (this) {
 private val SWATCH_SIZE = 44.dp
 
 private val SELECTED_RING = 3.dp
+
+/** Heights of the painted lines inside a theme-mode card's miniature. */
+private val LINE = 6.dp
+
+private val LINE_HALF = 3.dp

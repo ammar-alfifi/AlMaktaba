@@ -69,6 +69,28 @@ class PageCache(private val maxBytes: Int) {
     }
 
     /**
+     * Drops every page of one document, for a reader that has more than one open.
+     *
+     * A volume of a series is left behind when the reader crosses the seam into the next one, and
+     * its pages are the ones to give up first: they are not going to be asked for again soon, and
+     * leaving them in the budget would evict the pages of the book the reader is actually reading.
+     *
+     * The accounting goes through the same counter as [trimToBudget] and for the reason documented
+     * there — this is the second place an entry is dropped, and it is the one that would silently
+     * corrupt the counter if it removed from the map without subtracting.
+     */
+    fun evict(documentId: String) {
+        val iterator = entries.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (entry.key.documentId == documentId) {
+                totalBytes -= entry.value.byteSize
+                iterator.remove()
+            }
+        }
+    }
+
+    /**
      * Evicts least-recently-used entries until both budgets are met.
      *
      * **This is the only place an entry is ever dropped, and the only place [totalBytes] is ever

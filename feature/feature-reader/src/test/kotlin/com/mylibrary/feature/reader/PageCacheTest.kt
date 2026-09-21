@@ -31,8 +31,8 @@ class PageCacheTest {
     /** One page's worth of pixels as the cache counts them: `width * height * 4`. */
     private val pageBytes = width * height * 4
 
-    private fun keyFor(pageIndex: Int) = PageCache.Key(
-        documentId = "test://book",
+    private fun keyFor(pageIndex: Int, documentId: String = "test://book") = PageCache.Key(
+        documentId = documentId,
         pageIndex = pageIndex,
         widthPx = width,
         heightPx = height,
@@ -137,6 +137,46 @@ class PageCacheTest {
         assertEquals(0, cache.count)
         assertEquals(0, cache.sizeBytes)
         assertNull(cache.get(keyFor(0)))
+    }
+
+    // endregion
+
+    // region one document of several
+
+    /**
+     * Closing a volume of a series gives up that volume's pages, and only those.
+     *
+     * The reader holds the book on either side of the open one, so the cache does too. Both halves of
+     * that are worth pinning: pages of the book the reader is reading must survive a neighbour being
+     * closed — dropping them would re-render every page on screen — and the bytes of the pages that
+     * did go must leave the count with them, which is the accounting mistake this class has already
+     * made once.
+     */
+    @Test
+    fun `closing a document takes its pages and no others`() {
+        val cache = PageCache(maxBytes = 8 * pageBytes)
+        cache.put(keyFor(0, "test://volume-1"), image())
+        cache.put(keyFor(1, "test://volume-1"), image())
+        cache.put(keyFor(0, "test://volume-2"), image())
+
+        cache.evict("test://volume-1")
+
+        assertNull(cache.get(keyFor(0, "test://volume-1")))
+        assertNull(cache.get(keyFor(1, "test://volume-1")))
+        assertNotNull("the open book keeps its page", cache.get(keyFor(0, "test://volume-2")))
+        assertEquals(pageBytes.toLong(), cache.sizeBytes.toLong())
+    }
+
+    @Test
+    fun `evicting a document that holds nothing leaves the rest of the cache alone`() {
+        val cache = PageCache(maxBytes = 4 * pageBytes)
+        cache.put(keyFor(0), image())
+        cache.put(keyFor(1), image())
+
+        cache.evict("test://not-open")
+
+        assertEquals(2, cache.count)
+        assertEquals((2 * pageBytes).toLong(), cache.sizeBytes.toLong())
     }
 
     // endregion

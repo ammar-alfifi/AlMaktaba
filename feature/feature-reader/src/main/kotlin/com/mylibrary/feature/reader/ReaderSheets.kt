@@ -55,6 +55,7 @@ import com.mylibrary.core.domain.model.ReaderLayout
 import com.mylibrary.core.domain.model.ProgressScope
 import com.mylibrary.core.domain.model.ReadingDirection
 import com.mylibrary.core.domain.model.SearchHit
+import com.mylibrary.core.domain.model.TextAlignment
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.TocEntry
 import com.mylibrary.core.domain.usecase.UpdateSettingsUseCase
@@ -376,6 +377,15 @@ private fun ReaderSettingsPanel(
                 checked = state.settings.firstLineIndent,
                 onCheckedChange = { onIntent(ReaderIntent.SetFirstLineIndent(it)) },
             )
+
+            SettingGroup(title = stringResource(R.string.reader_settings_text_align)) {
+                ChoiceRow(
+                    options = TextAlignment.entries,
+                    selected = state.settings.textAlign,
+                    onSelect = { onIntent(ReaderIntent.SetTextAlignment(it)) },
+                    label = { alignment -> Text(textAlignmentLabel(alignment)) },
+                )
+            }
         }
 
         if (scope.pages) {
@@ -597,6 +607,15 @@ private fun layoutLabel(layout: ReaderLayout): String = stringResource(
     when (layout) {
         ReaderLayout.SCROLL -> R.string.reader_layout_scroll
         ReaderLayout.PAGED -> R.string.reader_layout_paged
+    },
+)
+
+@Composable
+private fun textAlignmentLabel(alignment: TextAlignment): String = stringResource(
+    when (alignment) {
+        TextAlignment.START -> R.string.reader_text_align_start
+        TextAlignment.CENTER -> R.string.reader_text_align_center
+        TextAlignment.JUSTIFY -> R.string.reader_text_align_justify
     },
 )
 

@@ -16,6 +16,7 @@ import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
 import com.mylibrary.core.domain.model.ReaderLayout
+import com.mylibrary.core.domain.model.TextAlignment
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.ViewMode
 import kotlinx.coroutines.flow.Flow
@@ -76,6 +77,7 @@ class SettingsDataStore @Inject constructor(
         this[Keys.MARGIN_SCALE] = settings.marginScale
         this[Keys.PARAGRAPH_SPACING_SCALE] = settings.paragraphSpacingScale
         this[Keys.FIRST_LINE_INDENT] = settings.firstLineIndent
+        this[Keys.TEXT_ALIGN] = settings.textAlign.name
         this[Keys.PAGE_FIT_MODE] = settings.pageFitMode.name
         this[Keys.READING_DIRECTION] = settings.readingDirection.name
         this[Keys.KEEP_SCREEN_ON] = settings.keepScreenOn
@@ -123,6 +125,7 @@ private object Keys {
     val MARGIN_SCALE = floatPreferencesKey("margin_scale")
     val PARAGRAPH_SPACING_SCALE = floatPreferencesKey("paragraph_spacing_scale")
     val FIRST_LINE_INDENT = booleanPreferencesKey("first_line_indent")
+    val TEXT_ALIGN = stringPreferencesKey("text_align")
     val PAGE_FIT_MODE = stringPreferencesKey("page_fit_mode")
     val READING_DIRECTION = stringPreferencesKey("reading_direction")
     val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
@@ -176,6 +179,7 @@ private fun ReaderSettings.Companion.fromPreferences(preferences: Preferences): 
         paragraphSpacingScale = preferences[Keys.PARAGRAPH_SPACING_SCALE]
             ?: defaults.paragraphSpacingScale,
         firstLineIndent = preferences[Keys.FIRST_LINE_INDENT] ?: defaults.firstLineIndent,
+        textAlign = preferences[Keys.TEXT_ALIGN].toEnum(defaults.textAlign),
         pageFitMode = preferences[Keys.PAGE_FIT_MODE].toEnum(defaults.pageFitMode),
         readingDirection = preferences[Keys.READING_DIRECTION].toEnum(defaults.readingDirection),
         keepScreenOn = preferences[Keys.KEEP_SCREEN_ON] ?: defaults.keepScreenOn,

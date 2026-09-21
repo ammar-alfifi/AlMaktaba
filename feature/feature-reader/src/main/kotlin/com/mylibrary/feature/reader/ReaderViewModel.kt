@@ -13,6 +13,7 @@ import com.mylibrary.core.domain.engine.LinkTarget
 import com.mylibrary.core.domain.engine.OpenDocument
 import com.mylibrary.core.domain.engine.PagedDocument
 import com.mylibrary.core.domain.engine.ReflowableDocument
+import com.mylibrary.core.domain.model.Book
 import com.mylibrary.core.domain.model.Chapter
 import com.mylibrary.core.domain.model.PageRenderRequest
 import com.mylibrary.core.domain.model.PageSize
@@ -21,7 +22,7 @@ import com.mylibrary.core.domain.repository.BookmarkRepository
 import com.mylibrary.core.domain.repository.DocumentRepository
 import com.mylibrary.core.domain.repository.LibraryRepository
 import com.mylibrary.core.domain.usecase.DeleteBookmarkUseCase
-import com.mylibrary.core.domain.usecase.ObserveNextBookUseCase
+import com.mylibrary.core.domain.usecase.ObserveFolderSequenceUseCase
 import com.mylibrary.core.domain.usecase.ObserveSettingsUseCase
 import com.mylibrary.core.domain.usecase.OpenBookUseCase
 import com.mylibrary.core.domain.usecase.ReadingProgressUseCase
@@ -33,8 +34,12 @@ import com.mylibrary.core.domain.usecase.UpdateSettingsUseCase
 import com.mylibrary.core.ui.mvi.MviViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -70,24 +75,32 @@ data class ChapterContent(
 /**
  * Drives the reader.
  *
- * Three things here are worth reading before changing anything:
+ * Four things here are worth reading before changing anything:
  *
- *  **1. The document is opened once and held.** Decoders hold native state — a pdfium document, an
- *  open archive — so the document is opened on the IO dispatcher, kept in a field, and closed in
+ *  **1. A document is opened once and held.** Decoders hold native state — a pdfium document, an
+ *  open archive — so a document is opened on the IO dispatcher, kept in a field, and closed in
  *  [onCleared]. Re-opening per page would be catastrophic for a PDF.
  *
- *  **2. All document access is serialised.** pdfium is not thread-safe on a single document, and
- *  opening a second stream into a RAR mid-extract is not either. A [Mutex] around every call into
- *  the document is cheaper than reasoning about which decoders happen to tolerate concurrency.
+ *  **2. All access to one document is serialised.** pdfium is not thread-safe on a single document,
+ *  and opening a second stream into a RAR mid-extract is not either. A [Mutex] around every call
+ *  into a document is cheaper than reasoning about which decoders happen to tolerate concurrency.
+ *  The lock belongs to the *document* rather than to the reader, because the reader now holds more
+ *  than one: a folder is a series, and the volume either side of the open one is opened before the
+ *  reader reaches it. One lock over all of them would make a prefetch block the page on screen.
  *
- *  **3. Rendered pages live in [PageCache], not in [ReaderUiState].** Putting bitmaps in the state
+ *  **3. The open book moves.** [currentBookId] is where the reader is, and it follows them across
+ *  the seam into the next volume of the folder — which is why nothing may capture it, and why
+ *  anything that observes the library (bookmarks, the sequence of neighbours, progress) observes it
+ *  through that flow rather than as a value read at construction time.
+ *
+ *  **4. Rendered pages live in [PageCache], not in [ReaderUiState].** Putting bitmaps in the state
  *  object would make every state comparison walk megabytes of pixels, and would make `StateFlow`
  *  conflation compare images by identity on every recomposition. The state holds *where* the reader
  *  is; the cache holds the pixels.
  */
 @HiltViewModel
 class ReaderViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle,
     private val libraryRepository: LibraryRepository,
     private val documentRepository: DocumentRepository,
     private val bookmarkRepository: BookmarkRepository,
@@ -100,14 +113,24 @@ class ReaderViewModel @Inject constructor(
     private val observeSettings: ObserveSettingsUseCase,
     private val updateSettings: UpdateSettingsUseCase,
     private val searchInDocument: SearchInDocumentUseCase,
-    private val observeNextBookInFolder: ObserveNextBookUseCase,
+    private val observeSequence: ObserveFolderSequenceUseCase,
     private val fontLoader: DocumentFontLoader,
     private val dispatchers: DispatcherProvider,
 ) : MviViewModel<ReaderUiState, ReaderIntent, ReaderEffect>(ReaderUiState()) {
 
-    private val bookId: Long = checkNotNull(savedStateHandle.get<Long>(ARG_BOOK_ID)) {
+    private val initialBookId: Long = checkNotNull(savedStateHandle.get<Long>(ARG_BOOK_ID)) {
         "ReaderViewModel requires a '$ARG_BOOK_ID' navigation argument"
     }
+
+    /**
+     * The book being read, which is not the same book for the whole life of this ViewModel.
+     *
+     * The reader carries on into the next volume of the folder without leaving the screen, so the
+     * document it is drawing changes underneath it — and everything that is *about* the open book
+     * (its bookmarks, its neighbours, the position written for it) has to follow that change rather
+     * than read a value captured when the screen was created.
+     */
+    private val currentBookId = MutableStateFlow(initialBookId)
 
     /**
      * A place to open at, when the caller named one — a search hit, a bookmark tap.
@@ -116,12 +139,51 @@ class ReaderViewModel @Inject constructor(
      * landing where they last were would make the request a lie. Absent, the ordinary case, means
      * the saved position decides. Parsed once here rather than in [openDocument] so a malformed
      * argument fails the same way every launch does — to `null` — and the saved position takes over.
+     * It applies to the book the reader *arrived* at, which is the only one a caller can have named.
      */
     private val startLocator: ReadingLocator? =
         savedStateHandle.get<String>(ARG_LOCATOR)?.let(ReadingLocator::parse)
 
-    private val documentMutex = Mutex()
-    private var document: OpenDocument? = null
+    /**
+     * One open book of the sequence, with the lock that serialises access to it.
+     *
+     * Holds the book rather than only the handle because everything read out of a document — its unit
+     * count, its outline, whether it is made of pages — is needed beside the identity of the book it
+     * came from, and a cache key is the book's own `uri`.
+     */
+    private class OpenSegment(
+        val book: Book,
+        val document: OpenDocument,
+        val mutex: Mutex = Mutex(),
+    )
+
+    /**
+     * The open documents, by book id.
+     *
+     * At most three: the open book and the volume on either side of it, and the two neighbours only
+     * while the reader is near enough to a seam to reach one — see [closeDetachedSegments]. Every one
+     * of them holds native memory, and a reader working through ten volumes while keeping all ten
+     * open is how a process runs out of it.
+     *
+     * Touched only from the main dispatcher. Opening happens on IO, but the result is published back
+     * here and the map is not read from anywhere else.
+     */
+    private val segments = mutableMapOf<Long, OpenSegment>()
+
+    /**
+     * Books whose document is being opened right now.
+     *
+     * What keeps the prefetch from being asked for the same volume on every page turned near the end
+     * of a book: opening a 900-page PDF is not free, and the request arrives once per position
+     * change.
+     */
+    private val pendingOpens = mutableSetOf<Long>()
+
+    /** The open book, or `null` before it opens and after the reader leaves. */
+    private val primary: OpenSegment? get() = segments[currentBookId.value]
+
+    /** The open document, which every call that reads from one goes through. */
+    private val document: OpenDocument? get() = primary?.document
 
     /**
      * Rendered pages, bounded in bytes rather than in page count — see [PageCache] for why.
@@ -131,10 +193,13 @@ class ReaderViewModel @Inject constructor(
     /** Debounces progress writes so that a fast scroll does not write on every frame. */
     private var progressJob: Job? = null
 
+    /** Set in [onCleared], so an open that lands afterwards is closed rather than kept alive. */
+    private var isCleared = false
+
     init {
         collectSettings()
         observeBookmarks()
-        observeNextBook()
+        observeSequenceOfBook()
         loadBook()
     }
 
@@ -152,9 +217,14 @@ class ReaderViewModel @Inject constructor(
 
     private fun loadBook() {
         launch {
-            val book = withContext(dispatchers.io) { libraryRepository.getBook(bookId) }
+            val book = withContext(dispatchers.io) { libraryRepository.getBook(currentBookId.value) }
             if (book == null) {
-                setState { copy(isLoading = false, error = AppError.FileAccess("Book $bookId is not in the library")) }
+                setState {
+                    copy(
+                        isLoading = false,
+                        error = AppError.FileAccess("Book ${currentBookId.value} is not in the library"),
+                    )
+                }
                 return@launch
             }
             setState { copy(book = book, isRtlContent = book.language?.startsWith("ar") == true) }
@@ -189,7 +259,7 @@ class ReaderViewModel @Inject constructor(
 
             is AppResult.Success -> {
                 val opened = result.data
-                document = opened
+                segments[book.id] = OpenSegment(book, opened)
                 val (restored, restoredOffset) = withContext(dispatchers.io) { restoredPosition(opened) }
                 setState {
                     copy(
@@ -223,6 +293,11 @@ class ReaderViewModel @Inject constructor(
                     val font = fontLoader.load(opened)
                     if (font != null) setState { copy(documentFont = font) }
                 }
+
+                // The volume either side of this one, opened now rather than on the frame the reader
+                // reaches the seam. A book of one page is already at its seam here, which is why this
+                // runs on opening rather than only on moving.
+                openNeighbours()
             }
         }
     }
@@ -238,7 +313,7 @@ class ReaderViewModel @Inject constructor(
      * the page inside it is not.
      */
     private suspend fun restoredPosition(opened: OpenDocument): Pair<Int, Int> {
-        val locator = startLocator ?: restorePosition(bookId)?.locator ?: return 0 to 0
+        val locator = startLocator ?: restorePosition(currentBookId.value)?.locator ?: return 0 to 0
         val total = unitCountOf(opened)
         val index = when (locator) {
             is ReadingLocator.Paged -> locator.pageIndex
@@ -262,18 +337,23 @@ class ReaderViewModel @Inject constructor(
     )
 
     /**
-     * Renders a page at the requested size, using the cache where possible.
+     * Renders a page of [bookId] at the requested size, using the cache where possible.
+     *
+     * The book is named by the caller rather than taken from the state, because the reader draws the
+     * volumes either side of the open one as well: a page of the next book is a page of *that* book,
+     * and asking the open one for it would render whatever page happens to share its number.
      *
      * Called from the UI with `produceState`, so it may be cancelled mid-render when the user
-     * scrolls past — which is safe, because the mutex is released by the cancellation and nothing
-     * partial is cached.
+     * scrolls past — which is safe, because the lock is released by the cancellation and nothing
+     * partial is cached. The lock is the book's own, so a page being prefetched for the next volume
+     * never blocks the page in front of the reader.
      */
-    suspend fun renderPage(pageIndex: Int, widthPx: Int, heightPx: Int): PageRenderState {
-        val book = currentState.book ?: return PageRenderState.Loading
+    suspend fun renderPage(bookId: Long, pageIndex: Int, widthPx: Int, heightPx: Int): PageRenderState {
+        val segment = segments[bookId] ?: return PageRenderState.Loading
         if (widthPx <= 0 || heightPx <= 0) return PageRenderState.Loading
 
         val key = PageCache.Key(
-            documentId = book.uri,
+            documentId = segment.book.uri,
             pageIndex = pageIndex,
             widthPx = widthPx,
             heightPx = heightPx,
@@ -281,9 +361,9 @@ class ReaderViewModel @Inject constructor(
         )
         pageCache[key]?.let { return PageRenderState.Ready(it) }
 
-        val paged = document as? PagedDocument ?: return PageRenderState.Loading
+        val paged = segment.document as? PagedDocument ?: return PageRenderState.Loading
 
-        val result = documentMutex.withLock {
+        val result = segment.mutex.withLock {
             paged.renderPage(
                 PageRenderRequest(
                     pageIndex = pageIndex,
@@ -305,7 +385,7 @@ class ReaderViewModel @Inject constructor(
     }
 
     /**
-     * The page's intrinsic size, or `null` when the document has no pages or will not report one.
+     * The page's intrinsic size in [bookId], or `null` when it has no pages or will not report one.
      *
      * The reader needs the page's proportions *before* it can ask for pixels: a width-fitted page is
      * as tall as its own proportions make it, and an actual-size page is rendered at its own
@@ -313,10 +393,11 @@ class ReaderViewModel @Inject constructor(
      * decode — reports `null`, and the reader falls back to fitting the viewport, which is what it
      * did before [ReaderUiState.settings]' fit mode existed.
      */
-    suspend fun pageSize(pageIndex: Int): PageSize? {
-        val paged = document as? PagedDocument ?: return null
+    suspend fun pageSize(bookId: Long, pageIndex: Int): PageSize? {
+        val segment = segments[bookId] ?: return null
+        val paged = segment.document as? PagedDocument ?: return null
         return withContext(dispatchers.io) {
-            documentMutex.withLock {
+            segment.mutex.withLock {
                 runCatching { paged.pageSize(pageIndex) }
                     .getOrNull()
                     ?.takeIf { it.width > 0 && it.height > 0 }
@@ -325,18 +406,22 @@ class ReaderViewModel @Inject constructor(
     }
 
     /**
-     * A parsed chapter: its title, its blocks, where its anchors are, and where its blocks sit in
-     * the chapter text.
+     * A parsed chapter of [bookId]: its title, its blocks, where its anchors are, and where its
+     * blocks sit in the chapter text.
+     *
+     * The book is named for the same reason [renderPage]'s is: the reader lays out the neighbour's
+     * chapters too, so that the turn across the seam lands on a page that already exists.
      *
      * All four are produced under one lock acquisition because they are derived from the same
      * chapter and must agree with each other — building them from separate reads would let a
      * document that changed underneath produce an anchor map that points into a different chapter's
      * text.
      */
-    suspend fun chapterContent(chapterIndex: Int, links: LinkStyling? = null): ChapterContent {
-        val reflowable = document as? ReflowableDocument ?: return ChapterContent.Empty
+    suspend fun chapterContent(bookId: Long, chapterIndex: Int, links: LinkStyling? = null): ChapterContent {
+        val segment = segments[bookId] ?: return ChapterContent.Empty
+        val reflowable = segment.document as? ReflowableDocument ?: return ChapterContent.Empty
 
-        val loaded = documentMutex.withLock {
+        val loaded = segment.mutex.withLock {
             LoadedChapter(
                 chapter = reflowable.chapter(chapterIndex),
                 parsed = parseChapterHtml(reflowable.chapterHtml(chapterIndex), links),
@@ -362,9 +447,10 @@ class ReaderViewModel @Inject constructor(
      * Returns `null` — rather than throwing — for a missing or undecodable image, because a broken
      * illustration must not take down the chapter around it.
      */
-    suspend fun chapterImage(path: String, targetWidthPx: Int): ImageBitmap? {
-        val reflowable = document as? ReflowableDocument ?: return null
-        val bytes = documentMutex.withLock { reflowable.resource(path) } ?: return null
+    suspend fun chapterImage(bookId: Long, path: String, targetWidthPx: Int): ImageBitmap? {
+        val segment = segments[bookId] ?: return null
+        val reflowable = segment.document as? ReflowableDocument ?: return null
+        val bytes = segment.mutex.withLock { reflowable.resource(path) } ?: return null
 
         return withContext(dispatchers.io) {
             runCatching {
@@ -447,7 +533,8 @@ class ReaderViewModel @Inject constructor(
             is ReaderIntent.JumpTo -> jumpTo(intent.locator)
             ReaderIntent.NextUnit -> moveTo(currentState.currentUnit + 1)
             ReaderIntent.PreviousUnit -> moveTo(currentState.currentUnit - 1)
-            ReaderIntent.OpenNextBook -> openNextBook()
+            is ReaderIntent.EnteredBook -> enterBook(intent.bookId, intent.locator)
+            is ReaderIntent.OpenNeighbour -> openNeighbour(intent.bookId)
 
             ReaderIntent.ToggleBookmark -> toggleBookmarkAtCurrentPosition()
             is ReaderIntent.DeleteBookmark -> launch {
@@ -480,6 +567,9 @@ class ReaderViewModel @Inject constructor(
             }
             is ReaderIntent.SetFirstLineIndent -> launch {
                 updateSettings.setFirstLineIndent(intent.enabled)
+            }
+            is ReaderIntent.SetTextAlignment -> launch {
+                updateSettings.setTextAlignment(intent.alignment)
             }
             is ReaderIntent.SetPageFit -> launch { updateSettings.setPageFitMode(intent.mode) }
             is ReaderIntent.SetKeepScreenOn -> launch { updateSettings.setKeepScreenOn(intent.enabled) }
@@ -523,35 +613,266 @@ class ReaderViewModel @Inject constructor(
     }
 
     /**
-     * Keeps the end-of-volume offer current.
+     * Keeps the reader's sequence of neighbours current.
      *
      * Collected rather than resolved once when the document opens, because the library is live: a
      * volume imported, a book moved into or out of the folder while this one is being read changes
-     * the answer, and the panel has to offer what is true when the reader reaches it.
+     * the answer, and the reader has to carry on into what is true when they reach the seam. It
+     * follows [currentBookId], so crossing into a volume re-resolves the sequence *of that volume* —
+     * which is how a reader works through a series rather than through two books.
      */
-    private fun observeNextBook() {
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeSequenceOfBook() {
         launch {
-            observeNextBookInFolder(bookId).collect { next ->
-                setState { copy(nextBook = next) }
+            currentBookId
+                .flatMapLatest { observeSequence(it) }
+                .collect { sequence ->
+                    setState { copy(sequence = sequence) }
+                    openNeighbours()
+                }
+        }
+    }
+
+    /**
+     * Opens the volume either side of the open one, before the reader reaches it.
+     *
+     * The point is the seam: a document opened on the frame the reader crosses into it is a stall in
+     * the middle of the one gesture this exists to make continuous. The cost is a second native
+     * handle while the reader is near an end of the book, which is why the trigger is proximity
+     * rather than the open itself — see [PREFETCH_LEAD_UNITS] and [closeDetachedSegments], which
+     * gives the two ends of the reader's position in a book its whole lifetime.
+     */
+    private fun openNeighbours() {
+        val state = currentState
+        val sequence = state.sequence ?: return
+
+        // How far the reader is from each end of the open book, in the units it counts in: pages for
+        // a PDF or a comic, chapters for a reflowed book. One expression for both because a book is
+        // read forwards from wherever the reader is, and the last few units of either are the ones
+        // that look ahead.
+        val toEnd = (state.totalUnits - 1 - state.currentUnit).coerceAtLeast(0)
+        val toStart = state.currentUnit.coerceAtLeast(0)
+
+        sequence.next?.let { if (toEnd <= PREFETCH_LEAD_UNITS) openSegment(it, isNext = true) }
+        sequence.previous?.let { if (toStart <= PREFETCH_LEAD_UNITS) openSegment(it, isNext = false) }
+        closeDetachedSegments(toStart = toStart, toEnd = toEnd)
+    }
+
+    /**
+     * Opens [book] and publishes it as the neighbour on one side.
+     *
+     * A book that cannot be carried on into is not an error the reader is told about: the seam
+     * between the two books simply offers to open it instead of drawing it, which is what the reader
+     * would have done anyway. Three ways that happens —
+     *
+     *  - it is protected by a password, which the reader cannot supply on its behalf;
+     *  - its file will not open, or opens to nothing;
+     *  - it is drawn by the other family of reader. A reflowed book is a column of chapters and a
+     *    comic is a column of pages, and the reader is *one* of those at a time rather than a
+     *    container for both: continuing into one from the other would mean a column that changes
+     *    what it is halfway down, which no presentation here can draw.
+     */
+    private fun openSegment(book: Book, isNext: Boolean) {
+        val id = book.id
+        if (segments.containsKey(id) || !pendingOpens.add(id)) return
+
+        // The family and the book being read *now*: a prefetch outlives the position it was started
+        // from, and one that lands after the reader has crossed into another volume is a document
+        // nobody is going to draw.
+        val readingAtStart = currentBookId.value
+
+        launch {
+            val opened = withContext(dispatchers.io) { openBook(book, password = null) }
+            pendingOpens.remove(id)
+
+            val segment = when (opened) {
+                is AppResult.Success -> ReaderSegment(
+                    book = book,
+                    unitCount = unitCountOf(opened.data),
+                    isPageImages = opened.data is PagedDocument,
+                )
+
+                is AppResult.Failure -> null
+            }
+
+            val usable = segment != null &&
+                segment.unitCount > 0 &&
+                segment.isPageImages == currentState.isPageImages &&
+                !isCleared &&
+                currentBookId.value == readingAtStart
+
+            if (!usable) {
+                // Closed here rather than kept for later: a document nobody can draw is native
+                // memory held for the lifetime of the reader.
+                if (opened is AppResult.Success) {
+                    val handle = opened.data
+                    withContext(dispatchers.io) { handle.close() }
+                }
+                // Only a failure that is still *this* book's to report. One that landed after the
+                // reader crossed into another volume says nothing about the neighbour, and marking
+                // it unavailable would put a button on a seam the reader is about to continue
+                // through.
+                if (!isCleared && currentBookId.value == readingAtStart) {
+                    setState { copy(unavailableNeighbours = unavailableNeighbours + id) }
+                }
+                return@launch
+            }
+
+            segments[id] = OpenSegment(book, (opened as AppResult.Success).data)
+            setState {
+                if (isNext) copy(nextSegment = segment) else copy(previousSegment = segment)
             }
         }
     }
 
     /**
-     * Carries on into the next book of the folder.
+     * Closes the documents the reader is nowhere near.
+     *
+     * One rule with two distances rather than two rules: a neighbour is *opened* within
+     * [PREFETCH_LEAD_UNITS] of the seam and *kept* within [KEEP_LEAD_UNITS] of it, and the gap
+     * between the two is what stops a reader sitting on the boundary from opening and closing the
+     * same volume as they cross one page back and forth. Anything left over — the volume before the
+     * one before this one, after the reader has crossed a seam — is closed by the same pass, because
+     * what is kept is decided by the position rather than by what happened to be open.
+     */
+    private fun closeDetachedSegments(toStart: Int, toEnd: Int) {
+        val state = currentState
+        val keepPrevious = state.previousSegment?.book?.id?.takeIf { toStart <= KEEP_LEAD_UNITS }
+        val keepNext = state.nextSegment?.book?.id?.takeIf { toEnd <= KEEP_LEAD_UNITS }
+
+        val keep = setOfNotNull(currentBookId.value, keepPrevious, keepNext)
+        segments.keys.filterNot { it in keep }.forEach { closeSegment(it) }
+
+        // A neighbour dropped for being far away is dropped from the state too, or the reader would
+        // keep drawing pages of a document that is no longer open. Reopening is one prefetch away,
+        // and the gap between the two distances is what keeps that from happening on every turn.
+        if (state.previousSegment != null && keepPrevious == null) {
+            setState { copy(previousSegment = null) }
+        }
+        if (state.nextSegment != null && keepNext == null) {
+            setState { copy(nextSegment = null) }
+        }
+    }
+
+    /**
+     * Closes one document and drops everything cached from it.
+     *
+     * The cache is keyed by the book's `uri`, so its pages go with it: a volume of a series is not
+     * going to be asked for the same page again soon, and leaving them in the budget would evict the
+     * pages of the book the reader *is* reading.
+     */
+    private fun closeSegment(bookId: Long) {
+        val segment = segments.remove(bookId) ?: return
+        pageCache.evict(segment.book.uri)
+        // Closing touches native state, so it must not run on the main thread. A detached write is
+        // the same trade `onCleared` makes: nothing is going to use this handle again.
+        CoroutineScope(dispatchers.io).launch { segment.document.close() }
+    }
+
+    /**
+     * Becomes [bookId], with the reader at [locator] in it.
+     *
+     * This is the seam being crossed: the volume that was open becomes the neighbour behind the
+     * reader, the neighbour they have walked into becomes the open book, and the reader keeps the
+     * page they were looking at — which is what makes the crossing a change of document rather than
+     * a second reader being started. The screen is not told to navigate anywhere: the presentations
+     * are already drawing this book's pages, and the only thing that changes is which of them the
+     * state describes.
+     */
+    private fun enterBook(bookId: Long, locator: ReadingLocator) {
+        if (bookId == currentBookId.value) return
+        val segment = segments[bookId] ?: return
+        val opened = segment.document
+        val arrivingFromNext = currentState.nextSegment?.book?.id == bookId
+
+        // The book being left, as the neighbour it becomes. Read before the state is overwritten,
+        // because the next frame draws it from these three facts.
+        val leavingSegment = currentState.let { state ->
+            state.book?.let {
+                ReaderSegment(
+                    book = it,
+                    unitCount = state.totalUnits,
+                    isPageImages = state.isPageImages,
+                )
+            }
+        }
+
+        // Written before the state stops describing the book being left, and written directly rather
+        // than through `scheduleProgressSave`: the position at the end of a volume is exactly the one
+        // worth keeping, since it is what says the volume was finished.
+        progressJob?.cancel()
+        launch {
+            saveCurrentProgress()
+
+            val index = when (locator) {
+                is ReadingLocator.Paged -> locator.pageIndex
+                is ReadingLocator.Reflowable -> locator.chapterIndex
+            }
+            val offset = (locator as? ReadingLocator.Reflowable)?.charOffset ?: 0
+            val total = unitCountOf(opened)
+
+            currentBookId.value = bookId
+            // The navigation argument too, so a process death in the middle of a series restores
+            // the volume the reader is actually in rather than the one they started from.
+            savedStateHandle[ARG_BOOK_ID] = bookId
+
+            setState {
+                copy(
+                    book = segment.book,
+                    error = null,
+                    capabilities = opened.capabilities,
+                    isPageImages = opened is PagedDocument,
+                    totalUnits = total,
+                    currentUnit = index.coerceIn(0, (total - 1).coerceAtLeast(0)),
+                    reflowOffset = offset.coerceAtLeast(0),
+                    reflowPage = 0,
+                    reflowPageCount = 0,
+                    // The measurement belonged to the book being left, and the paged view replaces it
+                    // once it has laid the new one out.
+                    bookIndex = null,
+                    outline = opened.outline,
+                    isRtlContent = opened.metadata.language?.startsWith("ar") ?: isRtlContent,
+                    documentFont = null,
+                    // Everything that was about the book being left.
+                    bookmarks = emptyList(),
+                    pendingAnchor = null,
+                    linkBackStack = emptyList(),
+                    // The volume just finished is behind the reader and is drawn above it; whatever
+                    // was open beyond it belongs to a book two seams away, and the pass below closes
+                    // it. The sequence is re-resolved for the new book by its own observer.
+                    previousSegment = if (arrivingFromNext) leavingSegment else null,
+                    nextSegment = if (arrivingFromNext) null else leavingSegment,
+                    unavailableNeighbours = emptySet(),
+                    sequence = null,
+                )
+            }
+            refreshPositionLabel()
+            saveCurrentProgress()
+
+            if (opened is ReflowableDocument) {
+                val font = fontLoader.load(opened)
+                if (font != null) setState { copy(documentFont = font) }
+            }
+
+            // The book left behind is kept open while the reader is near the seam — that is what
+            // makes scrolling back into it work — and closed by this same call once they are not.
+            openNeighbours()
+        }
+    }
+
+    /**
+     * Opens a neighbouring book that could not be continued into, as a book of its own.
      *
      * The position in the book being left is written *before* the effect that leaves it, and written
      * directly rather than through [scheduleProgressSave]: the reader's entry is popped as soon as
      * the navigation happens, which clears this ViewModel and cancels everything it was still
-     * waiting to do — including a save that was still inside the debounce. The position at the end
-     * of a volume is exactly the one worth keeping, since it is what says the volume was finished.
+     * waiting to do — including a save that was still inside the debounce.
      */
-    private fun openNextBook() {
-        val next = currentState.nextBook?.book ?: return
+    private fun openNeighbour(bookId: Long) {
         progressJob?.cancel()
         launch {
             saveCurrentProgress()
-            sendEffect(ReaderEffect.OpenBook(next.id))
+            sendEffect(ReaderEffect.OpenBook(bookId))
         }
     }
 
@@ -591,6 +912,9 @@ class ReaderViewModel @Inject constructor(
         }
         refreshPositionLabel()
         scheduleProgressSave()
+        // Every move is a chance to be near an end of the book, which is where the volume either
+        // side of it has to be open before the reader gets there.
+        openNeighbours()
     }
 
     /**
@@ -622,6 +946,7 @@ class ReaderViewModel @Inject constructor(
         }
         if (enteredChapter) refreshPositionLabel()
         scheduleProgressSave()
+        openNeighbours()
     }
 
     /**
@@ -654,7 +979,7 @@ class ReaderViewModel @Inject constructor(
         val locator = state.currentLocator ?: return
         val excerpt = excerptAt(locator)
         saveProgress(
-            bookId = bookId,
+            bookId = currentBookId.value,
             locator = locator,
             percent = percentOf(state, locator),
             excerpt = excerpt,
@@ -689,11 +1014,12 @@ class ReaderViewModel @Inject constructor(
      * round trip instead of a one-way jump to the end of the book.
      */
     private fun followLink(href: String) {
-        val reflowable = document as? ReflowableDocument ?: return
+        val open = primary ?: return
+        val reflowable = open.document as? ReflowableDocument ?: return
         val fromChapter = currentState.currentUnit
 
         launch {
-            val target = documentMutex.withLock { reflowable.resolveLink(fromChapter, href) }
+            val target = open.mutex.withLock { reflowable.resolveLink(fromChapter, href) }
 
             when (target) {
                 null -> sendEffect(ReaderEffect.ShowMessage(ReaderMessage.LinkUnavailable))
@@ -764,7 +1090,7 @@ class ReaderViewModel @Inject constructor(
             val excerpt = excerptAt(locator)
             val label = currentState.positionLabel
             val added = toggleBookmark(
-                bookId = bookId,
+                bookId = currentBookId.value,
                 locator = locator,
                 label = label,
                 excerpt = excerpt,
@@ -778,17 +1104,20 @@ class ReaderViewModel @Inject constructor(
     }
 
     /**
-     * Keeps the bookmark list live.
+     * Keeps the bookmark list live, for whichever book is open.
      *
      * Collected once rather than re-read after each mutation, so a bookmark added here and one added
      * elsewhere — or a highlight deleted from the details screen — both show up without the reader
-     * having to guess when its copy went stale.
+     * having to guess when its copy went stale. It follows [currentBookId] for the same reason the
+     * sequence does: the list belongs to the book being read, and crossing a seam changes which book
+     * that is.
      */
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun observeBookmarks() {
         launch {
-            bookmarkRepository.observeBookmarks(bookId).collect { bookmarks ->
-                setState { copy(bookmarks = bookmarks) }
-            }
+            currentBookId
+                .flatMapLatest { bookmarkRepository.observeBookmarks(it) }
+                .collect { bookmarks -> setState { copy(bookmarks = bookmarks) } }
         }
     }
 
@@ -830,20 +1159,23 @@ class ReaderViewModel @Inject constructor(
     }
 
     /**
-     * Releases the document and everything cached from it.
+     * Releases every open document and everything cached from them.
      *
      * This runs when the reader leaves the back stack. Without it a pdfium document and its native
      * buffers would stay alive for the life of the process, and opening half a dozen books in a
-     * session would exhaust memory.
+     * session would exhaust memory — which is why the prefetched neighbours are closed here too
+     * rather than only the book on screen.
      */
     override fun onCleared() {
+        isCleared = true
         pageCache.clear()
-        val open = document
-        document = null
+        val open = segments.values.map { it.document }
+        segments.clear()
+        pendingOpens.clear()
         // Closing touches native state, so it must not run on the main thread — but `onCleared`
         // cannot suspend. A detached write to the IO dispatcher is the correct trade: the process
-        // is not going to reuse this handle, and blocking the main thread here would be worse.
-        kotlinx.coroutines.CoroutineScope(dispatchers.io).launch { open?.close() }
+        // is not going to reuse these handles, and blocking the main thread here would be worse.
+        CoroutineScope(dispatchers.io).launch { open.forEach { it.close() } }
         super.onCleared()
     }
 
@@ -855,6 +1187,27 @@ class ReaderViewModel @Inject constructor(
 
         /** 64 MB: enough for several comic pages at phone resolution, far short of an OOM. */
         private const val PAGE_CACHE_BYTES = 64 * 1024 * 1024
+
+        /**
+         * How near the end of a book a reader has to be for the volume beside it to be opened.
+         *
+         * In the book's own units, so it is three pages of a comic and three chapters of an EPUB —
+         * deliberately the same distance, because what the distance buys is the same in both: enough
+         * time for a decoder to be opened off the main thread before the seam arrives. Opening a
+         * 900-page PDF is fast enough that one unit would do; parsing the chapters of an EPUB is
+         * not, which is why this is not one.
+         */
+        private const val PREFETCH_LEAD_UNITS = 3
+
+        /**
+         * How far past its end a neighbour stays open, before it is closed again.
+         *
+         * Eight against [PREFETCH_LEAD_UNITS]'s three, and the gap between them is the whole point:
+         * with one distance, a reader sitting on the boundary and turning one page back and forth
+         * would open and close a document on every turn. Wide enough to cover a reader reading on
+         * past the seam, and narrow enough that walking away from it gives the memory back.
+         */
+        private const val KEEP_LEAD_UNITS = 8
 
         /**
          * White, because a PDF or comic page *is* white paper.

@@ -221,22 +221,33 @@ class ToggleFavoriteUseCase @Inject constructor(
 }
 
 /**
- * The volume that follows [book] in its folder, offered when the reader reaches the end of it.
+ * The books either side of an open one, in its folder's own order.
  *
- * [folderName] travels with the book so the reader can say *which* series is being continued: a
- * panel offering "Vol 3" is a guess about what the reader owns, while "Next in «Detective Conan»"
- * is a fact they can check at a glance.
+ * This is the reader's *sequence*: the volume that was finished, the one being read, and the one
+ * after it. Both neighbours travel together rather than only the next one, because the reader draws
+ * the book on either side of the open one — a reader who scrolls back up through the seam has to
+ * find the previous volume there, not a wall.
+ *
+ * [previous] and [next] are `null` at the ends of a folder, for a book filed on its own, and for a
+ * book whose folder is no longer in the library; the reader then ends where it always did.
+ *
+ * [folderName] travels with them so the reader can say *which* series is being continued: a seam
+ * offering "Vol 3" is a guess about what the reader owns, while "Next in «Detective Conan»" is a
+ * fact they can check at a glance. [book] itself comes back so the sequence is one answer rather
+ * than three queries whose results the caller has to know how to line up.
  */
-data class NextBookInFolder(
+data class FolderSequence(
     val book: Book,
+    val previous: Book?,
+    val next: Book?,
     val folderName: String?,
 )
 
 /**
- * The next book in the same device folder, for the end of a volume.
+ * The books either side of [bookId] in its device folder.
  *
  * A folder is a series, and a reader who has just finished volume two overwhelmingly wants volume
- * three — so the reader offers it there instead of sending them back to the shelf to find it.
+ * three — so the reader carries them into it instead of sending them back to the shelf to find it.
  *
  * **The order is the folder's own, not the shelf's.** Siblings are sorted by [naturalSortKey] of the
  * title, which is the same natural order the folder was *scanned* in, so `Vol 2` precedes `Vol 10`
@@ -246,46 +257,57 @@ data class NextBookInFolder(
  * underneath the reader between one tap and the next.
  *
  * Observed rather than resolved once, because the library can change while a book is open — a volume
- * imported, a book moved to another folder — and the panel has to offer what is true when the reader
- * arrives at it. A book filed on its own, the last one in its folder, or one that has just been
- * unfiled reports `null`, which is what keeps the reader from offering a continuation that does not
- * exist.
+ * imported, a book moved to another folder — and the reader has to carry on into what is true when
+ * they arrive at the seam rather than into what was true when they opened the book.
  */
-class ObserveNextBookUseCase @Inject constructor(
+class ObserveFolderSequenceUseCase @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val folderRepository: FolderRepository,
 ) {
-    operator fun invoke(bookId: Long): Flow<NextBookInFolder?> = combine(
+    operator fun invoke(bookId: Long): Flow<FolderSequence?> = combine(
         libraryRepository.observeBook(bookId),
         libraryRepository.observeBooks(),
         folderRepository.observeFolders(),
-    ) { current, books, folders -> nextInFolder(current, books, folders) }
+    ) { current, books, folders -> sequenceOf(current, books, folders) }
 
-    private fun nextInFolder(
+    private fun sequenceOf(
         current: Book?,
         books: List<Book>,
         folders: List<FolderSummary>,
-    ): NextBookInFolder? {
+    ): FolderSequence? {
         val folderId = current?.folderId ?: return null
 
-        val siblings = books
-            .asSequence()
-            .filter { it.folderId == folderId }
-            // The key is computed once per book and then used as the sort key, rather than being a
-            // comparator selector: a selector is re-evaluated on every comparison, which turns a
-            // sort of a series into `n log n` string normalisations of the same `n` titles.
-            .map { book -> naturalSortKey(book.title) to book }
-            // The id breaks a tie between two volumes whose titles sort identically, so the order is
-            // stable rather than dependent on the order the rows came back in.
-            .sortedWith(compareBy({ it.first }, { it.second.id }))
-            .map { it.second }
-            .toList()
-
+        val siblings = folderOrder(books, folderId)
+        // A book that is in no list of its own folder — deleted, unfiled, or filtered out between
+        // the two queries — has no sequence, and the reader ends where it always did.
         val index = siblings.indexOfFirst { it.id == current.id }
-        val next = if (index < 0) null else siblings.getOrNull(index + 1)
-        return next?.let { NextBookInFolder(it, folders.folderNameOf(folderId)) }
+        if (index < 0) return null
+
+        return FolderSequence(
+            book = current,
+            previous = siblings.getOrNull(index - 1),
+            next = siblings.getOrNull(index + 1),
+            folderName = folders.folderNameOf(folderId),
+        )
     }
 }
+
+/**
+ * A folder's books in the order the folder is a series in.
+ *
+ * The key is computed once per book and then used as the sort key, rather than being a comparator
+ * selector: a selector is re-evaluated on every comparison, which turns a sort of a series into
+ * `n log n` string normalisations of the same `n` titles.
+ */
+private fun folderOrder(books: List<Book>, folderId: Long): List<Book> = books
+    .asSequence()
+    .filter { it.folderId == folderId }
+    // The id breaks a tie between two volumes whose titles sort identically, so the order is
+    // stable rather than dependent on the order the rows came back in.
+    .map { book -> naturalSortKey(book.title) to book }
+    .sortedWith(compareBy({ it.first }, { it.second.id }))
+    .map { it.second }
+    .toList()
 
 /** The name of a folder, or `null` when the row is gone — a book keeps working without its folder. */
 private fun List<FolderSummary>.folderNameOf(folderId: Long): String? =

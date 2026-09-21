@@ -133,7 +133,7 @@ class BookPageIndexTest {
     /**
      * A remembered page can be past the end of a chapter once the font has changed and the chapter
      * has fewer pages. It rounds to the chapter's last page rather than to nothing — the same answer
-     * [indexOfPage] gives, and for the same reason.
+     * `List<ReadingEntry>.indexOfTextPage` gives, and for the same reason.
      */
     @Test
     fun `a page past the end of its chapter is the chapter's last page`() {

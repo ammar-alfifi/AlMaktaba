@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.toIntSize
 import androidx.compose.ui.unit.dp
 import com.mylibrary.core.domain.model.PageTurnEffect
+import com.mylibrary.core.domain.model.ReadingLocator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -81,6 +82,14 @@ private const val MAX_MEASURED_LINES = 400
  * of the one before it and a turn reaches it the way it reaches any other page, in both directions.
  * Nothing special happens at the seam, which is the whole of the design: no button, and no case for
  * the end of a chapter anywhere below.
+ *
+ * The same holds one level up, where a folder is the series rather than a document: the volume before
+ * this one is drawn above it and the volume after it below, each behind the blank page [ReaderSeamPage]
+ * draws, so the reader carries on into the next volume the way they carry on into the next chapter.
+ * What the pager turns through is therefore the whole *reading order* and not this book's pages, which
+ * is why every entry of it names its book: a page has to be drawn from the document it is in, a page
+ * of the next volume is [ReaderIntent.EnteredBook] rather than a position in this one, and a seam
+ * reports nothing at all.
  */
 @Composable
 fun ReflowablePagedContent(
@@ -98,16 +107,47 @@ fun ReflowablePagedContent(
     val currentHapticsEnabled by rememberUpdatedState(state.settings.hapticsEnabled)
     val linkColor = MaterialTheme.colorScheme.primary
 
-    // The chapters the pager holds at once. A pure function of the reader's own chapter, which is
-    // what keeps a window slide to one per chapter crossed — see `windowChapters`.
-    val chapters = windowChapters(currentUnit = state.currentUnit, totalUnits = state.totalUnits)
+    // Which book is open, and so whose pages come first in the order. Null only before anything is
+    // open at all, which the screen has already answered with a spinner or an error rather than
+    // drawing this.
+    val openBookId = state.book?.id ?: return
 
-    // One parse per chapter in the window rather than one for the chapter being read: a page has to
-    // be drawn from the chapter it is *in*, and once a turn can cross a boundary that is the
-    // neighbour's chapter as often as it is this one's.
-    val contents by produceState<Map<Int, ChapterContent>>(emptyMap(), chapters, linkColor) {
-        value = chapters.associateWith { chapter ->
+    // The chapters the pager holds at once, for the open book and for each neighbour. A pure function
+    // of the reader's own chapter, which is what keeps a window slide to one per chapter crossed —
+    // see `windowChapters`. A neighbour gets a window of its own for the same reason the open book
+    // has one: the turn across the seam has to land on a page that exists, and the pages a reader
+    // arrives on are the next volume's opening chapters and the previous one's closing ones.
+    val openChapters = windowChapters(currentUnit = state.currentUnit, totalUnits = state.totalUnits)
+    val previousChapters = state.previousSegment?.let { segment ->
+        windowChapters(currentUnit = segment.unitCount - 1, totalUnits = segment.unitCount)
+    }.orEmpty()
+    val nextChapters = state.nextSegment?.let { segment ->
+        windowChapters(currentUnit = 0, totalUnits = segment.unitCount)
+    }.orEmpty()
+
+    // Every chapter the pager draws, each named by the book it belongs to as well as by its index —
+    // the previous volume's closing chapters, this book's window, then the next volume's opening
+    // ones. An index alone cannot name one of them: the open book's chapter 0 and the next volume's
+    // chapter 0 are on screen together at the end of a volume, and they are chapters of two different
+    // documents.
+    val drawnChapters = buildList {
+        state.previousSegment?.let { segment ->
+            previousChapters.forEach { chapter -> add(segment.book.id to chapter) }
+        }
+        openChapters.forEach { chapter -> add(openBookId to chapter) }
+        state.nextSegment?.let { segment ->
+            nextChapters.forEach { chapter -> add(segment.book.id to chapter) }
+        }
+    }
+
+    // One parse per drawn chapter rather than one for the chapter being read: a page has to be drawn
+    // from the chapter it is *in*, and once a turn can cross a boundary that is the neighbour's
+    // chapter as often as it is this one's — including the neighbour's chapter of another *book*,
+    // which is why each is parsed from the document that owns it.
+    val contents by produceState<Map<Pair<Long, Int>, ChapterContent>>(emptyMap(), drawnChapters, linkColor) {
+        value = drawnChapters.associateWith { (chapterBookId, chapter) ->
             viewModel.chapterContent(
+                bookId = chapterBookId,
                 chapterIndex = chapter,
                 links = LinkStyling(color = linkColor) { href ->
                     currentOnIntent(ReaderIntent.FollowLink(href))
@@ -161,7 +201,8 @@ fun ReflowablePagedContent(
             }
         }
 
-        // One chapter's pages: cut from the chapter's own text, at this width and this font. Keyed on
+        // Each drawn chapter's pages: cut from that chapter's own text, at this width and this font,
+        // whether it belongs to the open book or to a volume the reader has not reached yet. Keyed on
         // the parsed chapters rather than on the window, so a chapter carried over a slide is not
         // measured a second time on the frame that slid it.
         val chapterPages = remember(
@@ -179,9 +220,9 @@ fun ReflowablePagedContent(
                 pageHeightPx = heightPx,
                 styleFor = styleFor,
             )
-            chapters.associateWith { chapter ->
+            drawnChapters.associateWith { key ->
                 paginate(
-                    blocks = contents[chapter]?.blocks.orEmpty(),
+                    blocks = contents[key]?.blocks.orEmpty(),
                     widthPx = widthPx,
                     pageHeightPx = heightPx,
                     spacingPx = spacingPx,
@@ -190,16 +231,21 @@ fun ReflowablePagedContent(
             }
         }
 
-        // The whole book measured, so that the progress bar can count its pages rather than its
-        // chapters — see `BookPageIndex`. The reader is the only side that knows the width, the
-        // height, the spacing and the text styles a page is made at, which is why this runs here and
-        // not in the ViewModel.
+        // The whole of the *open* book measured, so that the progress bar can count its pages rather
+        // than its chapters — see `BookPageIndex`. The reader is the only side that knows the width,
+        // the height, the spacing and the text styles a page is made at, which is why this runs here
+        // and not in the ViewModel.
         //
         // Keyed on the layout and on nothing else. Keying on `contents` would re-measure the book
         // every time the theme colour changed, and keying on the state would do it on every page
         // turn; what it answers is "how long is this book, laid out *like this*", and that changes
         // only with the things below.
+        //
+        // The book's own id is among them because the measurement belongs to a book: crossing a seam
+        // makes the volume just entered the open one, and a count carried over from the volume left
+        // behind would be a count of pages this book does not have.
         LaunchedEffect(
+            openBookId,
             state.countsBookPages,
             state.totalUnits,
             widthPx,
@@ -235,7 +281,7 @@ fun ReflowablePagedContent(
                     // Co-operative rather than merely cancellable: a chapter is one long measurement
                     // with no suspension point inside it, so the check belongs between them.
                     coroutineContext.ensureActive()
-                    val content = viewModel.chapterContent(chapter)
+                    val content = viewModel.chapterContent(bookId = openBookId, chapterIndex = chapter)
                     measured += paginate(
                         blocks = content.blocks,
                         widthPx = widthPx,
@@ -249,14 +295,50 @@ fun ReflowablePagedContent(
             currentOnIntent(ReaderIntent.BookPageIndexReady(index))
         }
 
-        // The pager's pages: every page of every chapter in the window, in one flat sequence. A
-        // chapter still being parsed, or one that paginated to nothing, contributes none — so the
-        // turn across it happens between two pages that exist.
-        val pageRefs = remember(chapters, chapterPages) {
-            windowPages(chapters, chapterPages.mapValues { it.value.size })
+        // One book's pages, as the order wants them: every page of that book's own window, named by
+        // the book as well as by the chapter. The book is part of the name because the pager holds two
+        // documents at once, and a page that said only "chapter 1, page 0" would be a page of both.
+        // `windowPages` is unchanged and is asked once per book; what it is handed is that book's own
+        // pagination.
+        val pagesOf: (Long, List<Int>) -> List<ReadingEntry> = { id, chaptersOfBook ->
+            windowPages(
+                chapters = chaptersOfBook,
+                pageCounts = chaptersOfBook.associateWith { chapter ->
+                    chapterPages[id to chapter]?.size ?: 0
+                },
+            ).map { ref -> ReadingEntry.TextPage(id, ref.chapterIndex, ref.pageIndexInChapter) }
         }
 
-        val pagerState = rememberPagerState(pageCount = { pageRefs.size })
+        // The neighbours come from the state, which answers with how many chapters a neighbour has
+        // and nothing finer — so what it is given back is that neighbour's own paginated window,
+        // measured above, rather than a count that could not say where a page in it is.
+        //
+        // Built once per change of neighbour and of pagination rather than once per composition: what
+        // the state resolves a neighbour *to* is its book's id and its own window, and both are in the
+        // keys, so a list built from them cannot be a list of another book's pages.
+        val previousBookId = state.previousSegment?.book?.id ?: state.sequence?.previous?.id
+        val nextBookId = state.nextSegment?.book?.id ?: state.sequence?.next?.id
+        val previous = remember(previousBookId, previousChapters, chapterPages) {
+            state.previousNeighbour { id, _ -> pagesOf(id, previousChapters) }
+        }
+        val next = remember(nextBookId, nextChapters, chapterPages) {
+            state.nextNeighbour { id, _ -> pagesOf(id, nextChapters) }
+        }
+
+        // The order the pager turns through: the volume before this one above it, this one, and the
+        // volume after it below, with the blank page where each pair of books meets. `ReadingSequence`
+        // decides all of it — where a seam belongs, what an entry's key is, and how a position in a
+        // book is found again — so that the four presentations cannot drift apart on any of it.
+        val order = remember(openBookId, openChapters, previous, next, chapterPages) {
+            readingOrder(
+                primaryBookId = openBookId,
+                primary = pagesOf(openBookId, openChapters),
+                previous = previous,
+                next = next,
+            )
+        }
+
+        val pagerState = rememberPagerState(pageCount = { order.size })
 
         // What turns a page into a position: the block → character offset map of each chapter in the
         // window, so a page can say which character of *its own* chapter it begins at. Kept apart
@@ -276,19 +358,31 @@ fun ReflowablePagedContent(
         // A page turn is the case that needs nothing done and gets nothing: the turn reports the page
         // it arrived on, this finds that same page again, and the reader stays where they put
         // themselves.
-        LaunchedEffect(state.currentUnit, state.pendingAnchor, state.reflowOffset, chapterPages, contents) {
-            if (pageRefs.isEmpty()) return@LaunchedEffect
+        LaunchedEffect(
+            openBookId,
+            state.currentUnit,
+            state.pendingAnchor,
+            state.reflowOffset,
+            order,
+            chapterPages,
+            contents,
+        ) {
+            if (order.isEmpty()) return@LaunchedEffect
 
             val chapter = state.currentUnit
-            val pagesInChapter = chapterPages[chapter].orEmpty()
-            val chapterOffsets = offsets[chapter] ?: ChapterTextMap.Empty
+            val pagesInChapter = chapterPages[openBookId to chapter].orEmpty()
+            val chapterOffsets = offsets[openBookId to chapter] ?: ChapterTextMap.Empty
             val anchorBlock = state.pendingAnchor?.let { id ->
-                contents[chapter]?.anchorBlocks?.get(id)
+                contents[openBookId to chapter]?.anchorBlocks?.get(id)
             }
             val landing = landingPageIn(pagesInChapter, chapterOffsets, state.reflowOffset, anchorBlock)
             if (landing < 0) return@LaunchedEffect
 
-            val target = indexOfPage(pageRefs, chapter, landing)
+            // The landing page is this book's own, but its *index* is the order's — and another
+            // volume's pages are part of that order now, above and below this book's. So the page is
+            // found by the book it belongs to rather than by counting from somewhere in a list that is
+            // no longer only this book's.
+            val target = order.indexOfTextPage(openBookId, chapter, landing)
             if (target < 0) return@LaunchedEffect
             // Against the page the pager is *resting* on, not the one a gesture is turning to: a
             // drag in progress must not be snapped back to where it started.
@@ -315,34 +409,63 @@ fun ReflowablePagedContent(
         // than the one being turned to, so the chapter and the page within it always come from the
         // same page — a report taken mid-turn could name a page of one chapter inside another.
         //
+        // What is reported is the *entry* under the reader, and it is no longer always a page of the
+        // open book. On a page of a neighbour the reader has changed books, and saying so is the only
+        // report that is true — it becomes that book rather than being told it is somewhere in this
+        // one. On a seam there is nothing to report at all: the reader is between two books, and the
+        // position of the book behind them has not moved, which is what the progress bar should go on
+        // showing.
+        //
         // This collector is started once and never restarted, which is the whole reason it reads the
         // window through `rememberUpdatedState`: a restart would re-announce the page already on
         // screen, and a report is also read as a page turn. After a jump the pager is still on the
         // old chapter's page when the window changes, so that re-announcement would arrive as the
         // reader turning back — and cancel the jump that started it.
-        val latestPages by rememberUpdatedState(pageRefs)
+        //
+        // What is de-duplicated is the *report* and not the settled index. A handoff renumbers every
+        // entry in the order — the volume left behind contributes different chapters above, so every
+        // page below it moves — and the reader has not moved at all when that happens. De-duplicating
+        // the index would read that renumbering as a turn, and announce the handoff that has just
+        // happened as a fresh one.
+        val latestOrder by rememberUpdatedState(order)
         val latestChapterPages by rememberUpdatedState(chapterPages)
         val latestOffsets by rememberUpdatedState(offsets)
+        val latestOpenBookId by rememberUpdatedState(openBookId)
         LaunchedEffect(pagerState) {
-            snapshotFlow { pagerState.settledPage }
-                .distinctUntilChanged()
-                .collect { settled ->
-                    val ref = latestPages.getOrNull(settled) ?: return@collect
-                    val page = latestChapterPages[ref.chapterIndex]
-                        ?.getOrNull(ref.pageIndexInChapter) ?: return@collect
-                    val offset = pageOffset(page, latestOffsets[ref.chapterIndex] ?: ChapterTextMap.Empty)
-                    currentOnIntent(
-                        ReaderIntent.ReflowPositionChanged(
-                            chapterIndex = ref.chapterIndex,
-                            pageIndex = ref.pageIndexInChapter,
-                            pageCount = latestChapterPages[ref.chapterIndex]?.size ?: 0,
-                            offset = offset,
-                        ),
+            snapshotFlow {
+                val entry = latestOrder.getOrNull(pagerState.settledPage) ?: return@snapshotFlow null
+                if (entry !is ReadingEntry.TextPage) return@snapshotFlow null
+
+                // A page whose chapter has not been parsed and laid out yet has no offset to report,
+                // and a report invented from nothing would move the reader somewhere they are not.
+                // Its arrival re-runs this flow, which is what reports it then.
+                val pages = latestChapterPages[entry.bookId to entry.chapterIndex]
+                    ?: return@snapshotFlow null
+                val page = pages.getOrNull(entry.pageIndexInChapter) ?: return@snapshotFlow null
+                val offset = pageOffset(
+                    page,
+                    latestOffsets[entry.bookId to entry.chapterIndex] ?: ChapterTextMap.Empty,
+                )
+
+                if (entry.bookId == latestOpenBookId) {
+                    ReaderIntent.ReflowPositionChanged(
+                        chapterIndex = entry.chapterIndex,
+                        pageIndex = entry.pageIndexInChapter,
+                        pageCount = pages.size,
+                        offset = offset,
+                    )
+                } else {
+                    ReaderIntent.EnteredBook(
+                        bookId = entry.bookId,
+                        locator = ReadingLocator.Reflowable(entry.chapterIndex, offset),
                     )
                 }
+            }
+                .distinctUntilChanged()
+                .collect { report -> report?.let { currentOnIntent(it) } }
         }
 
-        val currentPages by rememberUpdatedState(pageRefs)
+        val currentOrder by rememberUpdatedState(order)
         val currentSettings by rememberUpdatedState(state.settings)
         // Read through `rememberUpdatedState`: the gesture loop is not restarted when the direction
         // changes, so a plain read inside it would keep the direction the chapter was opened in.
@@ -354,7 +477,7 @@ fun ReflowablePagedContent(
                 .pointerInput(Unit) {
                     detectTapGestures { position ->
                         val settings = currentSettings
-                        val pageCount = currentPages.size
+                        val pageCount = currentOrder.size
                         val zone = if (settings.tapToTurnPages) {
                             tapZoneFor(
                                 x = position.x,
@@ -377,7 +500,7 @@ fun ReflowablePagedContent(
                                 if (next < pageCount) {
                                     scope.launch { pagerState.animateScrollToPage(next) }
                                 } else {
-                                    // Past the last page of the chapter, the gesture keeps meaning
+                                    // Past the last page the pager holds, the gesture keeps meaning
                                     // "forward" and moves on to the next chapter.
                                     currentOnIntent(ReaderIntent.NextUnit)
                                 }
@@ -398,36 +521,73 @@ fun ReflowablePagedContent(
                     }
                 },
         ) {
-            if (pageRefs.isNotEmpty()) {
+            if (order.isNotEmpty()) {
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
                     pageSpacing = PAGE_SPACING,
-                    // The page's own identity rather than its place in the list. A window slide
-                    // renumbers every page in it, and this is what lets the pager find the page it
-                    // was on again — inside the measure pass that renumbered them, so no frame is
-                    // ever drawn with the new list and the old index. `(chapter, page)` names exactly
-                    // one page in the book; see `pagerKey` for why it travels as a number.
-                    key = { index -> pageRefs[index].pagerKey() },
+                    // The entry's own identity rather than its place in the list. A window slide
+                    // renumbers every entry in it, and a handoff renumbers them all — the volume left
+                    // behind contributes different chapters above, so every page below it moves — and
+                    // this is what lets the pager find the entry it was on again, inside the measure
+                    // pass that renumbered them, so no frame is ever drawn with the new list and the
+                    // old index. The key names the book as well as the page, so the next volume's
+                    // page 0 cannot be mistaken for this one's; see `readingKey`.
+                    key = { index -> order[index].readingKey() },
                 ) { pageIndex ->
-                    val ref = pageRefs[pageIndex]
-                    val page = chapterPages[ref.chapterIndex]?.getOrNull(ref.pageIndexInChapter)
-                    if (page != null) {
-                        PageContent(
-                            ref = ref,
-                            pageIndex = pageIndex,
-                            page = page,
-                            pagerState = pagerState,
-                            isRtl = isRtl,
-                            // The same turn effect as the fixed-page reader, driven by the same
-                            // value, so a text file split into pages and a comic turn alike — which
-                            // is the whole reason the reader has one toolbar and one set of gestures
-                            // for five formats.
-                            pageTurnEffect = currentSettings.pageTurnEffect,
-                            content = contents[ref.chapterIndex] ?: ChapterContent.Empty,
-                            viewModel = viewModel,
-                            state = state,
+                    when (val entry = order.getOrNull(pageIndex)) {
+                        is ReadingEntry.TextPage -> {
+                            val page = chapterPages[entry.bookId to entry.chapterIndex]
+                                ?.getOrNull(entry.pageIndexInChapter)
+                            if (page != null) {
+                                PageContent(
+                                    bookId = entry.bookId,
+                                    ref = PageRef(entry.chapterIndex, entry.pageIndexInChapter),
+                                    pageIndex = pageIndex,
+                                    page = page,
+                                    pagerState = pagerState,
+                                    isRtl = isRtl,
+                                    // The same turn effect as the fixed-page reader, driven by the
+                                    // same value, so a text file split into pages and a comic turn
+                                    // alike — which is the whole reason the reader has one toolbar
+                                    // and one set of gestures for five formats.
+                                    pageTurnEffect = currentSettings.pageTurnEffect,
+                                    content = contents[entry.bookId to entry.chapterIndex]
+                                        ?: ChapterContent.Empty,
+                                    viewModel = viewModel,
+                                    state = state,
+                                )
+                            }
+                        }
+
+                        // The blank page where two books meet, drawn exactly as it is in the other
+                        // three presentations. It is turned through in both directions like any page
+                        // and belongs to neither book, which is what makes the reader's position on
+                        // it the position they had before the seam.
+                        is ReadingEntry.Seam -> ReaderSeamPage(
+                            // Both ids came from the order, which only ever places a seam for a book
+                            // of the folder's own sequence, so both resolve — `orEmpty` is only the
+                            // type's own admission that a title may be missing.
+                            fromTitle = state.titleOf(entry.fromBookId).orEmpty(),
+                            toTitle = state.titleOf(entry.toBookId).orEmpty(),
+                            // Only out of the book being read, and only for a volume that could not
+                            // be drawn ahead of time: the seam offers to open it as a book of its
+                            // own rather than ending the reader's run there. The seam behind the open
+                            // book never gets the button — the reader is already past that volume,
+                            // and its saved position is where they would want to arrive.
+                            onOpenNext = if (
+                                entry.fromBookId == openBookId &&
+                                entry.toBookId in state.unavailableNeighbours
+                            ) {
+                                { currentOnIntent(ReaderIntent.OpenNeighbour(entry.toBookId)) }
+                            } else {
+                                null
+                            },
                         )
+
+                        // This order holds pages within chapters and nothing else; the other kinds of
+                        // entry belong to the presentations that count in pages or in chapters.
+                        is ReadingEntry.Page, is ReadingEntry.Chapter, null -> Unit
                     }
                 }
             }
@@ -449,9 +609,14 @@ fun ReflowablePagedContent(
  * A settled page takes none of this. It is drawn straight to the canvas exactly as it was before any
  * of it existed, which is the property that matters most — a page nobody is touching cannot have
  * been made slower or different by a page turn.
+ *
+ * The book is passed rather than assumed, because a page drawn below a seam is a page of the *next*
+ * volume: the chapter it comes from and the images inside it belong to that volume's document, not to
+ * the one the reader is still counted as being in.
  */
 @Composable
 private fun PageContent(
+    bookId: Long,
     ref: PageRef,
     page: ReaderPage,
     pageIndex: Int,
@@ -544,7 +709,13 @@ private fun PageContent(
         ) {
             page.slices.forEach { slice ->
                 val block = content.blocks.getOrNull(slice.blockIndex) ?: return@forEach
-                BlockSliceView(block = block, slice = slice, viewModel = viewModel, state = state)
+                BlockSliceView(
+                    bookId = bookId,
+                    block = block,
+                    slice = slice,
+                    viewModel = viewModel,
+                    state = state,
+                )
             }
         }
     }

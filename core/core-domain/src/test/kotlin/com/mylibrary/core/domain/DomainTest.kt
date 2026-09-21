@@ -12,11 +12,11 @@ import com.mylibrary.core.domain.model.ReadingPosition
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.repository.BookMetadataResult
+import com.mylibrary.core.domain.usecase.FolderSequence
 import com.mylibrary.core.domain.usecase.ImportBooksUseCase
 import com.mylibrary.core.domain.usecase.ImportCandidate
-import com.mylibrary.core.domain.usecase.NextBookInFolder
+import com.mylibrary.core.domain.usecase.ObserveFolderSequenceUseCase
 import com.mylibrary.core.domain.usecase.ObserveLibraryUseCase
-import com.mylibrary.core.domain.usecase.ObserveNextBookUseCase
 import com.mylibrary.core.domain.usecase.ReadingProgressUseCase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -289,18 +289,19 @@ class ObserveLibraryUseCaseTest {
 }
 
 /**
- * The next volume of a series, which is what the reader offers at the end of a book.
+ * The books either side of an open one, in the folder's own order.
  *
  * The order is the property worth pinning: a folder of volumes is a series, and the book after
  * volume two is volume three — not whatever a plain string sort or the reader's own history happens
- * to put beside it.
+ * to put beside it. The reader now draws those neighbours itself, so both directions are asked for
+ * and both are the folder's, not the shelf's.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class ObserveNextBookUseCaseTest {
+class ObserveFolderSequenceUseCaseTest {
 
     private val library = FakeLibraryRepository()
     private val folders = FakeFolderRepository(library)
-    private val useCase = ObserveNextBookUseCase(library, folders)
+    private val useCase = ObserveFolderSequenceUseCase(library, folders)
 
     private fun book(
         id: Long,
@@ -314,12 +315,15 @@ class ObserveNextBookUseCaseTest {
         folderId = folderId,
     )
 
-    private suspend fun nextAfter(bookId: Long): NextBookInFolder? = useCase(bookId).first()
+    private suspend fun sequenceOf(bookId: Long): FolderSequence? = useCase(bookId).first()
 
     @Test
-    fun `the next book is the following volume in natural order`() = runTest {
+    fun `the neighbours are the volumes either side in natural order`() = runTest {
         // Deliberately added out of order and read out of order: neither the insertion order nor the
-        // "recently read" order of the shelf may decide which volume comes next.
+        // "recently read" order of the shelf may decide which volume comes next. The titles are the
+        // interesting part — المجلد 2 precedes المجلد 3 precedes المجلد 10, so the volume *2* follows
+        // is *3* and the volume before *10* is *3* as well. A plain string sort would put 10 second
+        // and invert both answers.
         folders.folders.value = listOf(Folder(id = 7, name = "السلاسل", uri = "content://tree/7"))
         library.books.value = listOf(
             book(1, "المجلد 10", folderId = 7).copy(lastOpenedAt = 900),
@@ -327,42 +331,85 @@ class ObserveNextBookUseCaseTest {
             book(3, "المجلد 3", folderId = 7).copy(lastOpenedAt = 100),
         )
 
-        val next = nextAfter(2)
+        val second = sequenceOf(2)
+        assertEquals(3L, second?.next?.id)
+        assertNull("المجلد 2 is the first of the three, not the middle", second?.previous)
+        assertEquals("السلاسل", second?.folderName)
 
-        assertEquals(3L, next?.book?.id)
-        assertEquals("السلاسل", next?.folderName)
+        val tenth = sequenceOf(1)
+        assertEquals("المجلد 10 is the last of the three", 3L, tenth?.previous?.id)
+        assertNull(tenth?.next)
     }
 
     @Test
-    fun `the last volume of a folder has no next book`() = runTest {
+    fun `the ends of a folder have one neighbour and no more`() = runTest {
         library.books.value = listOf(
             book(1, "المجلد 1", folderId = 7),
             book(2, "المجلد 2", folderId = 7),
         )
 
-        assertNull(nextAfter(2))
+        val first = sequenceOf(1)
+        assertEquals(2L, first?.next?.id)
+        assertNull(first?.previous)
+
+        val last = sequenceOf(2)
+        assertEquals(1L, last?.previous?.id)
+        assertNull(last?.next)
     }
 
     @Test
-    fun `a book filed on its own has no next book`() = runTest {
+    fun `a book alone in its folder has a sequence with no neighbours`() = runTest {
+        // A folder of one is a legitimate folder, and the sequence is still the answer to "what is
+        // around this book" — it is just the same book and nothing. Reporting nothing at all would
+        // be indistinguishable from the two cases below, which are the ones where there is genuinely
+        // no series to be in.
+        library.books.value = listOf(book(1, "وحيد", folderId = 7))
+
+        val sequence = sequenceOf(1)
+
+        assertEquals("وحيد", sequence?.book?.title)
+        assertNull(sequence?.previous)
+        assertNull(sequence?.next)
+    }
+
+    @Test
+    fun `a book with no folder has no sequence`() = runTest {
         library.books.value = listOf(
             book(1, "وحيد", folderId = 7),
             book(2, "خارج المجلد"),
             book(3, "أيضاً خارجه"),
         )
 
-        assertNull(nextAfter(1))
-        assertNull(nextAfter(2))
-        assertNull(nextAfter(3))
+        assertNull(sequenceOf(2))
+        assertNull(sequenceOf(3))
     }
 
     @Test
-    fun `a removed folder leaves the book with no next volume`() = runTest {
-        // The folder row is gone but the book still carries its id until the association is
-        // cleared; nothing may be offered in the meantime.
+    fun `a folder whose row is gone still gives the book its siblings`() = runTest {
+        // The books outlive the folder row: deleting a folder keeps them, and a revoked tree keeps
+        // the ids until the user points at it again. The sequence must not lose the volume beside the
+        // reader because the shelf's row for it is missing — the siblings are real files in the same
+        // folder, and the reader draws them from the books themselves, whose `folderId` is what makes
+        // them a series. Only the folder's *name* is gone, and that is exactly what comes back.
+        library.books.value = listOf(
+            book(1, "المجلد 1", folderId = 7),
+            book(2, "المجلد 2", folderId = 7),
+        )
+
+        val sequence = sequenceOf(1)
+
+        assertEquals(2L, sequence?.next?.id)
+        assertNull(sequence?.folderName)
+    }
+
+    @Test
+    fun `a book absent from its own folder has no sequence`() = runTest {
+        // What a delete between the two queries looks like: `observeBook` still answers, the list of
+        // the folder no longer contains the row. There is no position in the order to carry on from,
+        // and guessing one would put the reader inside a volume they are not reading.
         library.books.value = listOf(book(1, "المجلد 1", folderId = 7))
 
-        assertNull(nextAfter(1))
+        assertNull(sequenceOf(9))
     }
 
     @Test
@@ -373,7 +420,9 @@ class ObserveNextBookUseCaseTest {
             book(3, "ج", folderId = 7),
         )
 
-        assertEquals(3L, nextAfter(1)?.book?.id)
+        val sequence = sequenceOf(1)
+        assertEquals(3L, sequence?.next?.id)
+        assertNull(sequence?.previous)
     }
 }
 

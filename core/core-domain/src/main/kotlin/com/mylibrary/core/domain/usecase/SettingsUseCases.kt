@@ -10,6 +10,7 @@ import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderLayout
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
+import com.mylibrary.core.domain.model.TextAlignment
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.ViewMode
 import com.mylibrary.core.domain.repository.SettingsRepository
@@ -66,6 +67,9 @@ class UpdateSettingsUseCase @Inject constructor(
 
     suspend fun setFirstLineIndent(enabled: Boolean) =
         settingsRepository.update { it.copy(firstLineIndent = enabled) }
+
+    suspend fun setTextAlignment(alignment: TextAlignment) =
+        settingsRepository.update { it.copy(textAlign = alignment) }
 
     suspend fun setPageFitMode(mode: PageFitMode) = settingsRepository.update { it.copy(pageFitMode = mode) }
 
@@ -137,6 +141,7 @@ class UpdateSettingsUseCase @Inject constructor(
             marginScale = ReaderSettings.Default.marginScale,
             paragraphSpacingScale = ReaderSettings.Default.paragraphSpacingScale,
             firstLineIndent = ReaderSettings.Default.firstLineIndent,
+            textAlign = ReaderSettings.Default.textAlign,
             pageFitMode = ReaderSettings.Default.pageFitMode,
             readingDirection = ReaderSettings.Default.readingDirection,
             keepScreenOn = ReaderSettings.Default.keepScreenOn,

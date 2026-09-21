@@ -54,9 +54,11 @@ import androidx.compose.ui.unit.dp
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.PageSize
 import com.mylibrary.core.domain.model.PageTurnEffect
+import com.mylibrary.core.domain.model.ReadingLocator
 import com.mylibrary.core.ui.component.ErrorState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -77,6 +79,12 @@ import kotlin.math.roundToInt
  * reader therefore owns a single zoom, applies it to the page it is showing, and hangs one set of
  * gesture handlers on the viewport. That is also the honest model: only the page in front of the
  * reader can be zoomed, and turning the page puts the zoom back.
+ *
+ * **The pager counts the reading order, not the document.** A folder is a series, so the volume
+ * before the open one is drawn above it and the volume after below, with a seam page wherever two
+ * books meet — the same list the other three presentations draw, built by [readingOrder]. The pages
+ * of a neighbouring volume are therefore entries of this pager like any other, and it is the entry
+ * keys that keep the reader's place when crossing the seam renumbers them.
  */
 @Composable
 fun PagedReaderContent(
@@ -85,24 +93,103 @@ fun PagedReaderContent(
     onIntent: (ReaderIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val openBookId = state.book?.id
+
+    // The entries this pager turns through: the open book's pages, the volumes either side of it,
+    // and the seam where each of them meets this one. Remembered on the ids and counts it is built
+    // from rather than on the state object — which is replaced on every page turn — because a new
+    // list every frame is a renumbering as far as the pager is concerned, and one it has no reason
+    // to scroll through. A neighbour whose document has not been opened yet contributes no units and
+    // still gets its seam; see [readingOrder].
+    val order = remember(
+        openBookId,
+        state.totalUnits,
+        state.previousSegment,
+        state.nextSegment,
+        state.sequence?.previous?.id,
+        state.sequence?.next?.id,
+    ) {
+        if (openBookId == null) {
+            emptyList()
+        } else {
+            readingOrder(
+                primaryBookId = openBookId,
+                primary = List(state.totalUnits) { ReadingEntry.Page(openBookId, it) },
+                previous = state.previousNeighbour { id, count ->
+                    List(count) { ReadingEntry.Page(id, it) }
+                },
+                next = state.nextNeighbour { id, count ->
+                    List(count) { ReadingEntry.Page(id, it) }
+                },
+            )
+        }
+    }
+
+    // Where a unit of the open book sits in that order: the volumes above it come first, and the
+    // seam between them takes a slot of its own. -1 when the order holds none of the book's entries,
+    // which is what a caller has to be able to tell apart from the first entry.
+    fun orderIndexOf(unit: Int): Int = openBookId?.let { order.indexOfPage(it, unit) } ?: -1
+
     val pagerState = rememberPagerState(
-        initialPage = state.currentUnit.coerceAtLeast(0),
-        pageCount = { state.totalUnits },
+        initialPage = orderIndexOf(state.currentUnit).coerceAtLeast(0),
+        pageCount = { order.size },
     )
 
-    // Pager -> state. `distinctUntilChanged` is what stops the two sync effects below from
-    // ping-ponging: this one emits only when the page genuinely changes.
+    // Read through `rememberUpdatedState` rather than taken as a key of the collector below, so that
+    // a renumbered order does not restart it: restarted, it would report the entry under the reader
+    // again, and after a handoff that is the report that caused the handoff.
+    val currentOrder by rememberUpdatedState(order)
+
+    // Pager -> state. What is reported is the *entry* under the reader, not the index they are
+    // looking at it through: the same page wears a different index once a neighbour's document opens
+    // above it, and an index that moved while the page did not is not a move. Mapping first and then
+    // dropping repeats is what stops this and the sync effect below from ping-ponging: this one
+    // emits only when the reader's position genuinely changes.
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.currentPage }
+            .map { index ->
+                when (val entry = currentOrder.entryAt(index)) {
+                    // A page of the open book: the intent the reader's position has always been
+                    // reported with.
+                    is ReadingEntry.Page ->
+                        if (entry.bookId == openBookId) {
+                            ReaderIntent.PageChanged(entry.pageIndex)
+                        } else {
+                            // A page of another book of the folder: the reader has crossed into it,
+                            // and the page they are looking at is the position they arrive at —
+                            // which is what makes the crossing a change of document rather than a
+                            // second reader starting at the beginning of the volume.
+                            ReaderIntent.EnteredBook(
+                                entry.bookId,
+                                ReadingLocator.Paged(entry.pageIndex),
+                            )
+                        }
+
+                    // A seam is between two books, so there is nothing to report: the open book's
+                    // position has not changed while the reader stands on it, and the progress bar
+                    // saying so is the truthful answer. Reporting the page behind them again would
+                    // read as the reader having gone back to it.
+                    is ReadingEntry.Seam -> null
+
+                    // Chapters and pages-within-chapters are what the reflowed presentations count
+                    // in; this order is built from pages alone. An index past the end of an order
+                    // that has just been rebuilt lands here too, and maps to the same nothing.
+                    else -> null
+                }
+            }
             .distinctUntilChanged()
-            .collect { page -> onIntent(ReaderIntent.PageChanged(page)) }
+            .collect { intent -> if (intent != null) onIntent(intent) }
     }
 
     // State -> pager, for jumps that did not come from a swipe: a table-of-contents entry, a search
-    // result, or the page slider in the bottom bar.
-    LaunchedEffect(state.currentUnit, state.totalUnits) {
-        if (state.totalUnits > 0 && state.currentUnit != pagerState.currentPage) {
-            pagerState.animateScrollToPage(state.currentUnit)
+    // result, or the page slider in the bottom bar. Such a jump names a page of the open book, which
+    // is no longer the same thing as an index into the pager — the volumes above come first — so it
+    // is resolved through the order to the entry that page occupies, and a book whose entries are
+    // not in the order at all has nowhere to scroll to.
+    LaunchedEffect(state.currentUnit, order) {
+        val target = orderIndexOf(state.currentUnit)
+        if (target >= 0 && target != pagerState.currentPage) {
+            pagerState.animateScrollToPage(target)
         }
     }
 
@@ -140,6 +227,10 @@ fun PagedReaderContent(
     // reader needs it to turn a tap into a page pixel and a page pixel back into a place on screen.
     var geometry by remember { mutableStateOf(PageGeometry()) }
 
+    // A detected speech bubble drawn enlarged over the page it came from, until a tap or back
+    // clears it. `null` means an ordinary page is on screen and gestures behave accordingly.
+    var bubbleOverlay by remember { mutableStateOf<BubbleOverlay?>(null) }
+
     // Bucketed to whole steps so that a continuous pinch does not request a new render on every
     // frame; only crossing 2x or 3x triggers a sharper render.
     val resolutionStep = remember(transform.scale) {
@@ -171,6 +262,7 @@ fun PagedReaderContent(
     // magnification carried into the next page would be a magnification of a page nobody chose.
     LaunchedEffect(pagerState.currentPage) {
         zoomJob?.cancel()
+        bubbleOverlay = null
         transform = PageTransform.Identity
         referenceWhenSet = Size.Zero
     }
@@ -207,16 +299,25 @@ fun PagedReaderContent(
     }
 
     /**
-     * Zooms into whatever is under [position]: a speech bubble or panel if one is there, and a fixed
-     * magnification about the tapped point if not.
+     * Zooms into whatever is under [position]: a speech bubble enlarged in place if one is there,
+     * and a fixed magnification about the tapped point if not.
+     *
+     * A bubble now belongs to the overlay rather than to the page's zoom. The camera zoom this used
+     * to do answered "double-tap" with a *page* move: everything in the frame — the panel around
+     * the bubble, the art either side of it — came with the magnification, and what the reader had
+     * asked for was only the bubble, bigger, with the page it lives on left exactly as it was. So a
+     * detected region is cropped out of the render and drawn back over its own place on screen,
+     * enlarged; the page below never moves. Only when nothing is detected does the tapped-point
+     * zoom remain, which is the same double-tap every other comic reader falls back to.
      */
     fun zoomIntoPage(position: Offset) {
         val bitmap = geometry.bitmap
         val container = geometry.container
         val drawn = geometry.drawn
+        if (container.width <= 0 || container.height <= 0 || drawn.width <= 0f) return
 
         scope.launch {
-            val framed = if (bitmap != null && currentBubbleZoom) {
+            val overlay = if (bitmap != null && currentBubbleZoom) {
                 viewPointToPixel(
                     viewPoint = position,
                     container = container,
@@ -228,31 +329,32 @@ fun PagedReaderContent(
                     ?.let { point ->
                         viewModel.bubbleRegionAt(bitmap, point.x.toInt(), point.y.toInt())
                     }
+                    // A region covering much of the page is not a bubble to enlarge: it is a
+                    // panel, and the whole-page plain zoom is both smaller and more useful.
+                    ?.takeIf { region ->
+                        region.bounds.area <= OVERLAY_MAX_PAGE_SHARE * bitmap.width * bitmap.height
+                    }
                     ?.let { region ->
-                        zoomTargetForRegion(
-                            region = region.bounds,
+                        bubbleOverlayFor(
+                            bitmap = bitmap,
+                            region = region,
                             container = container,
                             drawn = drawn,
-                            bitmapWidth = bitmap.width,
-                            bitmapHeight = bitmap.height,
                         )
                     }
-                    // A region covering nearly the whole page is not worth framing: the plain zoom
-                    // is both smaller and more useful.
-                    ?.takeIf { it.scale >= MIN_USEFUL_ZOOM }
             } else {
                 null
             }
 
-            if (framed != null) {
+            if (overlay != null) {
                 if (currentHapticsEnabled) {
                     haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                 }
-                zoomTo(framed)
+                bubbleOverlay = overlay
                 return@launch
             }
 
-            // Nothing to frame: the whole page, or a tap that landed on a drawing. Zoom about the
+            // Nothing detected: the whole page, or a tap that landed on a drawing. Zoom about the
             // point that was tapped — the reader aimed there, and a zoom that lands somewhere else
             // is the one thing a double-tap must not do.
             val pixel = viewPointToPixel(
@@ -343,19 +445,36 @@ fun PagedReaderContent(
                             isRtl = currentIsRtl,
                             reversed = currentReverseTapZones,
                         )
+                        // The page-turn zones move the pager by one *entry*, because the entries are
+                        // no longer only this book's pages: the seam before the next volume is one,
+                        // and so is every page of that volume. Asking the document for its own next
+                        // page would step over both — and at the end of a volume it would ask for a
+                        // page the open document does not have. Only at the ends of the order is
+                        // there no entry to turn to, and there the intent the reader always had is
+                        // the only answer left.
                         when (zone) {
                             TapZone.PREVIOUS -> {
                                 if (currentHapticsEnabled) {
                                     haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                                 }
-                                currentOnIntent(ReaderIntent.PreviousUnit)
+                                val previous = pagerState.currentPage - 1
+                                if (previous >= 0) {
+                                    scope.launch { pagerState.animateScrollToPage(previous) }
+                                } else {
+                                    currentOnIntent(ReaderIntent.PreviousUnit)
+                                }
                             }
 
                             TapZone.NEXT -> {
                                 if (currentHapticsEnabled) {
                                     haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                                 }
-                                currentOnIntent(ReaderIntent.NextUnit)
+                                val next = pagerState.currentPage + 1
+                                if (next < order.size) {
+                                    scope.launch { pagerState.animateScrollToPage(next) }
+                                } else {
+                                    currentOnIntent(ReaderIntent.NextUnit)
+                                }
                             }
 
                             TapZone.CENTER -> currentOnIntent(ReaderIntent.ToggleChrome)
@@ -384,22 +503,66 @@ fun PagedReaderContent(
             modifier = Modifier.fillMaxSize(),
             pageSpacing = PAGE_SPACING,
             beyondViewportPageCount = 1,
+            // Every entry is filed under a key naming the book it belongs to, which is what keeps the
+            // reader's place when the order is renumbered: crossing a seam rewrites which book is
+            // open and every index around the reader moves, while the page they are looking at does
+            // not. Without keys the pager would hold the index and land them on a page of the volume
+            // they had just finished.
+            key = { index -> order[index].readingKey() },
         ) { pageIndex ->
-            ReaderPage(
-                pageIndex = pageIndex,
-                // Read inside `graphicsLayer`, so a page's turn transform tracks the finger without
-                // recomposing the page on every frame of the drag.
-                pageOffset = { pagerState.offsetOf(pageIndex) },
-                isCurrentPage = pageIndex == pagerState.currentPage,
-                layerTransform = layerTransform,
-                resolutionStep = resolutionStep,
-                fitMode = state.settings.pageFitMode,
-                pageTurnEffect = state.settings.pageTurnEffect,
-                viewModel = viewModel,
-                onIntent = onIntent,
-                onGeometry = { page ->
-                    if (pageIndex == pagerState.currentPage) geometry = page
-                },
+            when (val entry = order[pageIndex]) {
+                is ReadingEntry.Page -> ReaderPage(
+                    bookId = entry.bookId,
+                    pageIndex = entry.pageIndex,
+                    // The slot's own index, not the page's: this is where the page sits in the order,
+                    // and a turn transform is measured between neighbouring slots. It is also the one
+                    // place the two are still told apart — below, `entry.pageIndex` is the page of
+                    // the document, and it is not the same number once a volume is drawn above this
+                    // one. Read inside `graphicsLayer`, so a page's turn transform tracks the finger
+                    // without recomposing the page on every frame of the drag.
+                    pageOffset = { pagerState.offsetOf(pageIndex) },
+                    isCurrentPage = pageIndex == pagerState.currentPage,
+                    layerTransform = layerTransform,
+                    resolutionStep = resolutionStep,
+                    fitMode = state.settings.pageFitMode,
+                    pageTurnEffect = state.settings.pageTurnEffect,
+                    viewModel = viewModel,
+                    onIntent = onIntent,
+                    onGeometry = { page ->
+                        if (pageIndex == pagerState.currentPage) geometry = page
+                    },
+                )
+
+                is ReadingEntry.Seam -> ReaderSeamPage(
+                    fromTitle = state.titleOf(entry.fromBookId).orEmpty(),
+                    toTitle = state.titleOf(entry.toBookId).orEmpty(),
+                    // Only the seam ahead of the reader offers to open its book, and only when that
+                    // book is one the reader could not be carried into: a book that could be is
+                    // already open and drawn below the seam. The seam behind the reader offers
+                    // nothing at all — the volume behind them is finished, and its saved position,
+                    // not its first page, is where they would want to arrive.
+                    onOpenNext = if (
+                        entry.fromBookId == openBookId &&
+                        entry.toBookId in state.unavailableNeighbours
+                    ) {
+                        { onIntent(ReaderIntent.OpenNeighbour(entry.toBookId)) }
+                    } else {
+                        null
+                    },
+                )
+
+                // Chapters and pages-within-chapters are the units of the reflowed presentations;
+                // this order is built from pages alone.
+                is ReadingEntry.Chapter, is ReadingEntry.TextPage -> Unit
+            }
+        }
+
+        // The enlarged bubble floats above everything, scrim and all, and swallows taps until it
+        // is dismissed: a tap that closes it must not also turn the page beneath it.
+        bubbleOverlay?.let { overlay ->
+            BubbleOverlayLayer(
+                overlay = overlay,
+                onDismiss = { bubbleOverlay = null },
             )
         }
     }
@@ -436,6 +599,7 @@ internal data class PageGeometry(
  */
 @Composable
 internal fun ReaderPage(
+    bookId: Long,
     pageIndex: Int,
     pageOffset: () -> Float,
     isCurrentPage: Boolean,
@@ -456,9 +620,11 @@ internal fun ReaderPage(
     // render is as tall as the page's own proportions make it, and an actual-size render is the
     // page's own dimensions. `null` until it arrives, and for a document that cannot report one —
     // which is why *whether* the question has been answered is tracked separately from its answer.
-    var pageSizeAnswered by remember(pageIndex) { mutableStateOf(false) }
-    val pageSize by produceState<PageSize?>(initialValue = null, pageIndex) {
-        value = viewModel.pageSize(pageIndex)
+    // Keyed on the book as well as the page, because page 12 of two volumes is two different pages,
+    // and this composable is handed the slot of whichever entry the pager puts there.
+    var pageSizeAnswered by remember(bookId, pageIndex) { mutableStateOf(false) }
+    val pageSize by produceState<PageSize?>(initialValue = null, bookId, pageIndex) {
+        value = viewModel.pageSize(bookId, pageIndex)
         pageSizeAnswered = true
     }
 
@@ -475,11 +641,13 @@ internal fun ReaderPage(
 
     val renderState by produceState<PageRenderState>(
         initialValue = PageRenderState.Loading,
+        bookId,
         pageIndex,
         renderBox,
     ) {
         if (renderBox.width > 0 && renderBox.height > 0) {
             value = viewModel.renderPage(
+                bookId = bookId,
                 pageIndex = pageIndex,
                 widthPx = renderBox.width,
                 heightPx = renderBox.height,
