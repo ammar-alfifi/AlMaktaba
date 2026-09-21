@@ -60,6 +60,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -186,10 +187,23 @@ fun PagedReaderContent(
     // is no longer the same thing as an index into the pager — the volumes above come first — so it
     // is resolved through the order to the entry that page occupies, and a book whose entries are
     // not in the order at all has nowhere to scroll to.
+    //
+    // **A long jump does not animate, and that is a crash fix rather than a taste.** The slider is
+    // dragged across a whole comic in one gesture, and `animateScrollToPage` sweeps the viewport
+    // through every page between here and there: each one is composed, its native page decoded and a
+    // full-page bitmap allocated on the way past. Dragging quickly across a 200-page CBZ therefore
+    // queues two hundred decodes for pages the reader never stops on — the out-of-memory crash
+    // reported against image files. `scrollToPage` moves the pager in one step, so only the pages at
+    // the destination are ever rendered. A one- or two-page move — an outline entry, a tap-zone turn
+    // at the end of the order — still animates, because there is nothing in between to pay for.
     LaunchedEffect(state.currentUnit, order) {
         val target = orderIndexOf(state.currentUnit)
         if (target >= 0 && target != pagerState.currentPage) {
-            pagerState.animateScrollToPage(target)
+            if (abs(target - pagerState.currentPage) <= PAGES_THAT_ANIMATE) {
+                pagerState.animateScrollToPage(target)
+            } else {
+                pagerState.scrollToPage(target)
+            }
         }
     }
 
@@ -227,9 +241,20 @@ fun PagedReaderContent(
     // reader needs it to turn a tap into a page pixel and a page pixel back into a place on screen.
     var geometry by remember { mutableStateOf(PageGeometry()) }
 
+    // Which page `geometry` describes. Published beside it so that a double-tap can tell whether the
+    // page it is about to read pixels from is still the page under the reader: turning the page does
+    // not clear the geometry in the same frame the page changes, and a bubble detected from the old
+    // page's pixels is a bubble drawn from the page the reader has already left.
+    var geometryPage by remember { mutableStateOf(-1) }
+
     // A detected speech bubble drawn enlarged over the page it came from, until a tap or back
     // clears it. `null` means an ordinary page is on screen and gestures behave accordingly.
     var bubbleOverlay by remember { mutableStateOf<BubbleOverlay?>(null) }
+
+    // The detection in flight, so a page turn can cancel it. The detector copies the page's pixels
+    // off the main thread, and without this a turn made while it ran would let its answer land on
+    // the page that replaced the one it was reading.
+    var bubbleJob by remember { mutableStateOf<Job?>(null) }
 
     // Bucketed to whole steps so that a continuous pinch does not request a new render on every
     // frame; only crossing 2x or 3x triggers a sharper render.
@@ -260,9 +285,15 @@ fun PagedReaderContent(
 
     // Turning the page puts the zoom back: the page that was framed is no longer on screen, and a
     // magnification carried into the next page would be a magnification of a page nobody chose.
+    // The geometry goes with it, so a double-tap made before the new page has rendered cannot read
+    // the old page's pixels, and any bubble still being detected is cancelled rather than allowed to
+    // land on the page that replaced it.
     LaunchedEffect(pagerState.currentPage) {
         zoomJob?.cancel()
+        bubbleJob?.cancel()
         bubbleOverlay = null
+        geometry = PageGeometry()
+        geometryPage = -1
         transform = PageTransform.Identity
         referenceWhenSet = Size.Zero
     }
@@ -311,12 +342,19 @@ fun PagedReaderContent(
      * zoom remain, which is the same double-tap every other comic reader falls back to.
      */
     fun zoomIntoPage(position: Offset) {
+        val page = pagerState.currentPage
+        // The geometry belongs to the page under the reader and no other. After a turn it is empty
+        // until the new page has rendered, and reading it then would crop the bubble out of the
+        // previous page's pixels — the bubble that appeared "from the page before", at the place the
+        // reader had double-tapped on the new one.
+        if (geometryPage != page) return
         val bitmap = geometry.bitmap
         val container = geometry.container
         val drawn = geometry.drawn
         if (container.width <= 0 || container.height <= 0 || drawn.width <= 0f) return
 
-        scope.launch {
+        bubbleJob?.cancel()
+        bubbleJob = scope.launch {
             val overlay = if (bitmap != null && currentBubbleZoom) {
                 viewPointToPixel(
                     viewPoint = position,
@@ -345,6 +383,11 @@ fun PagedReaderContent(
             } else {
                 null
             }
+
+            // The detection ran off the main thread and the reader may have turned the page while
+            // it did; an answer about a page that is no longer on screen is thrown away rather than
+            // painted over the page that replaced it.
+            if (pagerState.currentPage != page || geometryPage != page) return@launch
 
             if (overlay != null) {
                 if (currentHapticsEnabled) {
@@ -507,10 +550,11 @@ fun PagedReaderContent(
             // reader's place when the order is renumbered: crossing a seam rewrites which book is
             // open and every index around the reader moves, while the page they are looking at does
             // not. Without keys the pager would hold the index and land them on a page of the volume
-            // they had just finished.
-            key = { index -> order[index].readingKey() },
+            // they had just finished. `getOrNull` because the order can shrink between the pager
+            // asking for a key and the composition that changes its page count.
+            key = { index -> order.getOrNull(index)?.readingKey() ?: "missing:$index" },
         ) { pageIndex ->
-            when (val entry = order[pageIndex]) {
+            when (val entry = order.getOrNull(pageIndex)) {
                 is ReadingEntry.Page -> ReaderPage(
                     bookId = entry.bookId,
                     pageIndex = entry.pageIndex,
@@ -529,7 +573,10 @@ fun PagedReaderContent(
                     viewModel = viewModel,
                     onIntent = onIntent,
                     onGeometry = { page ->
-                        if (pageIndex == pagerState.currentPage) geometry = page
+                        if (pageIndex == pagerState.currentPage) {
+                            geometry = page
+                            geometryPage = pageIndex
+                        }
                     },
                 )
 
@@ -552,8 +599,9 @@ fun PagedReaderContent(
                 )
 
                 // Chapters and pages-within-chapters are the units of the reflowed presentations;
-                // this order is built from pages alone.
-                is ReadingEntry.Chapter, is ReadingEntry.TextPage -> Unit
+                // this order is built from pages alone. `null` is an index past the end of an order
+                // that has just been rebuilt under the pager.
+                is ReadingEntry.Chapter, is ReadingEntry.TextPage, null -> Unit
             }
         }
 
@@ -664,7 +712,12 @@ internal fun ReaderPage(
         referenceDrawnSizeFor(fitMode, drawnSize, pageSize)
     }
 
-    LaunchedEffect(bitmap, drawnSize, referenceDrawnSize, containerSize) {
+    // `isCurrentPage` is among the keys so that a page pre-composed as a neighbour republishes the
+    // moment it becomes the one on screen: its bitmap and size have not changed, so without this the
+    // effect would not run again and the reader's geometry would go on describing the page just left.
+    // The callback decides whether the report belongs to the reader — the paged reader accepts only
+    // the current page's, while a page of the scrolling column publishes for its own pinch.
+    LaunchedEffect(bitmap, drawnSize, referenceDrawnSize, containerSize, isCurrentPage) {
         onGeometry(PageGeometry(bitmap, drawnSize, referenceDrawnSize, containerSize))
     }
 
@@ -999,6 +1052,15 @@ private val PAGE_SPACING = 8.dp
 
 /** A neutral ground behind pages, matching how PDF readers present a paper page. */
 private val PAGE_BACKGROUND = Color(0xFF2B2B2B)
+
+/**
+ * How far a jump may be and still animate.
+ *
+ * Above this the pager steps straight to its destination instead of sweeping through it: a slider
+ * dragged across a comic would otherwise compose, decode and allocate every page in between. See the
+ * jump effect in [PagedReaderContent].
+ */
+private const val PAGES_THAT_ANIMATE = 2
 
 /**
  * How far the virtual camera sits from a turning page, in density-independent units.

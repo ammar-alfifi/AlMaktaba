@@ -540,6 +540,11 @@ private fun PageInspection(
      * point itself if not.
      */
     fun frameAt(fraction: Offset) {
+        // The pixels must belong to the page being framed. `frame` sets the page before the opened
+        // overlay has drawn anything, and for those frames the geometry still describes the page
+        // inspected before — reading a bubble out of it would draw the previous page's balloon over
+        // the new one.
+        if (!inspection.isDrawn()) return
         val bitmap = geometry.bitmap ?: return
         val pixel = Offset(fraction.x * bitmap.width, fraction.y * bitmap.height)
         scope.launch {
@@ -592,7 +597,9 @@ private fun PageInspection(
         inspection.applyPendingMagnify()
 
         val fraction = inspection.pendingFrame ?: return@LaunchedEffect
-        if (geometry.bitmap == null) return@LaunchedEffect
+        // Wait for the opened page to report its own geometry rather than consume the request while
+        // the previous page's is still in hand — clearing it first would lose the double-tap.
+        if (!inspection.isDrawn()) return@LaunchedEffect
         inspection.pendingFrame = null
         frameAt(fraction)
     }

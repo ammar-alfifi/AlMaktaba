@@ -761,6 +761,11 @@ internal fun ReaderUiState.headingStyle(level: Int): TextStyle {
         fontFamily = readingFontFamily(),
         fontSize = size.sp,
         lineHeight = (size * settings.lineHeightScale * LINE_HEIGHT_RATIO).sp,
+        // Headings carry the reader's alignment too. Without it the setting reached every block
+        // drawn from [bodyTextStyle] — paragraphs, quotations, list items, table cells — and left
+        // headings pinned to the start edge, which is what "alignment does not apply to everything"
+        // looked like on a book whose headings are centred in the file.
+        textAlign = settings.textAlign.toCompose(),
     )
 }
 
