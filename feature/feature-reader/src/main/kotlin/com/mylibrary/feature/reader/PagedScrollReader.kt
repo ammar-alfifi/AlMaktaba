@@ -134,25 +134,26 @@ internal fun PagedScrollReaderContent(
     val currentBubbleZoom by rememberUpdatedState(state.settings.bubbleZoom)
     val currentHapticsEnabled by rememberUpdatedState(state.settings.hapticsEnabled)
 
-    // Column -> state. The index is mapped through `readingOrder` before it reaches the ViewModel —
-    // the same reasoning the old `contentIndex` clamping carried, with the order in its place: a
-    // column index no longer names a page of the open book. The column holds the pages of the volume
-    // above and below as well, and the seam between two books belongs to neither — a reader who has
-    // scrolled onto one of those has not moved *within* the open book at all, and sending the index on
-    // as a page number would step the progress bar by a volume and carry the reader into a book they
-    // have not crossed into. Naming the book instead is what turns the crossing into a handover.
-    // `distinctUntilChanged` keeps the effect below from ping-ponging with it.
-    LaunchedEffect(listState, order) {
+    // Read through `rememberUpdatedState` and started once, so a renumbering does not restart the
+    // collector and re-announce the entry already under the reader. That re-announcement is the bug
+    // a handover used to hit: the order is rebuilt the moment the reader crosses a seam, the
+    // collector restarted, and its first emission described the page of the volume just left —
+    // which the ViewModel answered by crossing straight back, leaving the progress bar out of step
+    // with the page on screen. Reading the book and the order through the updated state means the
+    // collector only speaks when the reader actually moves the column.
+    val currentBookId by rememberUpdatedState(bookId)
+    val currentOrder by rememberUpdatedState(order)
+    LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex }
-            .map { index -> order.entryAt(index) }
+            .map { index -> currentOrder.entryAt(index) }
             .distinctUntilChanged()
             .collect { entry ->
                 when (entry) {
                     is ReadingEntry.Page ->
-                        if (entry.bookId == bookId) {
-                            onIntent(ReaderIntent.PageChanged(entry.pageIndex))
+                        if (entry.bookId == currentBookId) {
+                            currentOnIntent(ReaderIntent.PageChanged(entry.pageIndex))
                         } else {
-                            onIntent(
+                            currentOnIntent(
                                 ReaderIntent.EnteredBook(
                                     bookId = entry.bookId,
                                     locator = ReadingLocator.Paged(entry.pageIndex),
@@ -172,23 +173,30 @@ internal fun PagedScrollReaderContent(
     // State -> column, for a jump that did not come from scrolling: an outline entry, a search result,
     // a bookmark, or the slider in the bottom bar. Both sides are resolved through the order before
     // they are compared — the state names a page of the open book, while the column sits on an entry
-    // that is the same thing only while it belongs to the open book. The seam and the neighbour
-    // either side of it are credited with the open book's nearest page instead, which is the rounding
-    // `contentIndex` used to do for the end-of-book panel and for the same reason: a renumbered list
-    // must not be mistaken for a jump the reader did not ask for. Without it, a neighbour finishing
-    // its move into the column would drag the reader off the seam they were reading, or back out of
-    // the volume they had just crossed into.
+    // that is the same thing only while it belongs to the open book. A seam is credited with the open
+    // book's nearest page instead, which is the rounding `contentIndex` used to do for the end-of-book
+    // panel and for the same reason: a renumbered list must not be mistaken for a jump the reader did
+    // not ask for.
+    //
+    // **A page of a *neighbouring* volume is not credited with anything.** That is the difference the
+    // handover turns on: after the reader crosses a seam the state describes the new book while the
+    // column is still resting on a page of the old one, and treating that page as "the open book's
+    // nearest" — which is what `onScreen < target` used to do — read the move as already made and
+    // left the column on the wrong book. Nothing the column shows of another book can be trusted as
+    // the open book's position, so the column is moved to the entry the state names.
     LaunchedEffect(state.currentUnit, order) {
         val target = order.indexOfPage(bookId, state.currentUnit)
         if (target < 0) return@LaunchedEffect
 
         val onScreen = listState.firstVisibleItemIndex
         val visible = order.entryAt(onScreen) as? ReadingEntry.Page
-        val reading = when {
-            visible != null && visible.bookId == bookId -> visible.pageIndex
-            onScreen < target -> 0
-            else -> state.totalUnits - 1
-        }
+        val reading = columnReadingPage(
+            openBookId = bookId,
+            totalUnits = state.totalUnits,
+            targetIndex = target,
+            onScreenIndex = onScreen,
+            visible = visible,
+        )
         if (reading != state.currentUnit) listState.scrollToItem(target)
     }
 
@@ -323,6 +331,42 @@ internal fun PagedScrollReaderContent(
             )
         }
     }
+}
+
+/**
+ * A sentinel page index for "the column is not on a page of the open book".
+ *
+ * Negative because every real page index is zero-based, so it can never compare equal to a valid
+ * [ReaderUiState.currentUnit] — which is what makes the column follow the state across a handover.
+ */
+internal const val NOT_A_PAGE = -1
+
+/**
+ * The open book's page the column is effectively showing, for the state-to-column comparison.
+ *
+ * Three answers, because the column and the state can disagree in three ways:
+ *
+ *  - **A page of the open book** — its own number, the ordinary case where the reader scrolled and
+ *    the state is about to be told.
+ *  - **A seam, or past either end of the order** — the open book's nearest edge, [targetIndex]'s
+ *    side. A seam belongs to neither book, so resting on one has not moved the reader within the
+ *    open book, and the column must not be snapped back off it.
+ *  - **A page of a *neighbouring* volume** — [NOT_A_PAGE], never equal to any real position. After a
+ *    handover the state describes the new book while the column is still resting on a page of the
+ *    old one; treating that page as an edge — which is what `onScreen < targetIndex` used to do —
+ *    read the move as already made and left the column on the wrong book, which is how the progress
+ *    bar came out of step when moving between two consecutive files.
+ */
+internal fun columnReadingPage(
+    openBookId: Long,
+    totalUnits: Int,
+    targetIndex: Int,
+    onScreenIndex: Int,
+    visible: ReadingEntry.Page?,
+): Int = when {
+    visible == null -> if (onScreenIndex < targetIndex) 0 else totalUnits - 1
+    visible.bookId == openBookId -> visible.pageIndex
+    else -> NOT_A_PAGE
 }
 
 /**

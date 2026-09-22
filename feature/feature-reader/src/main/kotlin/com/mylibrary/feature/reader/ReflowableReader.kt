@@ -136,14 +136,19 @@ fun ReflowableReaderContent(
     // position has not moved — the progress bar keeps naming the book they have just finished, which
     // is the truthful answer.
     //
-    // `distinctUntilChanged` is what stops the effect re-reporting itself after a handoff: the order is
-    // rebuilt around the entry the reader is on, and that entry maps to the same intent it did a frame
-    // earlier.
-    LaunchedEffect(listState, bookId, order) {
+    // `distinctUntilChanged` is what stops the effect re-reporting itself after a handoff, and the
+    // book and the order are read through `rememberUpdatedState` so the collector is started once:
+    // restarted on a renumbering, its first emission would describe the chapter of the volume just
+    // left, and the ViewModel would answer by crossing straight back — the bounce that left the
+    // progress bar out of step with the page on screen.
+    val currentOnIntent by rememberUpdatedState(onIntent)
+    val currentBookId by rememberUpdatedState(bookId)
+    val currentOrder by rememberUpdatedState(order)
+    LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex }
             .map { index ->
-                when (val entry = order.entryAt(index)) {
-                    is ReadingEntry.Chapter -> if (entry.bookId == bookId) {
+                when (val entry = currentOrder.entryAt(index)) {
+                    is ReadingEntry.Chapter -> if (entry.bookId == currentBookId) {
                         ReaderIntent.ChapterChanged(entry.chapterIndex)
                     } else {
                         // The column has scrolled onto a chapter of another book: the reader has
@@ -163,13 +168,13 @@ fun ReflowableReaderContent(
                 }
             }
             .distinctUntilChanged()
-            .collect { intent -> intent?.let(onIntent) }
+            .collect { intent -> intent?.let(currentOnIntent) }
     }
 
     // Compared through the order for the same reason, and so that a renumbered column — a handoff, or
     // a neighbour's chapters arriving — is not mistaken for a jump the reader did not ask for and
-    // immediately undone.
-    LaunchedEffect(state.currentUnit, state.totalUnits, bookId) {
+    // immediately undone. The order is a key so the effect re-resolves against the list it is about.
+    LaunchedEffect(state.currentUnit, state.totalUnits, bookId, order) {
         val target = bookId?.let { order.indexOfChapter(it, state.currentUnit) } ?: -1
         if (target >= 0 && target != listState.firstVisibleItemIndex) {
             listState.animateScrollToItem(target)
@@ -179,7 +184,6 @@ fun ReflowableReaderContent(
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val currentOnIntent by rememberUpdatedState(onIntent)
     val currentTapToTurn by rememberUpdatedState(state.settings.tapToTurnPages)
     val currentReverseTapZones by rememberUpdatedState(state.settings.reverseTapZones)
     val currentHapticsEnabled by rememberUpdatedState(state.settings.hapticsEnabled)
@@ -409,7 +413,7 @@ internal fun BlockSliceView(
             text = part,
             style = state.headingStyle(block.level),
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
 
         is ContentBlock.Quote -> QuoteText(text = part, state = state)
@@ -442,7 +446,7 @@ private fun BlockView(
             text = block.text,
             style = state.headingStyle(block.level),
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
 
         is ContentBlock.Quote -> QuoteText(text = block.text, state = state)
@@ -541,6 +545,10 @@ private fun BodyText(
         text = text,
         style = if (asParagraph) state.paragraphTextStyle() else state.bodyTextStyle(),
         color = MaterialTheme.colorScheme.onSurface,
+        // Filling the column is what lets the reader's alignment reach a *short* line at all: a
+        // `Text` is only as wide as its own content, so a one-line paragraph or heading pinned to
+        // "centre" would have no spare width to be centred in and would sit at the start edge.
+        modifier = Modifier.fillMaxWidth(),
     )
 }
 
@@ -561,7 +569,7 @@ private fun QuoteText(text: AnnotatedString, state: ReaderUiState) {
         Text(
             text = text,
             style = state.bodyTextStyle().copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         )
     }
 }
@@ -591,6 +599,9 @@ private fun ListItemText(
             text = block.text,
             style = state.bodyTextStyle(),
             color = MaterialTheme.colorScheme.onSurface,
+            // Weighted so the item's text fills the space beside its marker, which is what lets the
+            // reader's alignment move a short item instead of leaving it at the start edge.
+            modifier = Modifier.weight(1f),
         )
     }
 }

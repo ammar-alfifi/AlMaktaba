@@ -98,6 +98,27 @@ fun colorSchemeForSource(source: ColorSource, dark: Boolean): ColorScheme =
     generatedColorScheme(source, dark) ?: if (dark) TealDarkColors else TealLightColors
 
 /**
+ * The scheme [source] resolves to on *this* device, wallpaper palette and all.
+ *
+ * [colorSchemeForSource] deliberately cannot answer this: it is a plain function with no device to
+ * read, and [ColorSource.WALLPAPER] has no fixed colours without one — it falls back to the app's
+ * teal. A preview is different. It is drawn on a real device and its whole job is to show what will
+ * actually be applied, so it reads the device's palette where there is one and falls back exactly as
+ * [MyLibraryTheme] does. Without this the wallpaper swatch showed the app's teal beside the actual
+ * palette the reader was about to get, which is the one colour a swatch must not lie about.
+ */
+@Composable
+fun rememberColorSchemeForSource(source: ColorSource, dark: Boolean): ColorScheme {
+    val context = LocalContext.current
+    val supportsDynamicColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    return remember(source, dark, supportsDynamicColor, context) {
+        wallpaperScheme(context, source, dark, supportsDynamicColor)
+            ?: generatedColorScheme(source, dark)
+            ?: if (dark) TealDarkColors else TealLightColors
+    }
+}
+
+/**
  * Overrides the layout direction for a subtree.
  *
  * Used by the reader: a reflowable document declares its own direction (an English TXT file read

@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
@@ -12,6 +14,9 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import com.mylibrary.core.ui.theme.Spacing
 
 /**
@@ -53,12 +58,26 @@ fun <T> ChoiceRow(
     // five-option row of the same setting do not change size when an option is added.
     ProvideTextStyle(value = MaterialTheme.typography.labelLarge) {
         if (options.size <= MAX_SEGMENTED_OPTIONS) {
+            val layoutDirection = LocalLayoutDirection.current
             SingleChoiceSegmentedButtonRow(modifier = modifier.fillMaxWidth()) {
                 options.forEachIndexed { index, option ->
                     SegmentedButton(
                         selected = option == selected,
                         onClick = { onSelect(option) },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                        // Resolved here rather than through `SegmentedButtonDefaults.itemShape`.
+                        // That reads the base shape's start/end corners and mirrors them for the
+                        // layout direction, and on this Material version the mirror is applied to
+                        // one side of the control but not the other: the selected fill is drawn
+                        // with the corners of the opposite direction, so in the English interface
+                        // the selected half's rounding was reversed — flat where the outline is
+                        // rounded and rounded where it is flat. Building the shape from the row's
+                        // own direction makes the fill and the outline agree, in both languages.
+                        shape = segmentedItemShape(
+                            index = index,
+                            count = options.size,
+                            base = SegmentedButtonDefaults.baseShape,
+                            layoutDirection = layoutDirection,
+                        ),
                         label = { label(option) },
                     )
                 }
@@ -84,9 +103,64 @@ fun <T> ChoiceRow(
 }
 
 /**
+ * The shape of one button in a segmented row, with the row's own layout direction applied.
+ *
+ * The two outer buttons keep the base shape's rounded corners on the *outside* and are squared off
+ * at the join; anything strictly between two neighbours is a plain rectangle.
+ *
+ * **The mirroring is done here, and it is why the parameter exists.** `RoundedCornerShape` keeps
+ * `start`/`end` semantics and swaps them when it builds an outline for a right-to-left layout, so a
+ * shape with the rounding on `topStart` lands on the left in an English row and on the right in an
+ * Arabic one — which is right for the container, and was wrong for the selected fill: the fill was
+ * resolved in the opposite direction to the outline, so in the English interface the selected half
+ * was rounded at the join and square on the outside, the reverse of the shape around it. Choosing
+ * the corner by the row's direction, rather than by name, makes the two agree: the rounding is
+ * always placed on the outside of the row and squared at the join, in both languages.
+ *
+ * A middle button is a plain rectangle, which the same "outside only" rule produces on its own —
+ * neither edge of it is an outside one.
+ */
+internal fun segmentedItemShape(
+    index: Int,
+    count: Int,
+    base: CornerBasedShape,
+    layoutDirection: LayoutDirection,
+): CornerBasedShape {
+    if (count <= 1) return base
+
+    val roundedStart = index == 0
+    val roundedEnd = index == count - 1
+    val corner = base.topStart
+    val square = CornerSize(0.dp)
+
+    // `base.copy` preserves whatever corner type the palette's shape uses, which a fresh
+    // `RoundedCornerShape` would not: an absolute cut or rounded corner shape survives.
+    return when (layoutDirection) {
+        LayoutDirection.Ltr -> base.copy(
+            topStart = if (roundedStart) corner else square,
+            bottomStart = if (roundedStart) corner else square,
+            topEnd = if (roundedEnd) corner else square,
+            bottomEnd = if (roundedEnd) corner else square,
+        )
+
+        // Mirrored: the row's *first* button is on the right, so its rounding is named `End`. When
+        // the shape is resolved for an RTL row those corners are drawn on the right — and they are
+        // resolved for the row's direction rather than the shape's own, which is what stops the
+        // fill from taking the opposite side to the outline.
+        LayoutDirection.Rtl -> base.copy(
+            topStart = if (roundedEnd) corner else square,
+            bottomStart = if (roundedEnd) corner else square,
+            topEnd = if (roundedStart) corner else square,
+            bottomEnd = if (roundedStart) corner else square,
+        )
+    }
+}
+
+/**
  * Two options, and only two, are laid out side by side.
  *
  * Three labels in a third of a phone's width is where English started being clipped; the chips
  * above are the answer to that, not a wider segmented row.
  */
 private const val MAX_SEGMENTED_OPTIONS = 2
+

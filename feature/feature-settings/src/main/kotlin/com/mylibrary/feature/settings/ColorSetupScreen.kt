@@ -51,7 +51,7 @@ import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.ui.component.FeatureScaffold
 import com.mylibrary.core.ui.theme.MyLibraryTheme
 import com.mylibrary.core.ui.theme.Spacing
-import com.mylibrary.core.ui.theme.colorSchemeForSource
+import com.mylibrary.core.ui.theme.rememberColorSchemeForSource
 
 /**
  * Choosing the app's colours: what a first launch opens on, and what Settings opens later.
@@ -135,6 +135,11 @@ fun ColorSetupScreen(
                         Section(title = stringResource(R.string.settings_color_colour)) {
                             Swatches(
                                 selected = settings.colorSource,
+                                // The swatches are drawn in the brightness the app is actually in, so
+                                // a colour that looks right here is the colour the reader gets. In
+                                // dark mode the light scheme's primary is a different colour, and a
+                                // swatch that always showed the light one was the swatch lying.
+                                dark = settings.themeMode.isDark(isSystemInDarkTheme()),
                                 onSelect = { onIntent(SettingsIntent.ColorSourceChanged(it)) },
                             )
                         }
@@ -276,7 +281,9 @@ private fun ThemeModeCards(
 @Composable
 private fun MiniAppPreview(colorSource: ColorSource, mode: ThemeMode) {
     val dark = mode.isDark(systemInDarkTheme = isSystemInDarkTheme())
-    val scheme = colorSchemeForSource(colorSource, dark)
+    // The wallpaper palette where there is one, so the miniature shows what the device would
+    // actually paint rather than the app's teal standing in for it.
+    val scheme = rememberColorSchemeForSource(colorSource, dark)
 
     Column(
         modifier = Modifier
@@ -368,10 +375,15 @@ private fun MiniAppPreview(colorSource: ColorSource, mode: ThemeMode) {
  *
  * A single filled circle says what the primary will be; a half-and-half of primary and tertiary
  * says what the *pairing* will be, which is the thing the reader is actually choosing.
+ *
+ * [dark] is the brightness the app is in right now, and each swatch is drawn in the scheme that
+ * brightness would actually produce — including the device's wallpaper palette, which
+ * `colorSchemeForSource` cannot supply. That is the difference between a preview and a decoration:
+ * a palette shown in the light scheme while the app runs dark is a colour the reader never sees.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Swatches(selected: ColorSource, onSelect: (ColorSource) -> Unit) {
+private fun Swatches(selected: ColorSource, dark: Boolean, onSelect: (ColorSource) -> Unit) {
     val available = ColorSource.entries.filter { it.isAvailable(supportsWallpaperColors) }
 
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
@@ -385,7 +397,7 @@ private fun Swatches(selected: ColorSource, onSelect: (ColorSource) -> Unit) {
         ) {
             available.forEach { source ->
                 val chosen = source == selected
-                val scheme = colorSchemeForSource(source, dark = false)
+                val scheme = rememberColorSchemeForSource(source, dark)
                 val name = stringResource(source.labelRes())
 
                 Box(
