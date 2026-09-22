@@ -3,8 +3,7 @@
     <!-- Toolbar -->
     <string name="lib_title">My Library</string>
     <string name="lib_cd_sort">Sort library</string>
-    <string name="lib_cd_view_mode">Switch view mode</string>
-    <string name="lib_sort_title">Sort by</string>
+    <string name="lib_view_mode_cd">Switch view mode</string>
 
     <!-- Sort options -->
     <string name="lib_sort_recently_read">Recently read</string>
@@ -13,9 +12,6 @@
     <string name="lib_sort_title_desc">Title (Z - A)</string>
     <string name="lib_sort_author">Author</string>
 
-    <!-- View mode -->
-    <string name="lib_view_grid">Grid</string>
-    <string name="lib_view_list">List</string>
 
     <!-- Filters -->
     <string name="lib_filter_favorites">Favourites</string>
@@ -23,13 +19,11 @@
     <!-- Empty / filtered states -->
     <string name="lib_empty_title">No books yet</string>
     <string name="lib_empty_message">Add your first book in PDF, EPUB, TXT, CBZ or CBR format to get started.</string>
-    <string name="lib_no_matches_title">No matches</string>
+    <string name="lib_no_matches_title">Nothing matches</string>
     <string name="lib_no_matches_message">No book matches the current filters. Try turning some off.</string>
     <string name="lib_clear_filters">Clear filters</string>
 
     <!-- Import -->
-    <string name="lib_import">Add books</string>
-    <string name="lib_importing">Importing…</string>
     <string name="lib_import_result">Added %1$d book(s)</string>
     <string name="lib_import_result_with_skipped">Added %1$d, %2$d already in the library, %3$d unsupported</string>
     <string name="lib_import_nothing">Nothing was added</string>
@@ -58,7 +52,7 @@
     <string name="lib_details_progress">Progress</string>
     <string name="lib_details_bookmarks">Bookmarks</string>
     <string name="lib_bookmark_deleted">Bookmark deleted</string>
-    <string name="lib_details_no_bookmarks">No bookmarks in this book yet.</string>
+    <string name="lib_details_no_bookmarks">This book has no bookmarks yet.</string>
     <string name="lib_details_added_on">Added %1$s</string>
     <string name="lib_details_last_read">Last read %1$s</string>
     <string name="lib_details_unknown_author">Unknown author</string>
@@ -95,7 +89,6 @@
     <string name="lib_folder_imported_with_skipped">Added %1$d from “%2$s”, %3$d already in the library, %4$d unsupported</string>
     <string name="lib_folder_imported_all_present">Every file in “%1$s” is already in your library</string>
     <string name="lib_folder_imported_nothing">No supported files were found in that folder</string>
-    <string name="lib_folder_rescanned">Added %1$d from “%2$s”</string>
     <string name="lib_folder_rescanned_missing">Added %1$d, and %2$d are no longer on the device</string>
     <string name="lib_folder_rescan_all_present">Nothing new in “%1$s”</string>
     <string name="lib_folder_scan_truncated">That folder is very large; the scan stopped after %1$d files</string>

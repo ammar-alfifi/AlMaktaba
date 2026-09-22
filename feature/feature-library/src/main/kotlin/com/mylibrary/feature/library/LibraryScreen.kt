@@ -403,7 +403,7 @@ private fun LibraryTopBar(
                     } else {
                         Icons.Filled.GridView
                     },
-                    contentDescription = stringResource(R.string.lib_cd_view_mode),
+                    contentDescription = stringResource(R.string.lib_view_mode_cd),
                 )
             }
         },

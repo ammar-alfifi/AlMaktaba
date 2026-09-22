@@ -11,10 +11,8 @@
 
     <!-- Content descriptions -->
     <string name="ui_cd_book_cover">Book cover</string>
-    <string name="ui_cd_navigation">Main navigation</string>
 
     <!-- States -->
-    <string name="ui_loading">Loading…</string>
     <string name="ui_error_title">Something went wrong</string>
     <string name="ui_error_file_access">Could not reach the file. It may have been moved or deleted.</string>
     <string name="ui_error_corrupt">The file is damaged or incomplete.</string>
@@ -34,7 +32,6 @@
     <string name="ui_continue_reading">Continue reading</string>
 
     <!-- The bundled Arabic typefaces. See the Arabic file for why they live here. -->
-    <string name="ui_font_system">System font</string>
     <string name="ui_font_amiri">Amiri (Naskh)</string>
     <string name="ui_font_plex_arabic">IBM Plex Arabic</string>
     <string name="ui_font_reem_kufi">Reem Kufi</string>

@@ -4,8 +4,7 @@
     <!-- Toolbar -->
     <string name="lib_title">مكتبتي</string>
     <string name="lib_cd_sort">ترتيب المكتبة</string>
-    <string name="lib_cd_view_mode">تبديل طريقة العرض</string>
-    <string name="lib_sort_title">ترتيب حسب</string>
+    <string name="lib_view_mode_cd">تبديل طريقة العرض</string>
 
     <!-- Sort options -->
     <string name="lib_sort_recently_read">الأحدث قراءةً</string>
@@ -15,9 +14,6 @@
     <string name="lib_sort_author">المؤلف</string>
 
     <!-- View mode -->
-    <string name="lib_view_grid">شبكة</string>
-    <string name="lib_view_list">قائمة</string>
-
     <!-- Filters -->
     <string name="lib_filter_favorites">المفضلة</string>
 
@@ -29,8 +25,6 @@
     <string name="lib_clear_filters">إلغاء التصفية</string>
 
     <!-- Import -->
-    <string name="lib_import">إضافة كتب</string>
-    <string name="lib_importing">جارٍ الاستيراد…</string>
     <string name="lib_import_result">تمت إضافة %1$d كتاب</string>
     <string name="lib_import_result_with_skipped">تمت إضافة %1$d، و%2$d موجودة مسبقاً، و%3$d غير مدعومة</string>
     <string name="lib_import_nothing">لم تتم إضافة أي كتاب</string>
@@ -96,7 +90,6 @@
     <string name="lib_folder_imported_with_skipped">أُضيف %1$d من «%2$s»، و%3$d موجودة مسبقاً، و%4$d غير مدعومة</string>
     <string name="lib_folder_imported_all_present">كل ملفات «%1$s» موجودة في مكتبتك</string>
     <string name="lib_folder_imported_nothing">لم يُعثر على ملفات مدعومة في هذا المجلد</string>
-    <string name="lib_folder_rescanned">أُضيف %1$d من «%2$s»</string>
     <string name="lib_folder_rescanned_missing">أُضيف %1$d، و%2$d لم تعد موجودة على الجهاز</string>
     <string name="lib_folder_rescan_all_present">لا جديد في «%1$s»</string>
     <string name="lib_folder_scan_truncated">المجلد كبير جداً؛ توقف الفحص عند %1$d ملف</string>

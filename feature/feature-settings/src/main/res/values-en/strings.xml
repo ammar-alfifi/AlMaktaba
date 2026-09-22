@@ -28,9 +28,6 @@
     <string name="settings_about_storage_title">Storage</string>
     <string name="settings_about_storage_body">The app opens your books directly through Android\'s Storage Access Framework, so nothing is copied into the app and no permission to your files is requested.</string>
 
-    <!-- Content descriptions -->
-    <string name="settings_show_options">Show options</string>
-
     <!-- Reset. Interface settings only: the reading ones have their own reset in the reader. -->
     <string name="settings_reset">Reset interface settings</string>
     <string name="settings_reset_summary">Restores the theme, the colour and the language to their defaults. The reading settings have their own reset inside the reader.</string>

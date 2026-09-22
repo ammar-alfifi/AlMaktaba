@@ -16,10 +16,8 @@
 
     <!-- Content descriptions -->
     <string name="ui_cd_book_cover">غلاف الكتاب</string>
-    <string name="ui_cd_navigation">التنقل الرئيسي</string>
 
     <!-- States -->
-    <string name="ui_loading">جارٍ التحميل…</string>
     <string name="ui_error_title">حدث خطأ ما</string>
     <string name="ui_error_file_access">تعذّر الوصول إلى الملف. قد يكون قد نُقل أو حُذف.</string>
     <string name="ui_error_corrupt">الملف تالف أو غير مكتمل.</string>
@@ -39,11 +37,9 @@
     <string name="ui_continue_reading">متابعة القراءة</string>
 
     <!--
-      The bundled Arabic typefaces, named once here and used by both pickers — the reader's panel
-      and the app's own appearance setting. Each name is shown in its own face, so the label and the
-      thing it labels cannot drift apart.
+      The bundled Arabic typefaces, named once here and used by the reader's font panel. Each name
+      is shown in its own face, so the label and the thing it labels cannot drift apart.
     -->
-    <string name="ui_font_system">خط النظام</string>
     <string name="ui_font_amiri">أميري (نسخ)</string>
     <string name="ui_font_plex_arabic">بلكس العربي (حديث)</string>
     <string name="ui_font_reem_kufi">ريم كوفي</string>

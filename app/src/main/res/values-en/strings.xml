@@ -7,40 +7,10 @@
     <string name="nav_search">Search</string>
     <string name="nav_settings">Settings</string>
 
-    <!-- Library screen -->
-    <string name="library_title">My Library</string>
-    <string name="library_empty_title">No books yet</string>
-    <string name="library_empty_message">Add your first book in PDF, EPUB, TXT, CBZ or CBR format to get started.</string>
-    <string name="library_import">Add books</string>
-    <string name="library_sort">Sort</string>
-    <string name="library_view_mode">View mode</string>
-    <string name="library_search_placeholder">Search your library…</string>
-
-    <!-- Sort options -->
-    <string name="sort_recently_read">Recently read</string>
-    <string name="sort_recently_added">Recently added</string>
-    <string name="sort_title_asc">Title (A - Z)</string>
-    <string name="sort_title_desc">Title (Z - A)</string>
-    <string name="sort_author">Author</string>
-
-    <!-- Generic actions -->
-    <string name="action_ok">OK</string>
-    <string name="action_cancel">Cancel</string>
-    <string name="action_delete">Delete</string>
-    <string name="action_rename">Rename</string>
-    <string name="action_share">Share</string>
-    <string name="action_retry">Retry</string>
-    <string name="action_close">Close</string>
-    <string name="action_save">Save</string>
-    <string name="action_more">More</string>
-    <string name="action_back">Back</string>
-
     <!-- Opening a book sent by another app -->
     <string name="app_open_file_failed">This file could not be added to the library. Its format is unsupported or it is unavailable.</string>
 
     <!-- Content descriptions -->
-    <string name="cd_book_cover">Book cover</string>
-    <string name="cd_more_options">More options</string>
     <string name="cd_previous_page">Previous page</string>
     <string name="cd_next_page">Next page</string>
 </resources>

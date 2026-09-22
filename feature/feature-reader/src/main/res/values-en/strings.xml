@@ -17,7 +17,7 @@
 
     <!-- Bookmarks -->
     <string name="reader_no_bookmarks_title">No bookmarks</string>
-    <string name="reader_no_bookmarks_message">Tap the bookmark icon in the toolbar to save your current position.</string>
+    <string name="reader_no_bookmarks_message">Tap the bookmark icon in the top bar to save your current position.</string>
 
     <!-- Settings -->
     <string name="reader_settings_theme">Theme</string>
@@ -27,7 +27,7 @@
     <string name="reader_settings_tap_to_turn">Tap the sides to turn pages</string>
     <string name="reader_settings_direction">Direction</string>
     <string name="reader_settings_direction_summary">Which side the first page is on, and which side a tap takes you to.</string>
-    <string name="reader_settings_reverse_tap">Reverse the sides taps go to</string>
+    <string name="reader_settings_reverse_tap">Reverse the tap sides</string>
     <string name="reader_direction_file">Follow the file</string>
     <string name="reader_direction_first_left">First page on the left</string>
     <string name="reader_direction_first_right">First page on the right</string>

@@ -25,7 +25,7 @@
     <string name="search_empty_no_results_title">No results</string>
     <string name="search_empty_no_results_message">Nothing matched “%1$s”.</string>
     <string name="search_empty_inside_off_title">Nothing in titles or authors</string>
-    <string name="search_empty_inside_off_message">The text of your books was not searched. Turn on “Search inside books” to look through every book in your library.</string>
+    <string name="search_empty_inside_off_message">Book text was not searched. Turn on “Search inside books” to look through every book in your library.</string>
     <string name="search_empty_inside_off_action">Search inside books</string>
 
     <!-- Recent queries -->

@@ -3,10 +3,9 @@
   Monochrome layer for Android 13+ themed icons: the system recolours these paths into the user's
   wallpaper palette, so the mark has to survive losing every colour it has.
 
-  It is the same two pages as the foreground, with nothing added and nothing removed. That is worth
-  stating because it has not always been true — the old mark had a watermark and a ribbon that had
-  to be dropped here to keep the silhouette legible, which meant the themed icon and the ordinary
-  one were two different drawings that could drift apart. One mark, drawn once, has no such seam.
+  It is the same two pages as the foreground — one mark, drawn once, recoloured by the system. A
+  themed icon and the ordinary one are therefore the same drawing in two palettes, and cannot
+  drift apart.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"

@@ -2,19 +2,19 @@
 <!--
   Brand mark: an open book, and nothing else.
 
-  The icon used to carry three things — a *rub el hizb* watermark, the book, and an amber ribbon —
-  which is a composition, not a mark. A launcher icon is read at 48dp from arm's length, and at that
-  size a watermark is grime and a ribbon is a smudge; what survives is one bold silhouette. So this
-  is the book on its own, in flat white, on a flat ground.
+  **The shape.** Two facing pages meeting at a straight spine: the glyph an open-book mark is
+  built from, stripped to its plainest expression — no ribbon, no watermark, no gradient, nothing
+  alongside the book. Each page falls from a high outer corner to the spine, so the spread reads
+  as a book laid open rather than two cards side by side; the two halves are mirror images, so
+  the mark is symmetric without being static.
 
-  **The shape.** Two pages meeting at a narrow spine, each curving down towards it — the one line
-  that says "open book" rather than "two cards side by side". The outer edge of each page is twice
-  the height of the spine edge, which is what gives the spread its tilt; the pages are otherwise
-  mirror images, so the mark reads as symmetric without being static.
-
-  Everything sits inside a 32.4-radius circle about the centre of the 108-unit viewport: the
-  outermost corner is at (27, 36), which is √(27² + 18²) away, comfortably inside the 33-radius
-  circle that no launcher mask cuts. Drawn as vectors, so no raster asset is needed at any density.
+  **Material 3 / adaptive-icon compliance.** The foreground and the monochrome layer are each a
+  single 108dp vector, drawn straight into the full adaptive-icon canvas: no inset wrapper, no
+  scaled-down "safe" sub-canvas, so every mask the system composes reads the mark at its intended
+  size. Everything that carries the silhouette sits inside the 66dp safe-zone circle about the
+  canvas centre: the extreme path points are (27,36), (81,36), (81,72) and (27,72) — radius
+  √(27²+18²) ≈ 32.4 < 33 — so no launcher mask, however aggressive, cuts the book. There is no
+  raster asset at any density; the same two paths serve every tier.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -22,8 +22,8 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Left page. The outer edge runs straight from (27,36) to (27,72); the spine edge is the
-         shorter pair, so the page narrows as it falls towards the binding. -->
+    <!-- Left page. The outer edge runs straight down from (27,36) to (27,72); the curve is the
+         page's own sag towards the binding. -->
     <path
         android:fillColor="#FFFFFF"
         android:pathData="M27,36 Q39.5,39.5 52,44 L52,64 Q39.5,68.5 27,72 Z" />

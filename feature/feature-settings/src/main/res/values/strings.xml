@@ -27,14 +27,10 @@
     <string name="settings_language_system">لغة النظام</string>
 
     <!-- About -->
-    <string name="settings_about_version_title">الإصدار</string>
-    <string name="settings_about_version_unknown">غير معروف</string>
+    <string name="settings_about_version_title">الإصدار</string>    <string name="settings_about_version_unknown">غير معروف</string>
     <string name="settings_about_formats_title">الصيغ المدعومة</string>
     <string name="settings_about_storage_title">التخزين</string>
     <string name="settings_about_storage_body">يفتح التطبيق كتبك مباشرةً عبر إطار عمل الوصول إلى التخزين (SAF) في أندرويد، فلا تُنسخ ملفاتك إلى داخله ولا يُطلب أي إذن على ملفاتك.</string>
-
-    <!-- Content descriptions -->
-    <string name="settings_show_options">عرض الخيارات</string>
 
     <!-- Reset. Interface settings only: the reading ones have their own reset in the reader. -->
     <string name="settings_reset">إعادة تعيين إعدادات الواجهة</string>
