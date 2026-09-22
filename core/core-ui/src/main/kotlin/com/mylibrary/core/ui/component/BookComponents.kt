@@ -64,6 +64,15 @@ fun BookCover(
     book: Book,
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
+    /**
+     * Whether the format chip is drawn over the cover.
+     *
+     * On everywhere a cover is a cover, because "which of these is the PDF" is a question a shelf of
+     * mixed files asks constantly. Off where the cover is a *thumbnail* — the continue-reading row
+     * draws one at 36dp, where the chip is wider than the artwork under it and hides the only thing
+     * the reader is meant to recognise.
+     */
+    showFormatBadge: Boolean = true,
 ) {
     val coverUri = remember(book.coverPath) {
         book.coverPath?.let { path -> runCatching { Uri.fromFile(java.io.File(path)) }.getOrNull() }
@@ -116,12 +125,14 @@ fun BookCover(
             }
         }
 
-        FormatBadge(
-            text = book.format.displayName,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(6.dp),
-        )
+        if (showFormatBadge) {
+            FormatBadge(
+                text = book.format.displayName,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(6.dp),
+            )
+        }
     }
 }
 

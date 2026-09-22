@@ -481,6 +481,10 @@ private fun ContinueReadingCard(
                 book = item.book,
                 modifier = Modifier.width(36.dp),
                 contentDescription = null,
+                // No format chip: at this size it is wider than the cover and covers it, and the row
+                // already says which book it is in words — the chip would hide the artwork the reader
+                // recognises the book by.
+                showFormatBadge = false,
             )
 
             Column(modifier = Modifier.weight(1f)) {

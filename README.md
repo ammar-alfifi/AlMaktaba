@@ -368,6 +368,12 @@ is in practice. A plain text file has neither, and gets the deterministic colour
 uses for anything coverless rather than a blank frame — as does any book whose cover file has gone,
 since covers live in `cacheDir` and Android is entitled to evict it.
 
+A cover also carries a small format chip — `PDF`, `EPUB`, `CBZ` — because *which of these is the PDF*
+is a question a mixed shelf asks constantly. It is drawn on the shelf's own covers and not on the
+continue-reading row's, where the cover is a 36dp thumbnail: at that size the chip is wider than the
+artwork under it and hides the one thing the reader recognises the book by, and the row already names
+the book in words a line above it.
+
 **Room generates Java here, deliberately.** See [§7](#7-engineering-findings-worth-knowing).
 
 ## 6. Testing
@@ -426,34 +432,41 @@ document had always listed as unverified — the reader's gestures, the bubble d
 import, the upgrade path — testable, and the first thing it found was that swiping did not turn
 pages. See [§7](#7-engineering-findings-worth-knowing).
 
-**Two behaviours are shell-verified on it rather than only unit-tested**, because both are things a
-reader does with a finger and a folder of volumes:
+**Three behaviours are shell-verified on it rather than only unit-tested**, because all three are
+things a reader does with a finger and a folder of volumes:
 
 | What was checked | How it was checked |
 |---|---|
 | The continue-reading button follows the folder chip | A folder of three comics added through the picker; with `Series` selected the button reads *متابعة القراءة من «Series»* and offers that folder's book, and switching to a folder whose books have never been opened removes it entirely |
 | A folder of volumes imports and its chip appears | `mylib-series` (`Vol 01`, `Vol 02`, `Vol 10`) added through the picker on the API 35 emulator; the folder row and its three books landed in the library with the folder id, which is what the reader's sequence is built from |
+| Reading on across a volume's seam, both ways | `mylib-series` opened in the paged reader: the last page of `Vol 02` tapped into the seam, on into `Vol 10` page 1 and back out of it — the toolbar naming the book, the progress bar restarting, and the numeral drawn on the page (`101`, `24`) agreeing with both, at every step |
 
 `adb` drives it — `input tap`, `uiautomator dump` — which is why the checks above are statements about
 what the screen said rather than about what the code intended.
 
-**What was changed in this release and is unit-covered but not yet emulator-driven.** The end-of-book
-*panel* those checks described is gone — the seam replaced it, in every presentation and in both
-directions — and the crossing itself has not yet been walked on the emulator. What is pinned by tests
-first is the arithmetic a screen cannot report as wrong: the order built over the folder's sequence
-(`ReadingSequenceTest`), the keys that keep a handover from wearing one book's page with another's
-(`PageWindowTest`, `ReadingSequenceTest`), and the lookup of a position past a book's end. The checks
-to run, against `test-books/series` (each page carries a numeral only its own volume produces —
-`11, 12, 13` then `21, …`) and `test-books/series-text`, are: the last page of `Vol 01` turned or
-scrolled into the seam naming it and `Vol 02`, the next turn landing on `Vol 02` page 1 (numeral `21`)
-with the toolbar naming `Vol 02` and the progress bar restarting, the same crossing backwards, a
-font-size change and a slider jump inside the open book, the last volume of the folder ending, and a
-mixed folder stopping at the seam with the offer to open the next file.
+**The crossing was walked on the emulator, and it found a bug.** The end-of-book *panel* those checks
+described is gone — the seam replaced it, in every presentation and in both directions — and what is
+pinned by tests is the arithmetic a screen cannot report as wrong: the order built over the folder's
+sequence (`ReadingSequenceTest`), the keys that keep a handover from wearing one book's page with
+another's (`PageWindowTest`, `ReadingSequenceTest`), and the lookup of a position past a book's end.
+The checks then run against `test-books/series` — each page carries a numeral only its own volume
+produces (`11, 12, 13` then `21, …` then `101, 102`), which is what a screenshot is read against —
+were: the last page of `Vol 02` turned into the seam naming it and `Vol 10`; the next turn landing on
+`Vol 10` page 1 (numeral `101`), with the toolbar naming `Vol 10` and the progress bar restarting at
+`١ من ٢`; the same crossing backwards, landing on `Vol 02`'s *last* page (numeral `24`) with the bar
+restarting at `٤ من ٤`; and a slider jump inside the open book. Every step was read twice — the
+numbers the toolbar and the bar report, and the numeral drawn on the page — so that a bar agreeing
+with itself could not pass for a bar agreeing with the book.
+
+The first walk found the bug §7 describes: after one crossing the progress bar stopped moving while
+the pages went on turning, which is the freeze reported when moving between two files, in either
+direction. The reflowed presentations' seam (`test-books/series-text`: a column of chapters, and a
+pager of pages within them) has not been walked yet, nor has a folder that mixes an EPUB with a CBZ.
 
 ## 7. Engineering findings worth knowing
 
-Five things were discovered while building this that are not obvious and would cost the next person
-real time. The first is the one that mattered most.
+The things below were discovered while building this. None of them is obvious, and each would cost
+the next person real time. The first is the one that mattered most.
 
 ### The bug that shipped
 
@@ -501,6 +514,44 @@ Two changes: the engine set is now injected as `Dagger`'s `Lazy`, so it is mater
 is actually decoded rather than at startup; and `PdfEngine` loads its native library lazily and
 tolerates failure, reporting `AppError.DecoderUnavailable` for PDFs while leaving every other
 format usable.
+
+### The progress bar that froze after a handoff
+
+**A collector that outlives its composition must not read a plain `val`.** Crossing a seam — reading
+on from one volume of a folder into the next — is not a change of screen: the reader stays composed,
+the pager keeps turning, and only the state underneath it says a different book is open. The pager's
+report flow, which turns the entry under the reader into an intent, is started once and never
+restarted (deliberately: restarting it would re-announce the page already on screen, and after a
+handoff that re-announcement *is* the handoff). Its order was read through `rememberUpdatedState`,
+with a comment saying exactly why — and the open book's id beside it was read as a plain value, so
+the flow kept the id of the book the reader had *arrived* in.
+
+The consequence was one comparison inverting for the rest of the session:
+
+```kotlin
+is ReadingEntry.Page ->
+    if (entry.bookId == openBookId) {          // ← openBookId is the book the collector started on
+        ReaderIntent.PageChanged(entry.pageIndex)
+    } else {
+        ReaderIntent.EnteredBook(entry.bookId, ReadingLocator.Paged(entry.pageIndex))
+    }
+```
+
+After the first crossing, every page of the open book compared unequal to a book the reader had left,
+so every page turn was reported as a crossing into the book already open — and `enterBook` answers
+that with nothing, because it is already the open one. The pages went on turning and the progress bar
+stopped moving, in both directions, until the reader left the book. The fix is the one the other three
+presentations already had: `val currentBookId by rememberUpdatedState(openBookId)`.
+
+What makes this worth writing down is that nothing else could have caught it. The order arithmetic is
+pure and tested (`ReadingSequenceTest`, `PageWindowTest`), the intent mapping is a `when` a compiler
+checks for exhaustiveness, and the whole bug is one captured value in a lambda that is correct on the
+frame it is created. It was found by walking the crossing on the emulator and comparing two things
+that should agree: the position the bar reported and the numeral drawn on the page. They disagreed —
+the bar said `Vol 01`, page 1 of 3, while the page on screen was `Vol 02`'s — and a temporary log in
+the flow showed the intent being mapped to `EnteredBook` for the book that was already open. The same
+lesson as the gesture detector above, one layer down: **this class of bug lives in composition
+lifetime, not in logic**, and only a running app answers it.
 
 ### The rest
 

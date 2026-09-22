@@ -28,8 +28,8 @@ android {
 
     defaultConfig {
         applicationId = "com.mylibrary"
-        versionCode = 14
-        versionName = "1.8.3"
+        versionCode = 15
+        versionName = "1.8.4"
         vectorDrawables { useSupportLibrary = true }
     }
 

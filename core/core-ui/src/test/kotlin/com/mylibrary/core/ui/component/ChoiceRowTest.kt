@@ -5,21 +5,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 /**
  * Tests for the shape of one button in a two-option segmented row.
  *
- * The bug these exist for is directional, and it is the kind that never shows up in a screenshot of
- * one language: the selected fill of a segmented control was mirrored in the English interface, so
- * its rounding was reversed — square where the outline is round and round where the outline is
- * square. The shape is therefore built from the row's own direction here, and the mirroring is
- * asserted in both directions rather than left to the library's own resolution.
+ * The bug these exist for is directional, and it is the kind a screenshot of one language never
+ * catches: the selected half of a segmented control was rounded against its neighbour and square at
+ * the screen edge in Arabic while the English one was the other way round.
  *
- * The rounding is always placed on the *outside* of the row: `Start` in a left-to-right row,
- * `End` in a right-to-left one, so that `RoundedCornerShape`'s own swap lands it on the row's outer
- * edge. The assertions below are in those terms because that is the contract.
+ * **The corners are logical and are not mirrored here.** `RoundedCornerShape` resolves
+ * `topStart`/`topEnd` for the direction it is drawn in — its own `createOutline` builds the
+ * top-left corner from `topStart` in an LTR layout and from `topEnd` in an RTL one — so naming the
+ * first button's rounding `Start` is what puts it on the outer edge of both an English and an
+ * Arabic row. Mirroring the indices, as this used to, is what inverted the Arabic one.
  */
 class ChoiceRowTest {
 
@@ -28,36 +27,39 @@ class ChoiceRowTest {
     private val base = RoundedCornerShape(16.dp)
 
     @Test
-    fun `in a left-to-right row the first button is rounded on the left`() {
-        val shape = segmentedItemShape(0, 2, base, LayoutDirection.Ltr) as RoundedCornerShape
+    fun `the first button is rounded at its start edge, whichever direction the row reads`() {
+        listOf(LayoutDirection.Ltr, LayoutDirection.Rtl).forEach { direction ->
+            val shape = segmentedItemShape(0, 2, base, direction) as RoundedCornerShape
 
-        assertEquals("outer corners rounded", rounded, shape.topStart)
-        assertEquals(rounded, shape.bottomStart)
-        assertEquals("the join is square", square, shape.topEnd)
-        assertEquals(square, shape.bottomEnd)
+            assertEquals("$direction: outer corners rounded", rounded, shape.topStart)
+            assertEquals(rounded, shape.bottomStart)
+            assertEquals("$direction: the join is square", square, shape.topEnd)
+            assertEquals(square, shape.bottomEnd)
+        }
     }
 
     @Test
-    fun `in a left-to-right row the last button is rounded on the right`() {
-        val shape = segmentedItemShape(1, 2, base, LayoutDirection.Ltr) as RoundedCornerShape
+    fun `the last button is rounded at its end edge, whichever direction the row reads`() {
+        listOf(LayoutDirection.Ltr, LayoutDirection.Rtl).forEach { direction ->
+            val shape = segmentedItemShape(1, 2, base, direction) as RoundedCornerShape
 
-        assertEquals(square, shape.topStart)
-        assertEquals(square, shape.bottomStart)
-        assertEquals("outer corners rounded", rounded, shape.topEnd)
-        assertEquals(rounded, shape.bottomEnd)
+            assertEquals("$direction: the join is square", square, shape.topStart)
+            assertEquals(square, shape.bottomStart)
+            assertEquals("$direction: outer corners rounded", rounded, shape.topEnd)
+            assertEquals(rounded, shape.bottomEnd)
+        }
     }
 
-    /** The mirror is the whole point: the first button of an RTL row is rounded on the other edge. */
+    /** The regression itself: the two directions must produce the *same* logical shape. */
     @Test
-    fun `a right-to-left row mirrors the rounding`() {
-        val ltr = segmentedItemShape(0, 2, base, LayoutDirection.Ltr) as RoundedCornerShape
-        val rtl = segmentedItemShape(0, 2, base, LayoutDirection.Rtl) as RoundedCornerShape
-
-        assertEquals("the rounded edge moves to the other side", ltr.topStart, rtl.topEnd)
-        assertEquals(ltr.bottomStart, rtl.bottomEnd)
-        assertEquals("and the join is square where it was round", ltr.topEnd, rtl.topStart)
-        assertEquals(ltr.bottomEnd, rtl.bottomStart)
-        assertNotEquals("and it is genuinely not the same shape", ltr, rtl)
+    fun `the shape does not change with the row's direction`() {
+        listOf(0, 1).forEach { index ->
+            assertEquals(
+                "button $index must not be mirrored for RTL",
+                segmentedItemShape(index, 2, base, LayoutDirection.Ltr),
+                segmentedItemShape(index, 2, base, LayoutDirection.Rtl),
+            )
+        }
     }
 
     @Test

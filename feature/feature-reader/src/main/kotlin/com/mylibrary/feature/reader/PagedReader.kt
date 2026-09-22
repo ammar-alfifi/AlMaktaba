@@ -141,6 +141,17 @@ fun PagedReaderContent(
     // again, and after a handoff that is the report that caused the handoff.
     val currentOrder by rememberUpdatedState(order)
 
+    // The open book, read the same way and for the same reason — and it is not the same reason only
+    // in appearance. The collector below is started once and outlives every book it reports on: the
+    // reader crosses a seam without leaving the screen, so `openBookId` read as a plain value is
+    // whatever book the reader *arrived* in. Every page turned after that crossing then compares a
+    // page of the open book against the book they have left, calls it another book, and reports a
+    // crossing into the book they are already in — which `enterBook` answers with nothing, because
+    // it is already the open one. The pages keep turning and the progress bar stops moving: the
+    // freeze reported when moving between two files, in either direction. The other three
+    // presentations read their book id through `rememberUpdatedState` already.
+    val currentBookId by rememberUpdatedState(openBookId)
+
     // Pager -> state. What is reported is the *entry* under the reader, not the index they are
     // looking at it through: the same page wears a different index once a neighbour's document opens
     // above it, and an index that moved while the page did not is not a move. Mapping first and then
@@ -153,7 +164,7 @@ fun PagedReaderContent(
                     // A page of the open book: the intent the reader's position has always been
                     // reported with.
                     is ReadingEntry.Page ->
-                        if (entry.bookId == openBookId) {
+                        if (entry.bookId == currentBookId) {
                             ReaderIntent.PageChanged(entry.pageIndex)
                         } else {
                             // A page of another book of the folder: the reader has crossed into it,
