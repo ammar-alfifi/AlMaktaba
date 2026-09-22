@@ -41,7 +41,6 @@ import com.mylibrary.core.domain.model.AppLanguage
 import com.mylibrary.core.domain.model.BookFormat
 import com.mylibrary.core.domain.model.ColorSource
 import com.mylibrary.core.domain.model.ReaderSettings
-import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.ui.component.ChoiceRow
 import com.mylibrary.core.ui.component.FeatureScaffold
 import com.mylibrary.core.ui.component.SectionHeader
@@ -169,7 +168,7 @@ private fun SettingsContent(
             // the last one does not leave a gap above the reset button.
             verticalArrangement = Arrangement.spacedBy(Spacing.XLarge),
         ) {
-            item { AppearanceSection(state.settings, onIntent, onOpenColorSetup) }
+            item { AppearanceSection(state.settings, onOpenColorSetup) }
             item { LanguageSection(state.settings, onIntent) }
             item { AboutSection(state.appVersionName) }
             item { ResetSection(onClick = { confirmingReset = true }) }
@@ -200,30 +199,22 @@ internal fun SettingsTopBar(modifier: Modifier = Modifier) {
 }
 
 /**
- * Theme mode and the app's colour — everything this screen says about how MyLibrary looks.
+ * The app's appearance, as one row that opens the appearance settings.
  *
- * A face for the interface used to be offered here as well, and it is gone: the app's own chrome is
- * set in the platform's stack, which resolves per script and is the arrangement that cannot get
- * Arabic wrong, while the three bundled Arabic faces remain where a face is genuinely a choice —
- * the *reader's* font setting, applied to the text of a book. One font picker, in the place a
- * reader is looking at the type.
+ * **The theme is no longer offered twice.** This section used to hold a theme picker *and* a row
+ * opening the colour setup, and that screen holds a theme picker of its own — so the same decision
+ * had two homes on two screens, one of them a navigation trip away from the other. The theme and the
+ * colour are one question about how the app looks, and they are answered together where the answer
+ * can be seen: the setup screen repaints the whole interface as each is chosen. This row is the way
+ * in, and it says which colour is current.
  */
 @Composable
 private fun AppearanceSection(
     settings: ReaderSettings,
-    onIntent: (SettingsIntent) -> Unit,
     onOpenColorSetup: () -> Unit,
 ) {
     SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
-        ChoiceSettingRow(
-            title = stringResource(R.string.settings_theme_mode),
-            options = ThemeMode.entries,
-            selected = settings.themeMode,
-            labelRes = ThemeMode::labelRes,
-            onSelect = { onIntent(SettingsIntent.ThemeModeChanged(it)) },
-        )
-        SectionDivider()
-        // A row that opens the setup rather than a control that changes something here. The colour
+        // A row that opens the setup rather than controls that change something here. The colour
         // is a palette, not a switch, and choosing one means looking at it: the setup screen draws
         // seven of them at once, in the reader's own language, with a preview of the interface
         // underneath. A dropdown of colour names in a settings list would be asking the reader to
@@ -410,13 +401,6 @@ private fun <T> ChoiceSettingRow(
  */
 private val SUPPORTED_FORMATS: String =
     BookFormat.entries.joinToString(separator = " · ") { format -> format.displayName }
-
-@StringRes
-private fun ThemeMode.labelRes(): Int = when (this) {
-    ThemeMode.SYSTEM -> R.string.settings_theme_system
-    ThemeMode.LIGHT -> R.string.settings_theme_light
-    ThemeMode.DARK -> R.string.settings_theme_dark
-}
 
 @StringRes
 private fun AppLanguage.labelRes(): Int = when (this) {

@@ -363,24 +363,35 @@ class ReaderViewModel @Inject constructor(
 
         val paged = segment.document as? PagedDocument ?: return PageRenderState.Loading
 
-        val result = segment.mutex.withLock {
-            paged.renderPage(
-                PageRenderRequest(
-                    pageIndex = pageIndex,
-                    targetWidthPx = widthPx,
-                    targetHeightPx = heightPx,
-                    backgroundColorArgb = PAGE_BACKGROUND_ARGB,
-                ),
-            )
-        }
-
-        return when (result) {
-            is AppResult.Failure -> PageRenderState.Failed(result.error)
-            is AppResult.Success -> {
-                val image = result.data.toImageBitmap()
-                pageCache.put(key, image)
-                PageRenderState.Ready(image)
+        // A page whose number is no longer in the document, or a render that cannot get the memory
+        // it needs, must not take the reader down with it. Both are reachable by dragging the
+        // progress bar quickly: the order underneath the pager is rebuilt as the volume either side
+        // opens and closes, and a scrub across a comic queues decodes faster than the cache frees
+        // them. The page is reported as still loading, or as an out-of-memory the reader can retry.
+        return try {
+            val result = segment.mutex.withLock {
+                paged.renderPage(
+                    PageRenderRequest(
+                        pageIndex = pageIndex,
+                        targetWidthPx = widthPx,
+                        targetHeightPx = heightPx,
+                        backgroundColorArgb = PAGE_BACKGROUND_ARGB,
+                    ),
+                )
             }
+
+            when (result) {
+                is AppResult.Failure -> PageRenderState.Failed(result.error)
+                is AppResult.Success -> {
+                    val image = result.data.toImageBitmap()
+                    pageCache.put(key, image)
+                    PageRenderState.Ready(image)
+                }
+            }
+        } catch (outOfMemory: OutOfMemoryError) {
+            PageRenderState.Failed(AppError.OutOfMemory)
+        } catch (staleIndex: IndexOutOfBoundsException) {
+            PageRenderState.Loading
         }
     }
 

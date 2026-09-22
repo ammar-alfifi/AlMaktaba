@@ -16,11 +16,9 @@
     <string name="settings_section_language">اللغة</string>
     <string name="settings_section_about">عن التطبيق</string>
 
-    <!-- Appearance -->
-    <string name="settings_theme_mode">السمة</string>
-    <string name="settings_theme_system">النظام</string>
-    <string name="settings_theme_light">فاتح</string>
-    <string name="settings_theme_dark">داكن</string>
+    <!-- Appearance. One row into the appearance settings, which hold the theme and the colour. -->
+    <string name="settings_appearance_colour">إعدادات المظهر</string>
+    <string name="settings_appearance_colour_summary">السمة والألوان.</string>
 
     <!-- Language -->
     <string name="settings_language">لغة التطبيق</string>
@@ -45,15 +43,13 @@
     <string name="settings_reset_dialog_message">ستفقد تفضيلاتك الحالية: السمة والألوان واللغة. لن تتغيّر إعدادات القراءة ولا مكتبتك.</string>
     <string name="settings_reset_confirm">إعادة التعيين</string>
     <string name="settings_reset_done">تمت إعادة تعيين إعدادات الواجهة.</string>
-    <string name="settings_appearance_colour">الألوان</string>
-    <string name="settings_appearance_colour_summary">لون التطبيق وسمته.</string>
 
-    <!-- Colour setup. Shown on a first launch and reopened from Appearance. -->
-    <string name="settings_color_title">الألوان والمظهر</string>
+    <!-- Appearance setup. Shown on a first launch and reopened from Appearance. -->
+    <string name="settings_color_title">إعدادات المظهر</string>
     <string name="settings_color_message">اختر لون التطبيق وسمته. يمكنك تغيير ذلك في أي وقت من الإعدادات.</string>
     <string name="settings_color_theme">السمة</string>
     <string name="settings_color_colour">اللون</string>
-    <string name="settings_color_done">ابدأ</string>
+    <string name="settings_color_done">تم</string>
     <string name="settings_color_theme_system">النظام</string>
     <string name="settings_color_theme_light">فاتح</string>
     <string name="settings_color_theme_dark">داكن</string>

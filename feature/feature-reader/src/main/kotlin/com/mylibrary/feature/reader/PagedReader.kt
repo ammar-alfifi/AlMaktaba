@@ -621,8 +621,16 @@ fun PagedReaderContent(
  *
  * Positive means the page is arriving from the trailing edge of the reading direction. The value is
  * continuous during a drag, which is what every effect in [pageTurnTransform] is driven by.
+ *
+ * The index is checked against the pager's *current* page count because a slider dragged quickly
+ * through a folder's reading order rebuilds that order underneath the pager: opening or closing the
+ * volume either side changes how many entries there are, and a page composed under the old
+ * numbering can still re-run its layer lambda after the count has changed. `getOffsetDistanceInPages`
+ * throws for an index outside the pager, and a throw in a draw pass is a crash; such a page draws
+ * settled instead, which is what a page on its way out of the pager looks like anyway.
  */
-private fun PagerState.offsetOf(pageIndex: Int): Float = getOffsetDistanceInPages(pageIndex)
+private fun PagerState.offsetOf(pageIndex: Int): Float =
+    if (pageIndex in 0 until pageCount) getOffsetDistanceInPages(pageIndex) else 0f
 
 /**
  * Where the page on screen is drawn, and what it is.

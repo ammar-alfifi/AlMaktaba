@@ -3,6 +3,7 @@ package com.mylibrary.feature.settings
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -266,10 +267,15 @@ private fun ThemeModeCards(
  * drawn from the actual [ColorScheme] that machine would run in, including the split of light and
  * dark that SYSTEM implies. `surfaceContainer` marks the furniture, `primaryContainer` the
  * emphasis; those two pairings are most of what a theme is.
+ *
+ * The SYSTEM card follows the device rather than assuming light. It used to treat anything that was
+ * not explicitly dark as light, so a reader whose phone was already in dark mode saw a light
+ * miniature under "System" — the one card meant to say "whatever the phone is doing" showing the
+ * opposite of it.
  */
 @Composable
 private fun MiniAppPreview(colorSource: ColorSource, mode: ThemeMode) {
-    val dark = mode == ThemeMode.DARK
+    val dark = mode.isDark(systemInDarkTheme = isSystemInDarkTheme())
     val scheme = colorSchemeForSource(colorSource, dark)
 
     Column(
@@ -526,6 +532,21 @@ private fun Section(title: String, content: @Composable () -> Unit) {
  */
 private val supportsWallpaperColors: Boolean
     get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+/**
+ * Whether [this] theme mode draws a dark scheme on a device whose system theme is [systemInDarkTheme].
+ *
+ * A pure function so the one rule that can go wrong here — that `SYSTEM` follows the device rather
+ * than being treated as light — is testable without a composition. The theme cards draw a miniature
+ * of the app for each mode, and the SYSTEM card is the one that has no fixed answer of its own: it
+ * used to be drawn light whatever the phone was doing, so a reader in dark mode saw a light preview
+ * under the card that promises to follow their phone.
+ */
+internal fun ThemeMode.isDark(systemInDarkTheme: Boolean): Boolean = when (this) {
+    ThemeMode.DARK -> true
+    ThemeMode.LIGHT -> false
+    ThemeMode.SYSTEM -> systemInDarkTheme
+}
 
 @androidx.annotation.StringRes
 private fun ThemeMode.setupLabelRes(): Int = when (this) {

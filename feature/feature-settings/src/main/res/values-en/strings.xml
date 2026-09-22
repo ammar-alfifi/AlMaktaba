@@ -11,11 +11,9 @@
     <string name="settings_section_language">Language</string>
     <string name="settings_section_about">About</string>
 
-    <!-- Appearance -->
-    <string name="settings_theme_mode">Theme</string>
-    <string name="settings_theme_system">System</string>
-    <string name="settings_theme_light">Light</string>
-    <string name="settings_theme_dark">Dark</string>
+    <!-- Appearance. One row into the appearance settings, which hold the theme and the colour. -->
+    <string name="settings_appearance_colour">Appearance settings</string>
+    <string name="settings_appearance_colour_summary">Theme and colour.</string>
 
     <!-- Language -->
     <string name="settings_language">App language</string>
@@ -40,15 +38,13 @@
     <string name="settings_reset_dialog_message">Your current preferences will be lost: the theme, the colour and the language. Your reading settings and your library are not changed.</string>
     <string name="settings_reset_confirm">Reset</string>
     <string name="settings_reset_done">Interface settings reset.</string>
-    <string name="settings_appearance_colour">Colour</string>
-    <string name="settings_appearance_colour_summary">The app\'s colour and theme.</string>
 
-    <!-- Colour setup. Shown on a first launch and reopened from Appearance. -->
-    <string name="settings_color_title">Colour and theme</string>
+    <!-- Appearance setup. Shown on a first launch and reopened from Appearance. -->
+    <string name="settings_color_title">Appearance settings</string>
     <string name="settings_color_message">Choose how MyLibrary looks. You can change this at any time in Settings.</string>
     <string name="settings_color_theme">Theme</string>
     <string name="settings_color_colour">Colour</string>
-    <string name="settings_color_done">Get started</string>
+    <string name="settings_color_done">Done</string>
     <string name="settings_color_theme_system">System</string>
     <string name="settings_color_theme_light">Light</string>
     <string name="settings_color_theme_dark">Dark</string>

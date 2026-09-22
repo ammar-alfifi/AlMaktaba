@@ -343,7 +343,11 @@ private fun ChapterContentView(
         // A document that names its chapters announces them; one that does not — a plain TXT file —
         // falls back to the chapter number so the reader can still tell where a part begins.
         if (chapterIndex > 0 || content.title != null) {
-            ChapterMarker(index = chapterIndex, title = content.title)
+            ChapterMarker(
+                index = chapterIndex,
+                title = content.title,
+                alignment = state.settings.textAlign,
+            )
         }
 
         content.blocks.forEachIndexed { blockIndex, block ->
@@ -662,14 +666,18 @@ private fun ChapterImage(
  *
  * A document that names its chapters gets that name in a readable weight; one that does not gets
  * the chapter number, which is all there is to say about it.
+ *
+ * The title follows the reader's text alignment like every other block. It used to be pinned to the
+ * centre whatever the setting said, which is what made the alignment look as though it reached the
+ * body text and nothing else: the one line on the page that announces the chapter stayed put while
+ * every line under it moved.
  */
 @Composable
-private fun ChapterMarker(index: Int, title: String?) {
+private fun ChapterMarker(index: Int, title: String?, alignment: TextAlignment) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 24.dp, bottom = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
             text = title ?: index.toString(),
@@ -683,7 +691,8 @@ private fun ChapterMarker(index: Int, title: String?) {
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
-            textAlign = TextAlign.Center,
+            textAlign = alignment.toCompose(),
+            modifier = Modifier.fillMaxWidth(),
         )
         HorizontalDivider(
             modifier = Modifier.padding(top = 8.dp),

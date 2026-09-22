@@ -5,10 +5,12 @@ import com.mylibrary.core.domain.model.ColorSource
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.PageTurnEffect
+import com.mylibrary.core.domain.model.ProgressScope
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderLayout
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
+import com.mylibrary.core.domain.model.TextAlignment
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.ViewMode
 import com.mylibrary.core.domain.repository.SettingsRepository
@@ -169,11 +171,13 @@ private val everythingChanged = ReaderSettings(
     marginScale = 2.0f,
     paragraphSpacingScale = 2.5f,
     firstLineIndent = true,
+    textAlign = TextAlignment.CENTER,
     pageFitMode = PageFitMode.ACTUAL_SIZE,
     readingDirection = ReadingDirection.LEFT_TO_RIGHT,
     keepScreenOn = false,
     showProgressIndicator = false,
     layout = ReaderLayout.SCROLL,
+    progressScope = ProgressScope.CHAPTER,
     tapToTurnPages = false,
     reverseTapZones = true,
     pageTurnEffect = PageTurnEffect.FADE,
@@ -290,11 +294,13 @@ class ResetReaderDefaultsTest {
             0.0001f,
         )
         assertEquals("first-line indent", defaults.firstLineIndent, reset.firstLineIndent)
+        assertEquals("text alignment", defaults.textAlign, reset.textAlign)
         assertEquals(defaults.pageFitMode, reset.pageFitMode)
         assertEquals(defaults.readingDirection, reset.readingDirection)
         assertEquals(defaults.keepScreenOn, reset.keepScreenOn)
         assertEquals(defaults.showProgressIndicator, reset.showProgressIndicator)
         assertEquals(defaults.layout, reset.layout)
+        assertEquals("the progress scope is a reading setting", defaults.progressScope, reset.progressScope)
         assertEquals(defaults.tapToTurnPages, reset.tapToTurnPages)
         assertEquals("the reversed tap zones are a reading setting", defaults.reverseTapZones, reset.reverseTapZones)
         assertEquals("the turn effect is a reading setting", defaults.pageTurnEffect, reset.pageTurnEffect)
