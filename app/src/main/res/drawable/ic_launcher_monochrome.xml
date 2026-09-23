@@ -3,8 +3,8 @@
   Monochrome layer for Android 13+ themed icons: the system recolours these paths into the user's
   wallpaper palette, so the mark has to survive losing every colour it has.
 
-  It is the same two pages as the foreground — one mark, drawn once, recoloured by the system. A
-  themed icon and the ordinary one are therefore the same drawing in two palettes, and cannot
+  It is the same shelf of books as the foreground — one mark, drawn once, recoloured by the system.
+  A themed icon and the ordinary one are therefore the same drawing in two palettes, and cannot
   drift apart.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -15,8 +15,17 @@
 
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M27,36 Q39.5,39.5 52,44 L52,64 Q39.5,68.5 27,72 Z" />
+        android:pathData="M33,42 L41,42 L41,68 L33,68 Z" />
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M81,36 Q68.5,39.5 56,44 L56,64 Q68.5,68.5 81,72 Z" />
+        android:pathData="M43,40 L50,40 L50,68 L43,68 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M52,43 L60,43 L60,68 L52,68 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M64,68 L71,68 L67,41 L60,41 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M28,68 L80,68 L80,73 L28,73 Z" />
 </vector>

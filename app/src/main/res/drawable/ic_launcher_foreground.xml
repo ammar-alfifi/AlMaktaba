@@ -1,20 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Brand mark: an open book, and nothing else.
+  Brand mark: a shelf of books, and nothing else.
 
-  **The shape.** Two facing pages meeting at a straight spine: the glyph an open-book mark is
-  built from, stripped to its plainest expression — no ribbon, no watermark, no gradient, nothing
-  alongside the book. Each page falls from a high outer corner to the spine, so the spread reads
-  as a book laid open rather than two cards side by side; the two halves are mirror images, so
-  the mark is symmetric without being static.
+  **The shape.** Three upright books and one leaning, resting on a shelf plank. The three standing
+  books share a baseline and near-aligned tops, and vary only in width and by a couple of units of
+  height — a real row of books, not the deliberately staggered tops of a bar chart, which is what
+  the first pass at this mark accidentally read as. The fourth book leans into the stack, resting
+  its top against the third: that lean is the one gesture that says "books" rather than "bars",
+  because nothing but a book stands at an angle on a shelf.
+
+  The plank runs wider than the books on both sides, which is what turns a row of rectangles into
+  "these books are *on a shelf*"; without the overhang the same shapes read as a fence.
 
   **Material 3 / adaptive-icon compliance.** The foreground and the monochrome layer are each a
   single 108dp vector, drawn straight into the full adaptive-icon canvas: no inset wrapper, no
   scaled-down "safe" sub-canvas, so every mask the system composes reads the mark at its intended
   size. Everything that carries the silhouette sits inside the 66dp safe-zone circle about the
-  canvas centre: the extreme path points are (27,36), (81,36), (81,72) and (27,72) — radius
-  √(27²+18²) ≈ 32.4 < 33 — so no launcher mask, however aggressive, cuts the book. There is no
-  raster asset at any density; the same two paths serve every tier.
+  canvas centre: the extreme points are the plank's bottom corners (28,73) and (80,73) — radius
+  √(26²+19²) ≈ 32.2 < 33 — so no launcher mask, however aggressive, cuts the shelf. There is no
+  raster asset at any density; the same paths serve every tier.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -22,14 +26,27 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Left page. The outer edge runs straight down from (27,36) to (27,72); the curve is the
-         page's own sag towards the binding. -->
+    <!-- The books. Three spines standing on the plank's top edge at y=68, separated by a two-unit
+         gap so the row never fuses into one block. Widths and heights differ just enough to read
+         as separate volumes. -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M27,36 Q39.5,39.5 52,44 L52,64 Q39.5,68.5 27,72 Z" />
+        android:pathData="M33,42 L41,42 L41,68 L33,68 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M43,40 L50,40 L50,68 L43,68 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M52,43 L60,43 L60,68 L52,68 Z" />
 
-    <!-- Right page: the same path reflected about the centre line, leaving a four-unit spine. -->
+    <!-- The leaning book: the same rectangle sheared four units off vertical, its top corner
+         coming to rest against the right edge of the third book. -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M81,36 Q68.5,39.5 56,44 L56,64 Q68.5,68.5 81,72 Z" />
+        android:pathData="M64,68 L71,68 L67,41 L60,41 Z" />
+
+    <!-- The shelf. A plain plank, overhanging the books by five units on each side. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M28,68 L80,68 L80,73 L28,73 Z" />
 </vector>

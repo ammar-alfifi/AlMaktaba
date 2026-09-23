@@ -705,5 +705,5 @@ dependency.
 
 The three bundled typefaces — Amiri, IBM Plex Sans Arabic and Reem Kufi — are under the SIL Open Font
 License 1.1, and their licence texts are in `licenses/`. The launcher icon is drawn in this repository
-as vector paths — a single flat white open book on a flat field of the app's own primary, with no
-watermark, no ribbon and no gradient.
+as vector paths — a flat white shelf of books, three upright and one leaning, on a flat field of the
+app's own primary, with no watermark, no gradient and no raster asset at any density.
