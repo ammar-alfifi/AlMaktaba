@@ -8,6 +8,7 @@ import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ProgressScope
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderLayout
+import com.mylibrary.core.domain.model.ReaderPaper
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
 import com.mylibrary.core.domain.model.TextAlignment
@@ -81,6 +82,9 @@ class UpdateSettingsUseCase @Inject constructor(
     suspend fun setShowProgressIndicator(enabled: Boolean) =
         settingsRepository.update { it.copy(showProgressIndicator = enabled) }
 
+    suspend fun setReaderPaper(paper: ReaderPaper) =
+        settingsRepository.update { it.copy(readerPaper = paper) }
+
     suspend fun setLayout(layout: ReaderLayout) = settingsRepository.update { it.copy(layout = layout) }
 
     suspend fun setProgressScope(scope: ProgressScope) =
@@ -146,6 +150,7 @@ class UpdateSettingsUseCase @Inject constructor(
             readingDirection = ReaderSettings.Default.readingDirection,
             keepScreenOn = ReaderSettings.Default.keepScreenOn,
             showProgressIndicator = ReaderSettings.Default.showProgressIndicator,
+            readerPaper = ReaderSettings.Default.readerPaper,
             layout = ReaderSettings.Default.layout,
             progressScope = ReaderSettings.Default.progressScope,
             tapToTurnPages = ReaderSettings.Default.tapToTurnPages,

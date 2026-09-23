@@ -3,12 +3,17 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-      MyLibrary works entirely through the Storage Access Framework and content:// URIs, so it
-      declares no storage permissions at all. A user grants access to individual books or folders
-      through the system picker, which is the only permission model modern Android needs here.
-      READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE are deliberately absent.
+      MyLibrary declares no permissions at all.
+
+      It works entirely through the Storage Access Framework and content:// URIs, so it needs no
+      storage permission: a user grants access to individual books or folders through the system
+      picker. READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE are deliberately absent.
+
+      INTERNET used to be declared here and has been removed: nothing in the app reaches the
+      network. Books are read from local content:// URIs and covers are loaded from cacheDir by
+      Coil, which has no network fetcher on its classpath. Asking for a permission the app never
+      uses asks the user to trust a claim it cannot keep.
     -->
-    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".MyLibraryApplication"

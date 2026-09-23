@@ -14,6 +14,7 @@ import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
 import com.mylibrary.core.domain.model.ReadingLocator
 import com.mylibrary.core.domain.model.ReaderLayout
+import com.mylibrary.core.domain.model.ReaderPaper
 import com.mylibrary.core.domain.model.SearchHit
 import com.mylibrary.core.domain.model.TextAlignment
 import com.mylibrary.core.domain.model.ThemeMode
@@ -399,6 +400,7 @@ sealed interface ReaderIntent {
     data class SetPageFit(val mode: PageFitMode) : ReaderIntent
     data class SetKeepScreenOn(val enabled: Boolean) : ReaderIntent
     data class SetShowProgressIndicator(val enabled: Boolean) : ReaderIntent
+    data class SetReaderPaper(val paper: ReaderPaper) : ReaderIntent
     data class SetLayout(val layout: ReaderLayout) : ReaderIntent
     data class SetProgressScope(val scope: ProgressScope) : ReaderIntent
     data class SetTapToTurnPages(val enabled: Boolean) : ReaderIntent

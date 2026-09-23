@@ -8,6 +8,7 @@ import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ProgressScope
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReaderLayout
+import com.mylibrary.core.domain.model.ReaderPaper
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
 import com.mylibrary.core.domain.model.TextAlignment
@@ -176,6 +177,7 @@ private val everythingChanged = ReaderSettings(
     readingDirection = ReadingDirection.LEFT_TO_RIGHT,
     keepScreenOn = false,
     showProgressIndicator = false,
+    readerPaper = ReaderPaper.BLACK,
     layout = ReaderLayout.SCROLL,
     progressScope = ProgressScope.CHAPTER,
     tapToTurnPages = false,
@@ -299,6 +301,7 @@ class ResetReaderDefaultsTest {
         assertEquals(defaults.readingDirection, reset.readingDirection)
         assertEquals(defaults.keepScreenOn, reset.keepScreenOn)
         assertEquals(defaults.showProgressIndicator, reset.showProgressIndicator)
+        assertEquals("the page paper is a reading setting", defaults.readerPaper, reset.readerPaper)
         assertEquals(defaults.layout, reset.layout)
         assertEquals("the progress scope is a reading setting", defaults.progressScope, reset.progressScope)
         assertEquals(defaults.tapToTurnPages, reset.tapToTurnPages)

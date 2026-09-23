@@ -135,6 +135,25 @@ enum class PageFitMode {
 }
 
 /**
+ * The colour of the reading surface — the "paper" a book is drawn on.
+ *
+ * Deliberately separate from [ThemeMode], which is the app's chrome: the toolbar, the panels and
+ * every other screen. A reader may want the app dark and the page warm, or the reverse, and tying
+ * the two together would make one of those impossible. [DEFAULT] is the app's own background, which
+ * is what the reader has always drawn.
+ */
+enum class ReaderPaper {
+    /** The app theme's own background. Unchanged behaviour. */
+    DEFAULT,
+
+    /** A warm off-white with dark ink — easier on the eye than pure white, and the classic choice. */
+    SEPIA,
+
+    /** True black with dimmed ink, for reading in the dark and for OLED panels that save power. */
+    BLACK,
+}
+
+/**
  * How a page is animated as it is turned.
  *
  * Three effects rather than a gallery of them. These are the three a reader actually chooses
@@ -289,6 +308,16 @@ data class ReaderSettings(
     val keepScreenOn: Boolean = true,
     /** Show the page number / progress indicator while reading. */
     val showProgressIndicator: Boolean = true,
+
+    /**
+     * The colour of the reading surface itself — the "paper" a book is drawn on.
+     *
+     * Deliberately separate from [ThemeMode], which is the app's chrome: the toolbar, the panels and
+     * every other screen. A reader may want a dark app with a warm page, or the reverse, and tying
+     * the two together would make one of those impossible. [ReaderPaper.DEFAULT] is the app's own
+     * background, which is what the reader has always drawn.
+     */
+    val readerPaper: ReaderPaper = ReaderPaper.DEFAULT,
 
     /**
      * Whether a document is read as pages or as a continuous scroll.

@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.mylibrary.core.domain.model.ColorSource
+import com.mylibrary.core.domain.model.ReaderPaper
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -142,6 +143,28 @@ class SettingsDataStoreTest {
         dataStore.rawEdit { it[stringPreferencesKey("color_source")] = "CHARTREUSE" }
 
         assertEquals(ColorSource.TEAL, dataStore.settings.first().colorSource)
+    }
+
+    // endregion
+
+    // region the page paper
+
+    /** The reading paper is a reading setting, and persists like the rest. */
+    @Test
+    fun `a chosen page paper survives a read`() = runTest {
+        val dataStore = store()
+        dataStore.update { it.copy(readerPaper = ReaderPaper.BLACK) }
+
+        assertEquals(ReaderPaper.BLACK, dataStore.settings.first().readerPaper)
+    }
+
+    /** An unknown paper name degrades to the default rather than throwing, as every enum here does. */
+    @Test
+    fun `an unrecognised page paper falls back rather than throwing`() = runTest {
+        val dataStore = store()
+        dataStore.rawEdit { it[stringPreferencesKey("reader_paper")] = "PARCHMENT" }
+
+        assertEquals(ReaderPaper.DEFAULT, dataStore.settings.first().readerPaper)
     }
 
     // endregion

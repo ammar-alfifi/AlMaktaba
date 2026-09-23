@@ -41,6 +41,10 @@
     <string name="reader_theme_system">النظام</string>
     <string name="reader_theme_light">فاتح</string>
     <string name="reader_theme_dark">داكن</string>
+    <string name="reader_settings_paper">ورق الصفحة</string>
+    <string name="reader_paper_default">الافتراضي</string>
+    <string name="reader_paper_sepia">ورقي</string>
+    <string name="reader_paper_black">أسود</string>
     <string name="reader_settings_font">الخط</string>
     <string name="reader_settings_font_summary">يُطبَّق على الكتب النصية مثل EPUB و TXT.</string>
     <string name="reader_settings_page_turn">انتقال قلب الصفحة</string>

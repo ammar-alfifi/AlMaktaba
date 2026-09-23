@@ -13,6 +13,7 @@ import com.mylibrary.core.domain.model.ColorSource
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.PageFitMode
 import com.mylibrary.core.domain.model.ReaderFont
+import com.mylibrary.core.domain.model.ReaderPaper
 import com.mylibrary.core.domain.model.ReaderSettings
 import com.mylibrary.core.domain.model.ReadingDirection
 import com.mylibrary.core.domain.model.ReaderLayout
@@ -82,6 +83,7 @@ class SettingsDataStore @Inject constructor(
         this[Keys.READING_DIRECTION] = settings.readingDirection.name
         this[Keys.KEEP_SCREEN_ON] = settings.keepScreenOn
         this[Keys.SHOW_PROGRESS_INDICATOR] = settings.showProgressIndicator
+        this[Keys.READER_PAPER] = settings.readerPaper.name
         this[Keys.LAYOUT] = settings.layout.name
         this[Keys.PROGRESS_SCOPE] = settings.progressScope.name
         this[Keys.TAP_TO_TURN_PAGES] = settings.tapToTurnPages
@@ -130,6 +132,7 @@ private object Keys {
     val READING_DIRECTION = stringPreferencesKey("reading_direction")
     val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
     val SHOW_PROGRESS_INDICATOR = booleanPreferencesKey("show_progress_indicator")
+    val READER_PAPER = stringPreferencesKey("reader_paper")
     // Named "reflow_mode" when only text could scroll. The layout setting inherited this key
     // rather than taking a new one, so a value written by an older build is still read: there is
     // no migration mechanism here, and orphaning the key would silently reset every reader.
@@ -185,6 +188,7 @@ private fun ReaderSettings.Companion.fromPreferences(preferences: Preferences): 
         keepScreenOn = preferences[Keys.KEEP_SCREEN_ON] ?: defaults.keepScreenOn,
         showProgressIndicator = preferences[Keys.SHOW_PROGRESS_INDICATOR]
             ?: defaults.showProgressIndicator,
+        readerPaper = preferences[Keys.READER_PAPER].toEnum(defaults.readerPaper),
         layout = preferences[Keys.LAYOUT].toEnum(defaults.layout),
         progressScope = preferences[Keys.PROGRESS_SCOPE].toEnum(defaults.progressScope),
         tapToTurnPages = preferences[Keys.TAP_TO_TURN_PAGES] ?: defaults.tapToTurnPages,

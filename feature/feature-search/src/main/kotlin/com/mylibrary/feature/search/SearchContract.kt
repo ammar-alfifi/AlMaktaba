@@ -44,7 +44,7 @@ data class SearchUiState(
      * costs.
      */
     val searchBookContents: Boolean = false,
-    /** Queries the user explicitly submitted, most recent first. Session-scoped, not persisted. */
+    /** Queries the user explicitly submitted, most recent first. Persisted across launches. */
     val recentQueries: List<String> = emptyList(),
     /** The last failure, or `null`. Cleared as soon as the next search starts. */
     val error: AppError? = null,

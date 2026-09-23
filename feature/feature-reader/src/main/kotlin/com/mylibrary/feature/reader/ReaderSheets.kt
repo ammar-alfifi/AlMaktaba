@@ -52,6 +52,7 @@ import com.mylibrary.core.domain.model.PageTurnEffect
 import com.mylibrary.core.domain.model.ReaderFont
 import com.mylibrary.core.domain.model.ReadingLocator
 import com.mylibrary.core.domain.model.ReaderLayout
+import com.mylibrary.core.domain.model.ReaderPaper
 import com.mylibrary.core.domain.model.ProgressScope
 import com.mylibrary.core.domain.model.ReadingDirection
 import com.mylibrary.core.domain.model.SearchHit
@@ -295,6 +296,17 @@ private fun ReaderSettingsPanel(
                 selected = state.settings.themeMode,
                 onSelect = { onIntent(ReaderIntent.SetThemeMode(it)) },
                 label = { mode -> Text(themeModeLabel(mode)) },
+            )
+        }
+
+        // The page's own colour, separate from the app's theme above it: a reader can want the app
+        // dark and the paper warm, or the reverse, and one control for both would forbid either.
+        SettingGroup(title = stringResource(R.string.reader_settings_paper)) {
+            ChoiceRow(
+                options = ReaderPaper.entries,
+                selected = state.settings.readerPaper,
+                onSelect = { onIntent(ReaderIntent.SetReaderPaper(it)) },
+                label = { paper -> Text(readerPaperLabel(paper)) },
             )
         }
 
@@ -814,6 +826,15 @@ private fun themeModeLabel(mode: ThemeMode): String = stringResource(
         ThemeMode.SYSTEM -> R.string.reader_theme_system
         ThemeMode.LIGHT -> R.string.reader_theme_light
         ThemeMode.DARK -> R.string.reader_theme_dark
+    },
+)
+
+@Composable
+private fun readerPaperLabel(paper: ReaderPaper): String = stringResource(
+    when (paper) {
+        ReaderPaper.DEFAULT -> R.string.reader_paper_default
+        ReaderPaper.SEPIA -> R.string.reader_paper_sepia
+        ReaderPaper.BLACK -> R.string.reader_paper_black
     },
 )
 

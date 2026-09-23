@@ -35,9 +35,9 @@ Jetpack Compose و Material 3، ومعمارية نظيفة متعددة الو�
 | **Direction** | Full RTL for Arabic, LTR for English — and a document's own direction is honoured *independently* of the UI, so an English TXT reads left-to-right inside the Arabic interface |
 | **Library** | Import through the Storage Access Framework — single files **or a whole device folder**, which keeps a series together as one shelf and can be re-scanned for new volumes later; grid/list layouts, five sort orders, favourite, format and folder filters, automatic cover extraction, moving a book between folders; a **continue-reading button above the shelf that follows the folder chip** — with a folder open it offers *that series'* book, not the most recent book in the library, and it says which book it would open |
 | **Opening from elsewhere** | The app registers as a viewer for every format it reads, so opening a file from a file manager — or sharing one into it — adds the book to the library and opens it in the reader. A search hit opens the reader *at the hit*, not at the last position |
-| **Reader** | One toolbar across all five formats, adapting to what the open file can do; **every format has both a pages layout and a continuous-scroll one**, chosen by one setting that both families obey; tap zones that turn the page (mirrored for Arabic, and independently reversible) or scroll a screenful, with a haptic tick on every turn and a switch to turn them off; **which side the first page is on** is a setting of its own; pinch-zoom, double-tap and a clamped pan; **double-tap a speech bubble or panel in a comic to zoom into it** — the balloon is found by reading the page's pixels, and a break in its outline is sealed rather than allowed to hand back the panel; page turns animated by a page-curl, a slide or a fade — **the curl lifts a corner on a diagonal fold and rolls the sheet over in every format, reflowed text included**; three page-fit modes; per-document search, outlines, bookmarks; **font, size, line spacing, margins, paragraph spacing and a first-line indent, applied live to a reflowed book** — three bundled Arabic typefaces and the platform's own — and one button that puts a reader's settings back **without touching the app's theme or its language**; and, in a folder of several, a reader that **carries on into the next volume by itself** — the previous and next books of the series are drawn above and below the open one in both layouts, a blank page at each seam names what was finished and what comes next, and the order is the folder's own, naturally sorted so *Vol 2* precedes *Vol 10* |
+| **Reader** | One toolbar across all five formats, adapting to what the open file can do; **every format has both a pages layout and a continuous-scroll one**, chosen by one setting that both families obey; tap zones that turn the page (mirrored for Arabic, and independently reversible) or scroll a screenful, with a haptic tick on every turn and a switch to turn them off; **which side the first page is on** is a setting of its own; pinch-zoom, double-tap and a clamped pan; **double-tap a speech bubble or panel in a comic to zoom into it** — the balloon is found by reading the page's pixels, and a break in its outline is sealed rather than allowed to hand back the panel; page turns animated by a page-curl, a slide or a fade — **the curl lifts a corner on a diagonal fold and rolls the sheet over in every format, reflowed text included**; three page-fit modes; per-document search, outlines, bookmarks; **font, size, line spacing, margins, paragraph spacing and a first-line indent, applied live to a reflowed book** — three bundled Arabic typefaces and the platform's own, plus a page paper that can be the app's own background, a warm sepia or true black — and one button that puts a reader's settings back **without touching the app's theme or its language**; and, in a folder of several, a reader that **carries on into the next volume by itself** — the previous and next books of the series are drawn above and below the open one in both layouts, a blank page at each seam names what was finished and what comes next, and the order is the folder's own, naturally sorted so *Vol 2* precedes *Vol 10* |
 | **Appearance** | Six Material 3 colour schemes — five generated from seeds by `tools/material_palette.py`, one the app's own hand-authored teal — plus the wallpaper palette on Android 12+; a first launch asks which, and the same screen reopens from Settings with the whole interface repainting live; light/dark/system |
-| **Storage** | No storage permission at all — only scoped `content://` access to files and folders the user picked |
+| **Storage** | No permissions at all — not storage, not network. Only scoped `content://` access to files and folders the user picked |
 
 ## 2. Requirements compliance
 
@@ -76,11 +76,11 @@ Every hard constraint from the specification, and where it is satisfied:
 
 A signed, installable build is attached to the latest release:
 
-**→ [MyLibrary-v1.8.6.apk](https://github.com/ammar-alfifi/MyLibrary/releases/download/v1.8.6/MyLibrary-v1.8.6.apk)** (~33 MB)
+**→ [MyLibrary-v1.8.7.apk](https://github.com/ammar-alfifi/MyLibrary/releases/download/v1.8.7/MyLibrary-v1.8.7.apk)** (~21 MB)
 
 Android 8.0 (API 26) and above. Signed with APK Signature Scheme v2 + v3. The app requests **no
-storage permission** — books are added through the system file picker, which grants access to the
-files you choose and nothing else.
+permissions at all** — not storage, not network. Books are added through the system file picker,
+which grants access to the files you choose and nothing else.
 
 ### Requirements
 
@@ -282,6 +282,15 @@ sensible answer and the picker was really offering one decision disguised as thr
 draws with is now `myLibraryTypography`'s, unconditionally, and the type is one less thing that can
 be wrong in a way nobody can see from a screenshot.
 
+**The page's paper is not the app's theme.** The reader offers the app's own background, a warm
+sepia and true black as three papers, and deliberately as a setting of its own rather than as more
+entries in the theme picker. They answer different questions: the theme is the *app's* chrome — the
+toolbar, the panels, every other screen — while the paper is the surface a book is drawn on, and a
+reader who wants a dark app with a warm page (or the reverse) is asking for two answers, not one
+contradiction. The paper is applied as a scoped colour-scheme override around the reader's content
+and nothing else, so the toolbar above the page stays the theme's; and it is a reading setting, so
+the reader's own reset puts it back while the settings screen's reset leaves it alone.
+
 **The settings screen is the interface's; the reader's panel is the book's.** One `ReaderSettings`
 object observed by every screen is what makes a setting change a single `copy()` and a single write,
 and it is worth keeping — but one object is not one *screen*. Settings used to offer the reading
@@ -378,7 +387,7 @@ the book in words a line above it.
 
 ## 6. Testing
 
-**610 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
+**617 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
 
 | Module | Tests | Covers |
 |---|---:|---|
@@ -389,7 +398,7 @@ the book in words a line above it.
 | `core-common` | 30 | natural sort key, file-name parsing, byte formatting, result combinators |
 | `format-archive` | 29 | natural page ordering, junk-entry filtering, container sniffing, sample-size maths |
 | `feature-search` | 20 | snippet offsets, result grouping, query history |
-| `core-data` | 29 | **real SQLite**: every sort order, `LIKE … ESCAPE`, cascade deletes, upserts, folders, and **the version 1 → 2 migration against a real version 1 database**. Also **the settings store's history**: that an upgrade is not sent through the first-run screen, that a reader who had turned dynamic colour *off* is not repainted with their wallpaper, and that an unknown colour name degrades rather than throws |
+| `core-data` | 36 | **real SQLite**: every sort order, `LIKE … ESCAPE`, cascade deletes, upserts, folders, and **the version 1 → 2 migration against a real version 1 database**. Also **the settings store's history**: that an upgrade is not sent through the first-run screen, that a reader who had turned dynamic colour *off* is not repainted with their wallpaper, that an unknown colour name — or page paper — degrades rather than throws, and that **the persisted search history** comes back in order and is not cut in half by a query containing the characters a naive delimiter would use |
 | `format-pdf` | 15 | aspect fitting, outline nesting, malformed bookmark trees |
 | `app` | 8 | **cold start**: real Hilt graph + `MainActivity` lifecycle, and the language override |
 | `feature-settings` | 12 | intent → settings mapping on both paths, and **the line between the two resets** — that the screen's puts back the theme, the colour and the language and touches nothing else, compared as a whole object so a field added later cannot slip through, and that the reader's is the exact complement |
@@ -629,8 +638,6 @@ Stated rather than hidden:
 - **Search inside books is capped at the 20 most recently added books** and is off by default, since
   it opens every book it scans. The cap is reported to the user rather than silently narrowing the
   result.
-- **Recent search queries are session-scoped.** Persisting them needs a DataStore key; the ViewModel
-  does not currently inject one.
 - **Highlights are modelled and stored** (`Bookmark` carries `colorArgb`) but the reader exposes
   bookmarking only, not text selection.
 - **The bubble detector is a heuristic, not image analysis.** It floods the light region under the
@@ -680,9 +687,12 @@ Stated rather than hidden:
 - **Folders are a grouping, not a copy.** Books are never moved or duplicated; a folder is a
   remembered SAF tree plus an id on each book. That is why removing a folder keeps its books, and why
   a folder whose permission has been revoked shows as "unavailable" until the user points at it again.
-- **R8/minification is disabled** for the release build, which is why the APK is ~33 MB. Turning it
-  on needs keep rules for pdfium's JNI entry points and the Room/Hilt generated code; the proguard
-  files are already wired up for it.
+- **R8 is enabled for release** — minification *and* resource shrinking — which brings the APK from
+  ~33 MB down to ~21 MB. The app-specific keep rules live in `app/proguard-rules.pro`; the
+  libraries' own consumer rules cover pdfium's JNI surface, Room's generated code and Hilt. Shrinking
+  is a packaging-time change, so the paths it can affect are the device-only ones (native PDF
+  rendering, opening the Room database): they build clean, but still want a run on real hardware, as
+  every device-only path in this project does.
 - **Relative dates used to follow the system locale** rather than the in-app language. Fixed:
   `DisplayFormatters` resolves them through a locale-scoped context, so they agree with the rest
   of the UI.

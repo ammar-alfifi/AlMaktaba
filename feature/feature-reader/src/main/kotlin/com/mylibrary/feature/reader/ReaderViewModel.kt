@@ -587,6 +587,7 @@ class ReaderViewModel @Inject constructor(
             is ReaderIntent.SetShowProgressIndicator -> launch {
                 updateSettings.setShowProgressIndicator(intent.enabled)
             }
+            is ReaderIntent.SetReaderPaper -> launch { updateSettings.setReaderPaper(intent.paper) }
             is ReaderIntent.SetLayout -> launch { updateSettings.setLayout(intent.layout) }
             is ReaderIntent.SetProgressScope -> launch { updateSettings.setProgressScope(intent.scope) }
             is ReaderIntent.SetTapToTurnPages -> launch { updateSettings.setTapToTurnPages(intent.enabled) }

@@ -6,6 +6,7 @@ import com.mylibrary.core.domain.model.Book
 import com.mylibrary.core.domain.usecase.ObserveLibraryUseCase
 import com.mylibrary.core.domain.usecase.SearchAcrossBooksUseCase
 import com.mylibrary.core.domain.usecase.SearchLibraryUseCase
+import com.mylibrary.core.domain.repository.SearchHistoryRepository
 import com.mylibrary.core.ui.mvi.MviViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -34,6 +35,7 @@ class SearchViewModel @Inject constructor(
     private val searchLibrary: SearchLibraryUseCase,
     private val searchAcrossBooks: SearchAcrossBooksUseCase,
     private val observeLibrary: ObserveLibraryUseCase,
+    private val searchHistory: SearchHistoryRepository,
 ) : MviViewModel<SearchUiState, SearchIntent, SearchEffect>(SearchUiState()) {
 
     /**
@@ -64,6 +66,14 @@ class SearchViewModel @Inject constructor(
                 }
             }
         }
+
+        // The history is persisted, so it is read back rather than seeded empty: a query submitted
+        // in a previous session is still offered on this one.
+        launch {
+            searchHistory.recentQueries.collect { queries ->
+                setState { copy(recentQueries = queries) }
+            }
+        }
     }
 
     override fun onIntent(intent: SearchIntent) {
@@ -74,9 +84,8 @@ class SearchViewModel @Inject constructor(
             is SearchIntent.SetSearchInsideBooks -> setSearchBookContents(intent.enabled)
             is SearchIntent.OpenBook -> openBook(intent.bookId)
             is SearchIntent.OpenHit -> openHit(intent.bookId, intent)
-            is SearchIntent.RemoveRecentQuery ->
-                setState { copy(recentQueries = recentQueries - intent.query) }
-            SearchIntent.ClearRecentQueries -> setState { copy(recentQueries = emptyList()) }
+            is SearchIntent.RemoveRecentQuery -> removeRecentQuery(intent.query)
+            SearchIntent.ClearRecentQueries -> clearRecentQueries()
         }
     }
 
@@ -178,20 +187,42 @@ class SearchViewModel @Inject constructor(
     }
 
     /**
-     * Adds a submitted query to this session's history.
+     * Adds a submitted query to the history, and writes the history down.
      *
      * Only explicit submissions are remembered, never the intermediate states of typing: a debounced
      * search runs for "d", "du" and "dun" on the way to "dune", and a history holding all four would
      * be a history of the keyboard, not of the user's intentions.
      *
-     * The history lives in this ViewModel and is gone when the screen is closed for good. Persisting
-     * it — a DataStore key or a small table in `:core:core-data` — is a reasonable follow-up, but it
-     * is not done here: it would add a storage dependency to a feature that works without one, and
-     * search history is not worth a dependency the project does not already have.
+     * The history outlives the screen: [persistHistory] writes it to `SearchHistoryRepository`, so a
+     * reader who found a useful query still has it after closing the app. The trimming and
+     * de-duplication stay here — [addRecentQuery] — because what makes a history useful is a
+     * presentation decision, and the store only remembers the result.
      */
     private fun rememberQuery(query: String) {
         if (query.isEmpty()) return
-        setState { copy(recentQueries = addRecentQuery(recentQueries, query)) }
+        persistHistory(addRecentQuery(currentState.recentQueries, query))
+    }
+
+    /** Drops one query from the history, in the state and in the store together. */
+    private fun removeRecentQuery(query: String) {
+        persistHistory(currentState.recentQueries - query)
+    }
+
+    /** Forgets the whole history, in the state and in the store together. */
+    private fun clearRecentQueries() {
+        persistHistory(emptyList())
+    }
+
+    /**
+     * Shows [queries] immediately and writes them behind the scenes.
+     *
+     * The state is updated first so a submitted query appears as a chip the instant it is submitted;
+     * the write is what makes it survive leaving the screen. The repository's own flow then emits
+     * the same list, which is a no-op for the state.
+     */
+    private fun persistHistory(queries: List<String>) {
+        setState { copy(recentQueries = queries) }
+        launch { searchHistory.save(queries) }
     }
 
     /** Replaces whatever search is running with a fresh one for [query]. */

@@ -64,8 +64,12 @@ internal fun ApplicationExtension.configureMyLibraryAndroid() {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // Shrinking is on for release only. Debug stays unminified so stack traces and
+            // step-debugging remain usable. The rules that make this safe live in
+            // `app/proguard-rules.pro`; most of them are actually consumer rules the libraries
+            // ship, and the file explains which app-specific ones are added on top.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         debug {

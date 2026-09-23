@@ -40,6 +40,10 @@
     <string name="reader_theme_system">System</string>
     <string name="reader_theme_light">Light</string>
     <string name="reader_theme_dark">Dark</string>
+    <string name="reader_settings_paper">Page paper</string>
+    <string name="reader_paper_default">Default</string>
+    <string name="reader_paper_sepia">Sepia</string>
+    <string name="reader_paper_black">Black</string>
     <string name="reader_settings_font">Font</string>
     <string name="reader_settings_font_summary">Applies to reflowable books such as EPUB and TXT.</string>
     <string name="reader_settings_page_turn">Page turn</string>
