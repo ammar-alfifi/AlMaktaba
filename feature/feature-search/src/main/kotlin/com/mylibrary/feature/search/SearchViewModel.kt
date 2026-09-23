@@ -4,7 +4,8 @@ import androidx.lifecycle.viewModelScope
 import com.mylibrary.core.common.AppError
 import com.mylibrary.core.domain.model.Book
 import com.mylibrary.core.domain.usecase.ObserveLibraryUseCase
-import com.mylibrary.core.domain.usecase.SearchAcrossBooksUseCase
+import com.mylibrary.core.domain.usecase.BuildSearchIndexUseCase
+import com.mylibrary.core.domain.usecase.SearchIndexedBooksUseCase
 import com.mylibrary.core.domain.usecase.SearchLibraryUseCase
 import com.mylibrary.core.domain.repository.SearchHistoryRepository
 import com.mylibrary.core.ui.mvi.MviViewModel
@@ -20,11 +21,11 @@ import kotlinx.coroutines.launch
  * The search screen's logic: two searches of very different cost, behind one intent.
  *
  * The first, [SearchLibraryUseCase], runs over titles and authors already in memory and answers in
- * milliseconds. The second, [SearchAcrossBooksUseCase], opens every book in turn, runs a full-text
- * search and closes it again — seconds to minutes, depending on the library. This class exists
- * because those two must not be conflated: the cheap one runs as the user types, the expensive one
- * only when they explicitly ask for it, and the screen shows a progress indicator while it runs
- * rather than pretending a scan of a whole library is instant.
+ * milliseconds. The second, [SearchIndexedBooksUseCase], searches the persisted full-text index the
+ * library builds once — a book is opened to be indexed, not on every query. This class exists
+ * because those two must not be conflated: the cheap one runs as the user types, the indexed one
+ * only when they explicitly ask for it, and the screen shows a progress indicator while the index is
+ * first built rather than pretending a scan of a whole library is instant.
  *
  * `SearchInDocumentUseCase` is deliberately absent. Searching inside one book needs an
  * already-open document, which only the reader owns; the reader screen searches its own book, and
@@ -33,9 +34,10 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val searchLibrary: SearchLibraryUseCase,
-    private val searchAcrossBooks: SearchAcrossBooksUseCase,
     private val observeLibrary: ObserveLibraryUseCase,
     private val searchHistory: SearchHistoryRepository,
+    private val buildSearchIndex: BuildSearchIndexUseCase,
+    private val searchIndexedBooks: SearchIndexedBooksUseCase,
 ) : MviViewModel<SearchUiState, SearchIntent, SearchEffect>(SearchUiState()) {
 
     /**
@@ -272,18 +274,30 @@ class SearchViewModel @Inject constructor(
     }
 
     /**
-     * Runs the in-book scan over the library, capped at [MAX_BOOKS_SCANNED] books.
+     * Searches the persisted index, building whatever part of it is missing first.
      *
-     * Failures are reported rather than thrown: `SearchAcrossBooksUseCase` already skips books it
-     * cannot open, so anything reaching here is a failure of the scan as a whole, and the partial
-     * results the user is looking at are still worth keeping on screen.
+     * [buildSearchIndex] skips every book it has already looked at, so on all but the first search
+     * it is one query and a set difference — cheap enough to run before each search, which is also
+     * what picks up a book imported since the last one. The whole library is searched: there is no
+     * cap, because there is no longer a reason for one.
+     *
+     * Failures are reported rather than thrown, and the results already on screen are kept: an index
+     * that could not be built must not empty a list the user is reading.
      */
     private suspend fun scanBookContents(query: String) {
-        val scan = books.take(MAX_BOOKS_SCANNED)
-        if (scan.isEmpty()) return
+        if (books.isEmpty()) return
+
+        try {
+            buildSearchIndex()
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            setState { copy(error = AppError.Unexpected(failure)) }
+            return
+        }
 
         val hits = try {
-            searchAcrossBooks(scan, query)
+            searchIndexedBooks(query)
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (failure: Exception) {
@@ -295,19 +309,6 @@ class SearchViewModel @Inject constructor(
             copy(
                 contentResults = hits,
                 contentBooks = hits.keys.mapNotNull(booksById::get).associateBy { it.id },
-            )
-        }
-
-        if (books.size > scan.size) {
-            // Say so rather than let an empty card read as "not in any of your books": the scan
-            // stopped early, and a user who is told that can narrow the library instead of
-            // concluding the text is not there. The count is passed with it — the string has a
-            // placeholder, and leaving it unformatted printed "%1$d" on screen.
-            sendEffect(
-                SearchEffect.ShowMessage(
-                    messageRes = R.string.search_message_scan_capped,
-                    formatArgs = listOf(scan.size),
-                ),
             )
         }
     }
@@ -326,18 +327,5 @@ class SearchViewModel @Inject constructor(
          * keystroke, so it costs a fast typist nothing.
          */
         const val LIBRARY_DEBOUNCE_MS = 250L
-
-        /**
-         * The most books one in-book scan will open.
-         *
-         * `SearchAcrossBooksUseCase` opens every book, scans its full text and closes it again —
-         * per book, that is a container parse plus a text scan, and on a library of a few hundred
-         * books it is minutes of work and a visible amount of battery. The scan therefore stops at
-         * the first [MAX_BOOKS_SCANNED] books, which `ObserveLibraryUseCase` orders by
-         * `RECENTLY_ADDED`, so the cap falls on the books the user is least likely to be thinking
-         * about. The user is told when it happens; scanning the remainder belongs in a background
-         * worker, not in a screen the user is waiting on.
-         */
-        const val MAX_BOOKS_SCANNED = 20
     }
 }

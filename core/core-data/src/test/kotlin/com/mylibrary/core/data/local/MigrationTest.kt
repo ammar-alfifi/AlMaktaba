@@ -8,6 +8,8 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import com.mylibrary.core.common.DefaultDispatcherProvider
 import com.mylibrary.core.data.local.entity.FolderEntity
+import com.mylibrary.core.data.local.entity.IndexedBookEntity
+import com.mylibrary.core.data.local.entity.SearchIndexEntity
 import com.mylibrary.core.data.repository.FolderRepositoryImpl
 import com.mylibrary.core.domain.model.Folder
 import kotlinx.coroutines.flow.first
@@ -61,7 +63,7 @@ class MigrationTest {
 
         // Opening is the assertion: Room runs the migration and then validates the schema.
         val bookDao = database.bookDao()
-        assertEquals("the upgrade is recorded", 2, database.openHelper.readableDatabase.version)
+        assertEquals("the upgrade is recorded", 3, database.openHelper.readableDatabase.version)
 
         val books = bookDao.getById(1L)
         assertNotNull("a book survives the upgrade", books)
@@ -149,6 +151,33 @@ class MigrationTest {
         assertNull("the folder is gone", repository.getFolder(folderId))
         assertNotNull("but the book is still in the library", database.bookDao().getById(1L))
         assertNull("and is simply no longer filed", database.bookDao().getById(1L)?.folderId)
+
+        database.close()
+    }
+
+    @Test
+    fun `the search index is created by the upgrade and follows the book`() = runTest {
+        createVersion1Database()
+
+        val database = Room.databaseBuilder(context, MyLibraryDatabase::class.java, databaseName)
+            .addMigrations(*ALL_MIGRATIONS)
+            .allowMainThreadQueries()
+            .build()
+
+        val dao = database.searchIndexDao()
+        dao.insertChunks(
+            listOf(SearchIndexEntity(bookId = 1L, label = null, locator = "p0", text = "مرحبا بالعالم")),
+        )
+        dao.markIndexed(IndexedBookEntity(bookId = 1L, indexedAt = 1L))
+
+        assertEquals("the book is marked as indexed", setOf(1L), dao.indexedBookIds().toSet())
+        assertEquals("its text is searchable", 1, dao.searchChunks("%بالعالم%", 10).size)
+
+        // The index is a child of the book, so deleting the book takes it with it.
+        database.bookDao().deleteByIds(listOf(1L))
+
+        assertEquals("no chunks survive the book", 0, dao.searchChunks("%بالعالم%", 10).size)
+        assertEquals("and it is no longer marked indexed", emptyList<Long>(), dao.indexedBookIds())
 
         database.close()
     }

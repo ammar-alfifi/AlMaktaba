@@ -1,12 +1,10 @@
 package com.mylibrary.core.domain.usecase
 
 import com.mylibrary.core.common.DispatcherProvider
-import com.mylibrary.core.common.getOrNull
 import com.mylibrary.core.domain.engine.OpenDocument
 import com.mylibrary.core.domain.model.Book
 import com.mylibrary.core.domain.model.LibrarySort
 import com.mylibrary.core.domain.model.SearchHit
-import com.mylibrary.core.domain.repository.DocumentRepository
 import com.mylibrary.core.domain.repository.LibraryRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -75,42 +73,5 @@ class SearchInDocumentUseCase @Inject constructor(
         return withContext(dispatchers.default) {
             document.search(normalized, limit)
         }
-    }
-}
-
-/**
- * Opens a book, searches it, and closes it.
- *
- * This is the "find in all my books" path: it takes the cost of opening every book in turn, so it
- * is only ever invoked explicitly by the search screen, never speculatively.
- */
-class SearchAcrossBooksUseCase @Inject constructor(
-    private val documentRepository: DocumentRepository,
-    private val dispatchers: DispatcherProvider,
-) {
-    suspend operator fun invoke(
-        books: List<Book>,
-        query: String,
-        limitPerBook: Int = DEFAULT_LIMIT_PER_BOOK,
-    ): Map<Long, List<SearchHit>> = withContext(dispatchers.io) {
-        val normalized = query.trim()
-        if (normalized.isEmpty()) return@withContext emptyMap()
-
-        buildMap {
-            for (book in books) {
-                val document = documentRepository.open(book).getOrNull() ?: continue
-                try {
-                    val hits = document.search(normalized, limitPerBook)
-                    if (hits.isNotEmpty()) put(book.id, hits)
-                } finally {
-                    // Always release native handles, even if the scan above threw.
-                    document.close()
-                }
-            }
-        }
-    }
-
-    private companion object {
-        const val DEFAULT_LIMIT_PER_BOOK = 20
     }
 }

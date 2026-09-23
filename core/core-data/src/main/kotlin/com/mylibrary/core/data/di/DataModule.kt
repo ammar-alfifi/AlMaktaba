@@ -18,6 +18,7 @@ import com.mylibrary.core.data.local.dao.FolderDao
 import com.mylibrary.core.data.source.SafFolderScanner
 import com.mylibrary.core.domain.engine.FolderScanner
 import com.mylibrary.core.data.local.dao.ReadingPositionDao
+import com.mylibrary.core.data.local.dao.SearchIndexDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -74,6 +75,9 @@ object DataModule {
 
     @Provides
     fun provideFolderDao(database: MyLibraryDatabase): FolderDao = database.folderDao()
+
+    @Provides
+    fun provideSearchIndexDao(database: MyLibraryDatabase): SearchIndexDao = database.searchIndexDao()
 
     /**
      * The scanner that enumerates a folder the user granted access to.

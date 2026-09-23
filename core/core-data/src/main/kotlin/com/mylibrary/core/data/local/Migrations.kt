@@ -42,5 +42,43 @@ internal val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+/**
+ * Version 2 → 3: the full-text index behind "search inside books".
+ *
+ * Two child tables, and deliberately no change to `books`. A foreign key on a *child* is safe: the
+ * cascade runs when a book is deleted, which is exactly what should happen to its index, and unlike
+ * the folder association there is no parent table to rebuild — so the hazard the 1 → 2 migration
+ * documents does not arise here.
+ *
+ * The statements are written in the shape Room's generator produces, because Room validates the
+ * schema after migrating in production as well as in tests.
+ */
+internal val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `search_index` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`bookId` INTEGER NOT NULL, " +
+                "`label` TEXT, " +
+                "`locator` TEXT NOT NULL, " +
+                "`text` TEXT NOT NULL, " +
+                "FOREIGN KEY(`bookId`) REFERENCES `books`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE CASCADE)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_search_index_bookId` " +
+                "ON `search_index` (`bookId`)",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `indexed_books` (" +
+                "`bookId` INTEGER NOT NULL, " +
+                "`indexedAt` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`bookId`), " +
+                "FOREIGN KEY(`bookId`) REFERENCES `books`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE CASCADE)",
+        )
+    }
+}
+
 /** Every migration the database needs, in order. Registered by `DataModule`. */
-internal val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)
+internal val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)

@@ -6,6 +6,7 @@ import com.mylibrary.core.data.repository.FolderRepositoryImpl
 import com.mylibrary.core.data.repository.LibraryRepositoryImpl
 import com.mylibrary.core.data.repository.ReadingProgressRepositoryImpl
 import com.mylibrary.core.data.repository.SearchHistoryRepositoryImpl
+import com.mylibrary.core.data.repository.SearchIndexRepositoryImpl
 import com.mylibrary.core.data.repository.SettingsRepositoryImpl
 import com.mylibrary.core.domain.repository.BookmarkRepository
 import com.mylibrary.core.domain.repository.DocumentRepository
@@ -13,6 +14,7 @@ import com.mylibrary.core.domain.repository.FolderRepository
 import com.mylibrary.core.domain.repository.LibraryRepository
 import com.mylibrary.core.domain.repository.ReadingProgressRepository
 import com.mylibrary.core.domain.repository.SearchHistoryRepository
+import com.mylibrary.core.domain.repository.SearchIndexRepository
 import com.mylibrary.core.domain.repository.SettingsRepository
 import dagger.Binds
 import dagger.Module
@@ -62,4 +64,10 @@ internal abstract class RepositoryModule {
     abstract fun bindSearchHistoryRepository(
         impl: SearchHistoryRepositoryImpl,
     ): SearchHistoryRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSearchIndexRepository(
+        impl: SearchIndexRepositoryImpl,
+    ): SearchIndexRepository
 }

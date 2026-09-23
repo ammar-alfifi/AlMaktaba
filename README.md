@@ -387,7 +387,7 @@ the book in words a line above it.
 
 ## 6. Testing
 
-**617 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
+**627 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
 
 | Module | Tests | Covers |
 |---|---:|---|
@@ -398,7 +398,7 @@ the book in words a line above it.
 | `core-common` | 30 | natural sort key, file-name parsing, byte formatting, result combinators |
 | `format-archive` | 29 | natural page ordering, junk-entry filtering, container sniffing, sample-size maths |
 | `feature-search` | 20 | snippet offsets, result grouping, query history |
-| `core-data` | 36 | **real SQLite**: every sort order, `LIKE … ESCAPE`, cascade deletes, upserts, folders, and **the version 1 → 2 migration against a real version 1 database**. Also **the settings store's history**: that an upgrade is not sent through the first-run screen, that a reader who had turned dynamic colour *off* is not repainted with their wallpaper, that an unknown colour name — or page paper — degrades rather than throws, and that **the persisted search history** comes back in order and is not cut in half by a query containing the characters a naive delimiter would use |
+| `core-data` | 46 | **real SQLite**: every sort order, `LIKE … ESCAPE`, cascade deletes, upserts, folders, and **the version 1 → 3 migration against a real version 1 database** (including that the new search index cascades away with its book). Also **the settings store's history**: that an upgrade is not sent through the first-run screen, that a reader who had turned dynamic colour *off* is not repainted with their wallpaper, that an unknown colour name — or page paper — degrades rather than throws, and that **the persisted search history** comes back in order and is not cut in half by a query containing the characters a naive delimiter would use. And **the full-text index**: literal `%`/`_` matching, per-book limits, and that a snippet's highlight offsets point at the match inside the collapsed whitespace it is shown in |
 | `format-pdf` | 15 | aspect fitting, outline nesting, malformed bookmark trees |
 | `app` | 8 | **cold start**: real Hilt graph + `MainActivity` lifecycle, and the language override |
 | `feature-settings` | 12 | intent → settings mapping on both paths, and **the line between the two resets** — that the screen's puts back the theme, the colour and the language and touches nothing else, compared as a whole object so a field added later cannot slip through, and that the reader's is the exact complement |
@@ -635,9 +635,11 @@ Stated rather than hidden:
   but it also means **the key used for the published APK exists only on the machine that built it**.
   Anyone shipping an update must keep that keystore: Android refuses to install an update signed
   with a different key.
-- **Search inside books is capped at the 20 most recently added books** and is off by default, since
-  it opens every book it scans. The cap is reported to the user rather than silently narrowing the
-  result.
+- **Search inside books builds a persisted index** the first time it is used: every book is opened
+  *once* and its text stored, after which a query is a scan of text already on disk and the whole
+  library is searched — there is no cap. It is still off by default because that first search has to
+  open every book to index it. A book whose text changes (a re-import) keeps its old index until the
+  next pass; there is no invalidation-on-change yet.
 - **Highlights are modelled and stored** (`Bookmark` carries `colorArgb`) but the reader exposes
   bookmarking only, not text selection.
 - **The bubble detector is a heuristic, not image analysis.** It floods the light region under the

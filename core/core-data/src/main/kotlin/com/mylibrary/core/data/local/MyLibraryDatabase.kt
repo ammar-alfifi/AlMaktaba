@@ -6,10 +6,13 @@ import com.mylibrary.core.data.local.dao.BookDao
 import com.mylibrary.core.data.local.dao.BookmarkDao
 import com.mylibrary.core.data.local.dao.FolderDao
 import com.mylibrary.core.data.local.dao.ReadingPositionDao
+import com.mylibrary.core.data.local.dao.SearchIndexDao
 import com.mylibrary.core.data.local.entity.BookEntity
 import com.mylibrary.core.data.local.entity.BookmarkEntity
 import com.mylibrary.core.data.local.entity.FolderEntity
+import com.mylibrary.core.data.local.entity.IndexedBookEntity
 import com.mylibrary.core.data.local.entity.ReadingPositionEntity
+import com.mylibrary.core.data.local.entity.SearchIndexEntity
 
 /**
  * MyLibrary's local store.
@@ -31,8 +34,10 @@ import com.mylibrary.core.data.local.entity.ReadingPositionEntity
         ReadingPositionEntity::class,
         BookmarkEntity::class,
         FolderEntity::class,
+        SearchIndexEntity::class,
+        IndexedBookEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class MyLibraryDatabase : RoomDatabase() {
@@ -44,6 +49,8 @@ abstract class MyLibraryDatabase : RoomDatabase() {
     abstract fun bookmarkDao(): BookmarkDao
 
     abstract fun folderDao(): FolderDao
+
+    abstract fun searchIndexDao(): SearchIndexDao
 
     companion object {
         const val NAME = "mylibrary.db"

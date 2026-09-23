@@ -14,9 +14,8 @@
 
     <!-- Searching inside books -->
     <string name="search_filter_inside_books">البحث داخل الكتب</string>
-    <string name="search_filter_inside_books_note">قد يستغرق وقتًا: يُفتح كل كتاب على حدة ويُفحص نصه.</string>
+    <string name="search_filter_inside_books_note">يُفهرَس كل كتاب مرة واحدة عند أول بحث، ثم يصبح البحث فوريًا.</string>
     <string name="search_scanning">جارٍ البحث داخل الكتب…</string>
-    <string name="search_message_scan_capped">تم فحص أحدث %1$d كتابًا فقط، تجنّبًا لفحص المكتبة كاملة.</string>
 
     <!-- Sections and matches -->
     <string name="search_section_library">من مكتبتك</string>

@@ -10,9 +10,8 @@
 
     <!-- Searching inside books -->
     <string name="search_filter_inside_books">Search inside books</string>
-    <string name="search_filter_inside_books_note">Can take a while: every book is opened and scanned in turn.</string>
+    <string name="search_filter_inside_books_note">Your books are indexed once, on the first search; after that it is instant.</string>
     <string name="search_scanning">Searching inside books…</string>
-    <string name="search_message_scan_capped">Only the %1$d most recent books were scanned, rather than the whole library.</string>
 
     <!-- Sections and matches -->
     <string name="search_section_library">From your library</string>
