@@ -27,12 +27,14 @@ import com.mylibrary.core.domain.usecase.UpdateSettingsUseCase
 import com.mylibrary.core.ui.mvi.MviViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Drives the library screen.
@@ -258,17 +260,23 @@ class LibraryViewModel @Inject constructor(
     /**
      * Imports a device folder, and files what it contains under it.
      *
-     * The folder's name is shown while it runs, from the URI alone, because the scan may take a
-     * minute on a large series and a progress bar with nothing beside it does not tell the user
-     * which of their folders the app is currently reading.
+     * The folder's name is resolved on the IO dispatcher, not in the frame that receives the
+     * picker's result: it is a query into the provider that handed back the tree, and on a provider
+     * that is not local storage it can block for as long as the network takes. A frozen frame on
+     * the one screen that has to stay responsive — the moment the user has just chosen a folder —
+     * is the whole of this bug, and a name is not worth it. The bar goes up first so the tap has
+     * feedback before the name arrives, and the name fills in beside it when it does.
      */
     private fun importPickedFolder(treeUri: String) {
-        val name = runCatching { folderScanner.displayName(treeUri) }.getOrNull().orEmpty()
-        setState { copy(importingFolderName = name) }
+        setState { copy(importingFolderName = "") }
         launch {
-            val summary = importFolder(treeUri)
-            setState { copy(importingFolderName = null) }
-            reportFolderOutcome(summary, wasRescan = false)
+            runFolderImport(wasRescan = false) {
+                val name = withContext(dispatchers.io) {
+                    runCatching { folderScanner.displayName(treeUri) }.getOrNull().orEmpty()
+                }
+                setState { copy(importingFolderName = name) }
+                importFolder(treeUri)
+            }
         }
     }
 
@@ -276,9 +284,33 @@ class LibraryViewModel @Inject constructor(
         val name = currentState.folders.firstOrNull { it.folder.id == folderId }?.folder?.name
         setState { copy(importingFolderName = name.orEmpty()) }
         launch {
-            val summary = rescanFolder(folderId)
+            runFolderImport(wasRescan = true) { rescanFolder(folderId) }
+        }
+    }
+
+    /**
+     * Runs a folder scan and reports it, and — whatever happens — takes the progress bar down.
+     *
+     * The clear happens on every way out rather than only on success, because a scan that *throws*
+     * used to leave [LibraryUiState.importingFolderName] set for the life of the screen: a bar that
+     * never stops and a folder that never appears is indistinguishable from a frozen app, which is
+     * how it gets reported. A failure now says so and puts the screen back, and cancellation — the
+     * user leaving the screen mid-scan — clears the bar on its way out too.
+     */
+    private suspend fun runFolderImport(
+        wasRescan: Boolean,
+        import: suspend () -> FolderImportSummary,
+    ) {
+        try {
+            val summary = import()
             setState { copy(importingFolderName = null) }
-            reportFolderOutcome(summary, wasRescan = true)
+            reportFolderOutcome(summary, wasRescan)
+        } catch (cancellation: CancellationException) {
+            setState { copy(importingFolderName = null) }
+            throw cancellation
+        } catch (_: Exception) {
+            setState { copy(importingFolderName = null) }
+            sendEffect(LibraryEffect.ShowMessage(LibraryMessage.ImportFailed))
         }
     }
 

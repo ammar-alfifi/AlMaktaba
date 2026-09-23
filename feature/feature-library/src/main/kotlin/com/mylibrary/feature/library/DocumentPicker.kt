@@ -84,7 +84,9 @@ fun rememberFolderPicker(onPicked: (String) -> Unit): () -> Unit {
  * only a transient grant, and the book still works for as long as it lasts.
  *
  * Returns `null` only when the provider cannot even name the file, which means there is nothing
- * usable to record.
+ * usable to record. Whether the URI is one the reader can actually open is not decided here: a
+ * `file://` path a malformed intent carries still gets a candidate, and `ImportBooksUseCase`
+ * refuses it as unsupported, which lets the UI report the failure instead of swallowing it.
  *
  * Shared rather than private because the same conversion is needed on the other road in: a book
  * the rest of the system hands over (a VIEW or SEND intent) is converted by `MainActivity` with

@@ -514,6 +514,22 @@ class ImportBooksUseCaseTest {
     }
 
     @Test
+    fun `refuses a uri the reader could never open`() = runTest {
+        // A VIEW intent can carry a `file://` path, and MyLibrary holds no storage permission, so
+        // such a book would be filed and then fail on the first tap. It is counted as unsupported
+        // and never stored, so the shelf cannot collect rows that are guaranteed to break.
+        val useCase = ImportBooksUseCase(library, FakeDocumentRepository(), dispatchers)
+
+        val summary = useCase(
+            listOf(candidate("novel-ar.pdf", uri = "file:///sdcard/Download/novel-ar.pdf")),
+        )
+
+        assertEquals(0, summary.imported)
+        assertEquals(1, summary.unsupported)
+        assertTrue(library.books.value.isEmpty())
+    }
+
+    @Test
     fun `an unknown extension still imports when the provider reports a supported mime type`() = runTest {
         // The mirror image of the mislabelled-CBZ case: some providers hand back no usable
         // extension (a numeric document id) but do report the right type. Format resolution tries

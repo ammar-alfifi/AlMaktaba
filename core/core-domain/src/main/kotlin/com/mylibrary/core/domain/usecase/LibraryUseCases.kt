@@ -123,6 +123,9 @@ data class ImportSummary(
     val total: Int get() = imported + alreadyInLibrary + unsupported
 }
 
+/** The only URI scheme the library ever stores; see [ImportBooksUseCase]. */
+private const val CONTENT_URI_SCHEME = "content://"
+
 /**
  * Adds picked files to the library.
  *
@@ -145,6 +148,16 @@ class ImportBooksUseCase @Inject constructor(
             var unsupported = 0
 
             for (candidate in candidates) {
+                // MyLibrary reads exclusively through the Storage Access Framework, so a book is
+                // only ever a `content://` document the app holds a grant for. Anything else — a
+                // `file://` path a legacy or malformed VIEW intent carried in, say — cannot be
+                // opened by the reader at all, so importing it would file a book that is guaranteed
+                // to fail the moment it is tapped. It is counted as unsupported, exactly like a
+                // format no engine reads, rather than silently recorded.
+                if (!candidate.uri.startsWith(CONTENT_URI_SCHEME)) {
+                    unsupported++
+                    continue
+                }
                 val extension = candidate.displayName.substringAfterLast('.', "")
                 val format = BookFormat.fromExtension(extension)
                     ?: BookFormat.fromMimeType(candidate.mimeType)
