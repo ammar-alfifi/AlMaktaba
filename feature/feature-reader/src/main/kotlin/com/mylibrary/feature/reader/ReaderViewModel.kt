@@ -573,6 +573,9 @@ class ReaderViewModel @Inject constructor(
             is ReaderIntent.SearchQueryChanged -> setState { copy(searchQuery = intent.query) }
             ReaderIntent.SubmitSearch -> runSearch()
 
+            ReaderIntent.ReadAloud -> launch { readAloud() }
+            ReaderIntent.StopReadingAloud -> launch { sendEffect(ReaderEffect.StopSpeaking) }
+
             is ReaderIntent.SetThemeMode -> launch { updateSettings.setThemeMode(intent.mode) }
             is ReaderIntent.SetFont -> launch { updateSettings.setReaderFont(intent.font) }
             is ReaderIntent.SetFontScale -> launch { updateSettings.setFontScale(intent.scale) }
@@ -1173,6 +1176,34 @@ class ReaderViewModel @Inject constructor(
             else -> null
         }
         setState { copy(positionLabel = label) }
+    }
+
+    /**
+     * Speaks the text from the reader's position to the end of the current unit.
+     *
+     * A reflowable book speaks its chapter *from the reader's own character offset*, so "read aloud"
+     * carries on from where they are rather than restarting the chapter; a page-image document with a
+     * text layer speaks the page. A comic has no text at all and says so, rather than appearing to
+     * start and going silent — the same honesty the search action follows.
+     *
+     * The text is produced as an effect, never held in state: a chapter is large, and the platform
+     * engine that speaks it belongs to the screen.
+     */
+    private suspend fun readAloud() {
+        val open = document ?: return
+        val text = when (open) {
+            is ReflowableDocument -> open.chapterText(currentState.currentUnit)
+                .drop(currentState.reflowOffset)
+
+            is PagedDocument -> open.pageText(currentState.currentUnit).orEmpty()
+            else -> ""
+        }.trim()
+
+        if (text.isBlank()) {
+            sendEffect(ReaderEffect.ShowMessage(ReaderMessage.ReadAloudUnavailable))
+        } else {
+            sendEffect(ReaderEffect.Speak(text))
+        }
     }
 
     /**

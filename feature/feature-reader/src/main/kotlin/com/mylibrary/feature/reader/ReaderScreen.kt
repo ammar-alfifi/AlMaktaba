@@ -68,6 +68,7 @@ fun ReaderRoute(
     val context = LocalContext.current
 
     var pendingMessage by remember { mutableStateOf<ReaderMessage?>(null) }
+    val speaker = rememberReaderSpeaker()
     ObserveEffects(viewModel.effects) { effect ->
         when (effect) {
             ReaderEffect.NavigateBack -> onBack()
@@ -78,6 +79,9 @@ fun ReaderRoute(
             is ReaderEffect.OpenBook -> onOpenBook(effect.bookId)
 
             is ReaderEffect.ShowMessage -> pendingMessage = effect.message
+
+            is ReaderEffect.Speak -> speaker.speak(effect.text)
+            ReaderEffect.StopSpeaking -> speaker.stop()
 
             is ReaderEffect.OpenExternalUrl -> {
                 // Opening a URL needs a platform context, which is exactly why the ViewModel emits
@@ -132,6 +136,7 @@ fun ReaderRoute(
         onIntent = viewModel::onIntent,
         onBack = onBack,
         snackbarHostState = snackbarHostState,
+        isSpeaking = speaker.isSpeaking,
         modifier = modifier,
     )
 }
@@ -143,6 +148,7 @@ fun ReaderScreen(
     onIntent: (ReaderIntent) -> Unit,
     onBack: () -> Unit,
     snackbarHostState: SnackbarHostState,
+    isSpeaking: Boolean,
     modifier: Modifier = Modifier,
 ) {
     KeepScreenOn(enabled = state.settings.keepScreenOn)
@@ -222,7 +228,7 @@ fun ReaderScreen(
             exit = slideOutVertically { -it },
             modifier = Modifier.align(Alignment.TopCenter),
         ) {
-            ReaderTopBar(state = state, onIntent = onIntent, onBack = onBack)
+            ReaderTopBar(state = state, onIntent = onIntent, onBack = onBack, isSpeaking = isSpeaking)
         }
 
         AnimatedVisibility(
@@ -391,6 +397,7 @@ private fun readerMessageText(message: ReaderMessage): String = stringResource(
         ReaderMessage.BookmarkSaved -> R.string.reader_bookmark_saved
         ReaderMessage.NoSearchResults -> R.string.reader_no_results
         ReaderMessage.SearchUnavailable -> R.string.reader_search_unavailable
+        ReaderMessage.ReadAloudUnavailable -> R.string.reader_read_aloud_unavailable
         ReaderMessage.SettingsReset -> R.string.reader_settings_reset_done
         ReaderMessage.LinkUnavailable -> R.string.reader_link_unavailable
     },

@@ -9,7 +9,9 @@ import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -33,21 +35,30 @@ import androidx.compose.ui.unit.dp
 import com.mylibrary.core.domain.model.ProgressScope
 
 /**
- * A panel the toolbar can open, in the order the overflow lists them.
+ * A panel the toolbar can open, or an action it performs directly, in the order the overflow lists
+ * them.
  *
  * The reader serves five formats through four engines, and they do not all have the same parts: a
  * comic archive has no text layer to search and no outline to navigate, and a plain-text file has no
  * outline either. An action is therefore *derived from what the document can do* rather than assumed,
  * which is what lets one toolbar serve every format without offering buttons that quietly do nothing.
+ *
+ * [panel] is `null` for an action that is not a panel — [ReadAloud] starts and stops speaking in
+ * place rather than opening a sheet — which is why the toolbar dispatches on it rather than assuming
+ * every entry opens something.
  */
-enum class ReaderMenuAction(val panel: ReaderPanel) {
+enum class ReaderMenuAction(val panel: ReaderPanel?) {
     TableOfContents(ReaderPanel.TABLE_OF_CONTENTS),
     Search(ReaderPanel.SEARCH),
+
+    /** Read the current chapter or page aloud, or stop if it is already speaking. */
+    ReadAloud(null),
+
     Bookmarks(ReaderPanel.BOOKMARKS),
 }
 
 /**
- * The panel actions that make sense for [state]'s document, in display order.
+ * The actions that make sense for [state]'s document, in display order.
  *
  * Pure and free of Compose so it can be asserted directly in a JVM test — this is the rule that
  * decides what "unified, but not identical" means for each of the five formats, and it is worth
@@ -57,6 +68,8 @@ enum class ReaderMenuAction(val panel: ReaderPanel) {
  *    outline means a button whose only outcome is an apology.
  *  - **Search** only when the engine reports a text layer. A comic's pages are pictures; there is
  *    nothing to find in them.
+ *  - **Read aloud** only when there is text to speak — the same condition as search, because a text
+ *    layer a search can read is a text layer a voice can read. A comic is silent.
  *  - **Bookmarks** always: every format can remember a position, including a page image.
  *
  * The bookmark *toggle* is not here: it is a stateful control that lives in the toolbar itself on
@@ -65,6 +78,7 @@ enum class ReaderMenuAction(val panel: ReaderPanel) {
 fun readerMenuActions(state: ReaderUiState): List<ReaderMenuAction> = buildList {
     if (state.outline.isNotEmpty()) add(ReaderMenuAction.TableOfContents)
     if (state.capabilities.canSearch) add(ReaderMenuAction.Search)
+    if (state.capabilities.canSearch) add(ReaderMenuAction.ReadAloud)
     add(ReaderMenuAction.Bookmarks)
 }
 
@@ -91,6 +105,7 @@ internal fun ReaderTopBar(
     state: ReaderUiState,
     onIntent: (ReaderIntent) -> Unit,
     onBack: () -> Unit,
+    isSpeaking: Boolean,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val menuActions = readerMenuActions(state)
@@ -182,16 +197,21 @@ internal fun ReaderTopBar(
                     ) {
                         menuActions.forEach { action ->
                             DropdownMenuItem(
-                                text = { Text(readerMenuActionLabel(action)) },
+                                text = { Text(readerMenuActionLabel(action, isSpeaking)) },
                                 leadingIcon = {
                                     Icon(
-                                        imageVector = readerMenuActionIcon(action),
+                                        imageVector = readerMenuActionIcon(action, isSpeaking),
                                         contentDescription = null,
                                     )
                                 },
                                 onClick = {
                                     menuExpanded = false
-                                    onIntent(ReaderIntent.OpenPanel(action.panel))
+                                    val panel = action.panel
+                                    if (panel != null) {
+                                        onIntent(ReaderIntent.OpenPanel(panel))
+                                    } else {
+                                        onIntent(ReaderIntent.ReadAloud)
+                                    }
                                 },
                             )
                         }
@@ -255,16 +275,20 @@ internal fun ReaderUiState.progressDescription(): String {
 }
 
 @Composable
-private fun readerMenuActionLabel(action: ReaderMenuAction): String = stringResource(
+private fun readerMenuActionLabel(action: ReaderMenuAction, isSpeaking: Boolean): String = stringResource(
     when (action) {
         ReaderMenuAction.TableOfContents -> R.string.reader_toc
         ReaderMenuAction.Search -> R.string.reader_search_action
+        ReaderMenuAction.ReadAloud ->
+            if (isSpeaking) R.string.reader_stop_reading else R.string.reader_read_aloud
+
         ReaderMenuAction.Bookmarks -> R.string.reader_bookmarks
     },
 )
 
-private fun readerMenuActionIcon(action: ReaderMenuAction): ImageVector = when (action) {
+private fun readerMenuActionIcon(action: ReaderMenuAction, isSpeaking: Boolean): ImageVector = when (action) {
     ReaderMenuAction.TableOfContents -> Icons.AutoMirrored.Filled.MenuBook
     ReaderMenuAction.Search -> Icons.Filled.Search
+    ReaderMenuAction.ReadAloud -> if (isSpeaking) Icons.Filled.Stop else Icons.Filled.PlayArrow
     ReaderMenuAction.Bookmarks -> Icons.Filled.BookmarkBorder
 }

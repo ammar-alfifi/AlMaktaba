@@ -389,6 +389,12 @@ sealed interface ReaderIntent {
     data class SearchQueryChanged(val query: String) : ReaderIntent
     data object SubmitSearch : ReaderIntent
 
+    /** Read the current chapter or page aloud. */
+    data object ReadAloud : ReaderIntent
+
+    /** Stop reading aloud. */
+    data object StopReadingAloud : ReaderIntent
+
     data class SetThemeMode(val mode: ThemeMode) : ReaderIntent
     data class SetFont(val font: ReaderFont) : ReaderIntent
     data class SetFontScale(val scale: Float) : ReaderIntent
@@ -440,6 +446,18 @@ sealed interface ReaderEffect {
      * can show a chooser or refuse a scheme — the ViewModel deliberately cannot.
      */
     data class OpenExternalUrl(val url: String) : ReaderEffect
+
+    /**
+     * Speak [text] aloud.
+     *
+     * A one-shot effect rather than state: the text of a chapter is large, and putting it in the UI
+     * state would mean holding it for as long as the reader is open. The screen owns the platform
+     * `TextToSpeech` engine, which is exactly the kind of thing this layer never touches.
+     */
+    data class Speak(val text: String) : ReaderEffect
+
+    /** Stop speaking, if anything is being spoken. */
+    data object StopSpeaking : ReaderEffect
 }
 
 /** One-shot reader messages, resolved to text by the screen so they are localized at render time. */
@@ -458,6 +476,9 @@ sealed interface ReaderMessage {
 
     data object NoSearchResults : ReaderMessage
     data object SearchUnavailable : ReaderMessage
+
+    /** Read aloud was asked for a document or page that has no text to speak. */
+    data object ReadAloudUnavailable : ReaderMessage
 
     /** Confirmation that the reading settings are back to their defaults. */
     data object SettingsReset : ReaderMessage
