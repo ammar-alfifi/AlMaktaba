@@ -191,35 +191,44 @@ fun ReaderScreen(
                 // presentation gets it — including the seam between two volumes — while the toolbar,
                 // the progress bar and the sheets above stay on the app's own theme.
                 ReaderPaperSurface(state.settings.readerPaper) {
-                    when {
-                        !state.hasPages -> if (state.isPageImages) {
-                            PagedScrollReaderContent(
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            // The surface the gestures act on is also the one node a screen reader
+                            // lands on: its click reveals the controls, its custom actions turn the
+                            // page.
+                            .readerAccessibilityActions(onIntent),
+                    ) {
+                        when {
+                            !state.hasPages -> if (state.isPageImages) {
+                                PagedScrollReaderContent(
+                                    state = state,
+                                    viewModel = viewModel,
+                                    onIntent = onIntent,
+                                )
+                            } else {
+                                ReflowableReaderContent(
+                                    state = state,
+                                    viewModel = viewModel,
+                                    onIntent = onIntent,
+                                )
+                            }
+
+                            state.isPageImages -> PagedReaderContent(
                                 state = state,
                                 viewModel = viewModel,
                                 onIntent = onIntent,
                             )
-                        } else {
-                            ReflowableReaderContent(
+
+                            // Same document, two answers to "how much text is a screenful". The
+                            // paged view measures the chapter and turns it in pages; the scrolling
+                            // one leaves the text in a single column and lets it move.
+                            else -> ReflowablePagedContent(
                                 state = state,
                                 viewModel = viewModel,
                                 onIntent = onIntent,
                             )
                         }
-
-                        state.isPageImages -> PagedReaderContent(
-                            state = state,
-                            viewModel = viewModel,
-                            onIntent = onIntent,
-                        )
-
-                        // Same document, two answers to "how much text is a screenful". The paged
-                        // view measures the chapter and turns it in pages; the scrolling one leaves
-                        // the text in a single column and lets it move.
-                        else -> ReflowablePagedContent(
-                            state = state,
-                            viewModel = viewModel,
-                            onIntent = onIntent,
-                        )
                     }
                 }
             }

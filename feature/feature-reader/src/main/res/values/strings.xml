@@ -25,6 +25,11 @@
     <string name="reader_read_aloud_unavailable">لا يوجد نص لقراءته في هذا الملف.</string>
     <string name="reader_share_quote">مشاركة اقتباس</string>
 
+    <!-- Tap-zone accessibility: the reading surface as a screen reader sees it. -->
+    <string name="cd_previous_page">الصفحة السابقة</string>
+    <string name="cd_next_page">الصفحة التالية</string>
+    <string name="cd_toggle_controls">إظهار أو إخفاء عناصر التحكم</string>
+
     <!-- Table of contents -->
     <string name="reader_no_toc_title">لا يوجد جدول محتويات</string>
     <string name="reader_no_toc_message">هذا الملف لا يتضمن فهرساً. يمكنك التنقل باستخدام شريط التقدم أو الإشارات المرجعية.</string>

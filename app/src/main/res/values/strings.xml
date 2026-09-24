@@ -5,9 +5,9 @@
   else. `values-en/` holds the complete English translation.
 
   Every string here is referenced in code — the app module renders only the chrome the features
-  don't: the launcher destination labels, the cold-open failure notice and the app name. The
-  per-screen vocabulary lives with the screens that render it; `cd_previous_page` and
-  `cd_next_page` are the one exception, kept here awaiting the tap-zone a11y pass.
+  don't: the launcher destination labels, the shortcut labels, the cold-open failure notice and the
+  app name. The per-screen vocabulary lives with the screens that render it, including the reader's
+  tap-zone accessibility labels, which live in `:feature:feature-reader`.
 -->
 <resources>
     <string name="app_name">مكتبتي</string>
@@ -21,8 +21,6 @@
     <string name="app_open_file_failed">تعذّر إضافة هذا الملف إلى المكتبة. الصيغة غير مدعومة أو الملف غير متاح.</string>
 
     <!-- Content descriptions -->
-    <string name="cd_previous_page">الصفحة السابقة</string>
-    <string name="cd_next_page">الصفحة التالية</string>
 
     <!-- Launcher shortcut -->
     <string name="shortcut_search_short">بحث</string>

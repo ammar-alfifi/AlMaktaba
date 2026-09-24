@@ -657,6 +657,8 @@ Stated rather than hidden:
   action rules and the page-breaking arithmetic behind them are pure functions with unit tests, but
   the gestures themselves — tap zones, pinch-zoom, the clamped pan — have no automated coverage:
   they have been exercised by hand on the emulator (see [§6](#6-testing)) and by reading the code.
+  A screen reader is served by a different road now — the reading surface offers the same turns as
+  accessibility actions — but that road, too, has only been reasoned about, not run with TalkBack.
   The same goes for pagination end to end: what it *decides* is tested, what it *looks like* is not.
   Treat the first run on real hardware as the real test.
 - **A page turn crosses chapters and volumes, but only within one family of reader.** The pager holds

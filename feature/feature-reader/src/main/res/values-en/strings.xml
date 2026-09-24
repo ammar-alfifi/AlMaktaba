@@ -24,6 +24,11 @@
     <string name="reader_read_aloud_unavailable">There is no text to read in this file.</string>
     <string name="reader_share_quote">Share a quote</string>
 
+    <!-- Tap-zone accessibility: the reading surface as a screen reader sees it. -->
+    <string name="cd_previous_page">Previous page</string>
+    <string name="cd_next_page">Next page</string>
+    <string name="cd_toggle_controls">Show or hide the controls</string>
+
     <!-- Table of contents -->
     <string name="reader_no_toc_title">No table of contents</string>
     <string name="reader_no_toc_message">This file does not include an outline. Use the progress bar or bookmarks to navigate instead.</string>

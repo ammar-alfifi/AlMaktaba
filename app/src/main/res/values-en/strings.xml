@@ -11,8 +11,6 @@
     <string name="app_open_file_failed">This file could not be added to the library. Its format is unsupported or it is unavailable.</string>
 
     <!-- Content descriptions -->
-    <string name="cd_previous_page">Previous page</string>
-    <string name="cd_next_page">Next page</string>
 
     <!-- Launcher shortcut -->
     <string name="shortcut_search_short">Search</string>
