@@ -5,6 +5,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -253,9 +255,9 @@ private fun BookmarksPanel(
  * stand out, and a bookmark with neither is the plain bookmark the toolbar button places. Choosing
  * the selected colour again clears it.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BookmarkEditDialog(
-    bookmark: Bookmark,
+private fun BookmarkEditDialog(    bookmark: Bookmark,
     onSave: (Bookmark) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -278,7 +280,13 @@ private fun BookmarkEditDialog(
                     text = stringResource(R.string.reader_bookmark_colour_label),
                     style = MaterialTheme.typography.labelLarge,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                // A FlowRow rather than a Row: four chips do not fit across a phone's dialog, and
+                // a Row does not wrap — it clips, which is how the fourth colour became
+                // unreachable. Wrapping costs nothing here and keeps every colour one tap away.
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.Small),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.Small),
+                ) {
                     BookmarkColor.entries.forEach { option ->
                         FilterChip(
                             selected = colour == option,

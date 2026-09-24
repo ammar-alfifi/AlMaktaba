@@ -168,7 +168,7 @@ class LibraryViewModel @Inject constructor(
                 // Asked off the main thread, and asked outside the reducer below: `hasPermission`
                 // is a call into the system, and a state reducer that performs I/O is a reducer that
                 // can stall the frame that applies it — or run twice under a compare-and-set retry.
-                .map { folders -> folders to folders.filterNot { isUnavailable(it) }.map { it.folder.id }.toSet() }
+                .map { folders -> folders to unavailableFolderIds(folders, ::isUnavailable) }
                 .flowOn(dispatchers.io)
                 .collect { (folders, unavailable) ->
                     setState {
@@ -186,7 +186,6 @@ class LibraryViewModel @Inject constructor(
 
     private fun isUnavailable(summary: FolderSummary): Boolean =
         !folderScanner.hasPermission(summary.folder.uri)
-
     override fun onIntent(intent: LibraryIntent) {
         when (intent) {
             is LibraryIntent.ImportPicked -> importPicked(intent.candidates)
@@ -431,3 +430,15 @@ private data class LibraryCriteria(
     val formats: Set<BookFormat>,
     val folderId: Long?,
 )
+
+/**
+ * The ids of the folders whose permission has lapsed.
+ *
+ * A pure function so the one thing that can go wrong here — marking the wrong set — is pinned by a
+ * test rather than by inspecting a chip: `filterNot` in place of `filter` below marked every
+ * *available* folder as unavailable, and the shelf believed it on every launch.
+ */
+internal fun unavailableFolderIds(
+    folders: List<FolderSummary>,
+    isUnavailable: (FolderSummary) -> Boolean,
+): Set<Long> = folders.filter(isUnavailable).map { it.folder.id }.toSet()
