@@ -33,6 +33,15 @@ data class AppUiState(
      * configuration change. `null` means nothing is pending.
      */
     val externalBookId: Long? = null,
+
+    /**
+     * True when a launcher shortcut asked for the search screen, awaiting navigation.
+     *
+     * The same shape as [externalBookId] and for the same reason: the request arrives on the
+     * Activity, which has no `NavController`, so it is held here until the host that does own one
+     * consumes it.
+     */
+    val openSearchRequested: Boolean = false,
 )
 
 /** Every action the app-level layer can be asked to perform. */
@@ -46,6 +55,12 @@ sealed interface AppIntent {
 
     /** The pending external book has been navigated to and can be forgotten. */
     data object ExternalBookConsumed : AppIntent
+
+    /** A launcher shortcut asked for the search screen. */
+    data object OpenSearchRequested : AppIntent
+
+    /** The pending search request has been navigated to and can be forgotten. */
+    data object SearchRequestConsumed : AppIntent
 }
 
 /** One-shot app-level events. */
@@ -80,6 +95,8 @@ class AppViewModel @Inject constructor(
         when (intent) {
             is AppIntent.OpenExternalFile -> launch { openExternal(intent.candidate) }
             AppIntent.ExternalBookConsumed -> setState { copy(externalBookId = null) }
+            AppIntent.OpenSearchRequested -> setState { copy(openSearchRequested = true) }
+            AppIntent.SearchRequestConsumed -> setState { copy(openSearchRequested = false) }
         }
     }
 

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Static launcher shortcuts.
+
+  "Search" is a jumps-to-a-place shortcut, so it is a plain intent carrying the app's own action;
+  the Activity's intent filter resolves it, which is what lets the shortcut avoid naming a package —
+  a hardcoded `com.mylibrary` would be wrong in the debug build, whose application id ends in
+  `.debug`.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="search"
+        android:shortcutLongLabel="@string/shortcut_search_long"
+        android:shortcutShortLabel="@string/shortcut_search_short">
+        <intent android:action="com.mylibrary.action.OPEN_SEARCH" />
+    </shortcut>
+</shortcuts>

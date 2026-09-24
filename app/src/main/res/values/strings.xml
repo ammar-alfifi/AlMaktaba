@@ -23,4 +23,8 @@
     <!-- Content descriptions -->
     <string name="cd_previous_page">الصفحة السابقة</string>
     <string name="cd_next_page">الصفحة التالية</string>
+
+    <!-- Launcher shortcut -->
+    <string name="shortcut_search_short">بحث</string>
+    <string name="shortcut_search_long">ابحث في مكتبتك</string>
 </resources>

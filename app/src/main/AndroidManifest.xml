@@ -66,6 +66,20 @@
                 <data android:mimeType="application/epub+zip" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+
+            <!--
+              The launcher shortcut's own action. An implicit intent with a custom action, resolved
+              through this filter so the shortcut names no package — which the debug build's `.debug`
+              application id would make wrong.
+            -->
+            <intent-filter>
+                <action android:name="com.mylibrary.action.OPEN_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
     </application>
 

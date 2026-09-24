@@ -13,4 +13,8 @@
     <!-- Content descriptions -->
     <string name="cd_previous_page">Previous page</string>
     <string name="cd_next_page">Next page</string>
+
+    <!-- Launcher shortcut -->
+    <string name="shortcut_search_short">Search</string>
+    <string name="shortcut_search_long">Search your library</string>
 </resources>

@@ -107,6 +107,7 @@ fun MyLibraryApp(viewModel: AppViewModel = hiltViewModel()) {
                     MyLibraryNavHost(
                         viewModel = viewModel,
                         externalBookId = state.externalBookId,
+                        openSearchRequested = state.openSearchRequested,
                     )
                 } else {
                     ColorSetupRoute(onDone = {})
@@ -153,6 +154,7 @@ private fun MyLibraryLocalized(language: AppLanguage, content: @Composable () ->
 private fun MyLibraryNavHost(
     viewModel: AppViewModel,
     externalBookId: Long?,
+    openSearchRequested: Boolean,
     navController: NavHostController = rememberNavController(),
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -167,6 +169,15 @@ private fun MyLibraryNavHost(
                 launchSingleTop = true
             }
             viewModel.onIntent(AppIntent.ExternalBookConsumed)
+        }
+    }
+
+    // A launcher shortcut's search request, consumed the same way a handed-over book is: the host
+    // owns the NavController, so it navigates and then tells the ViewModel the request is done.
+    LaunchedEffect(openSearchRequested) {
+        if (openSearchRequested) {
+            navController.navigateTopLevel(Routes.SEARCH)
+            viewModel.onIntent(AppIntent.SearchRequestConsumed)
         }
     }
 

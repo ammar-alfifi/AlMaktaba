@@ -59,6 +59,13 @@ class MainActivity : ComponentActivity() {
      * response to an intent this app did not advertise.
      */
     private fun handleIntent(intent: Intent?) {
+        // A launcher shortcut: the app is being asked to *go somewhere* rather than to open a file,
+        // so it is answered before the document road and carries no URI.
+        if (intent?.action == ACTION_OPEN_SEARCH) {
+            viewModel.onIntent(AppIntent.OpenSearchRequested)
+            return
+        }
+
         val uri = when (intent?.action) {
             Intent.ACTION_VIEW -> intent.data
             // The typed variant via compat, because the platform's `getParcelableExtra(String)`
@@ -75,5 +82,16 @@ class MainActivity : ComponentActivity() {
         // provider cannot even name yields null, and there is genuinely nothing to open.
         val candidate = toImportCandidate(uri) ?: return
         viewModel.onIntent(AppIntent.OpenExternalFile(candidate))
+    }
+
+    companion object {
+        /**
+         * The action the "Search" launcher shortcut carries.
+         *
+         * A custom action rather than an extra, so the shortcut resolves through this Activity's
+         * own intent filter and needs no hardcoded package name — which would be wrong in the debug
+         * build, whose application id carries a `.debug` suffix.
+         */
+        const val ACTION_OPEN_SEARCH = "com.mylibrary.action.OPEN_SEARCH"
     }
 }
