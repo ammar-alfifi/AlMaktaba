@@ -257,7 +257,8 @@ private fun BookmarksPanel(
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BookmarkEditDialog(    bookmark: Bookmark,
+private fun BookmarkEditDialog(
+    bookmark: Bookmark,
     onSave: (Bookmark) -> Unit,
     onDismiss: () -> Unit,
 ) {

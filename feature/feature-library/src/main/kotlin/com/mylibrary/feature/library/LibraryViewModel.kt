@@ -186,6 +186,7 @@ class LibraryViewModel @Inject constructor(
 
     private fun isUnavailable(summary: FolderSummary): Boolean =
         !folderScanner.hasPermission(summary.folder.uri)
+
     override fun onIntent(intent: LibraryIntent) {
         when (intent) {
             is LibraryIntent.ImportPicked -> importPicked(intent.candidates)
@@ -435,8 +436,9 @@ private data class LibraryCriteria(
  * The ids of the folders whose permission has lapsed.
  *
  * A pure function so the one thing that can go wrong here — marking the wrong set — is pinned by a
- * test rather than by inspecting a chip: `filterNot` in place of `filter` below marked every
- * *available* folder as unavailable, and the shelf believed it on every launch.
+ * test rather than by inspecting a chip. The call site once read `filterNot { isUnavailable(it) }`,
+ * which collected the *available* folders into this set, so the shelf marked every folder that had a
+ * live grant as unavailable on every launch.
  */
 internal fun unavailableFolderIds(
     folders: List<FolderSummary>,
