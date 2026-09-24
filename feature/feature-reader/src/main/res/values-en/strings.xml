@@ -22,6 +22,7 @@
     <string name="reader_read_aloud">Read aloud</string>
     <string name="reader_stop_reading">Stop reading</string>
     <string name="reader_read_aloud_unavailable">There is no text to read in this file.</string>
+    <string name="reader_share_quote">Share a quote</string>
 
     <!-- Table of contents -->
     <string name="reader_no_toc_title">No table of contents</string>

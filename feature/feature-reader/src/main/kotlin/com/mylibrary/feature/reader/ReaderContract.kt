@@ -395,6 +395,9 @@ sealed interface ReaderIntent {
     /** Stop reading aloud. */
     data object StopReadingAloud : ReaderIntent
 
+    /** Share a short quote from the current position. */
+    data object ShareQuote : ReaderIntent
+
     data class SetThemeMode(val mode: ThemeMode) : ReaderIntent
     data class SetFont(val font: ReaderFont) : ReaderIntent
     data class SetFontScale(val scale: Float) : ReaderIntent
@@ -458,6 +461,15 @@ sealed interface ReaderEffect {
 
     /** Stop speaking, if anything is being spoken. */
     data object StopSpeaking : ReaderEffect
+
+    /**
+     * Hand [text] to the platform's share sheet.
+     *
+     * An effect for the same reason a link is: showing a chooser is a platform action the ViewModel
+     * cannot perform, and its content — a title, a position and an excerpt — is assembled where the
+     * document is open.
+     */
+    data class ShareText(val text: String) : ReaderEffect
 }
 
 /** One-shot reader messages, resolved to text by the screen so they are localized at render time. */

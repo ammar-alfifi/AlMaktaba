@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.DropdownMenu
@@ -54,6 +55,9 @@ enum class ReaderMenuAction(val panel: ReaderPanel?) {
     /** Read the current chapter or page aloud, or stop if it is already speaking. */
     ReadAloud(null),
 
+    /** Share a quote from the current position. */
+    Share(null),
+
     Bookmarks(ReaderPanel.BOOKMARKS),
 }
 
@@ -70,6 +74,7 @@ enum class ReaderMenuAction(val panel: ReaderPanel?) {
  *    nothing to find in them.
  *  - **Read aloud** only when there is text to speak — the same condition as search, because a text
  *    layer a search can read is a text layer a voice can read. A comic is silent.
+ *  - **Share** only when there is text to quote, for the same reason.
  *  - **Bookmarks** always: every format can remember a position, including a page image.
  *
  * The bookmark *toggle* is not here: it is a stateful control that lives in the toolbar itself on
@@ -79,6 +84,7 @@ fun readerMenuActions(state: ReaderUiState): List<ReaderMenuAction> = buildList 
     if (state.outline.isNotEmpty()) add(ReaderMenuAction.TableOfContents)
     if (state.capabilities.canSearch) add(ReaderMenuAction.Search)
     if (state.capabilities.canSearch) add(ReaderMenuAction.ReadAloud)
+    if (state.capabilities.canSearch) add(ReaderMenuAction.Share)
     add(ReaderMenuAction.Bookmarks)
 }
 
@@ -206,11 +212,20 @@ internal fun ReaderTopBar(
                                 },
                                 onClick = {
                                     menuExpanded = false
-                                    val panel = action.panel
-                                    if (panel != null) {
-                                        onIntent(ReaderIntent.OpenPanel(panel))
-                                    } else {
-                                        onIntent(ReaderIntent.ReadAloud)
+                                    when (action) {
+                                        ReaderMenuAction.ReadAloud -> onIntent(
+                                            if (isSpeaking) {
+                                                ReaderIntent.StopReadingAloud
+                                            } else {
+                                                ReaderIntent.ReadAloud
+                                            },
+                                        )
+
+                                        ReaderMenuAction.Share -> onIntent(ReaderIntent.ShareQuote)
+
+                                        else -> action.panel?.let {
+                                            onIntent(ReaderIntent.OpenPanel(it))
+                                        }
                                     }
                                 },
                             )
@@ -282,6 +297,7 @@ private fun readerMenuActionLabel(action: ReaderMenuAction, isSpeaking: Boolean)
         ReaderMenuAction.ReadAloud ->
             if (isSpeaking) R.string.reader_stop_reading else R.string.reader_read_aloud
 
+        ReaderMenuAction.Share -> R.string.reader_share_quote
         ReaderMenuAction.Bookmarks -> R.string.reader_bookmarks
     },
 )
@@ -290,5 +306,6 @@ private fun readerMenuActionIcon(action: ReaderMenuAction, isSpeaking: Boolean):
     ReaderMenuAction.TableOfContents -> Icons.AutoMirrored.Filled.MenuBook
     ReaderMenuAction.Search -> Icons.Filled.Search
     ReaderMenuAction.ReadAloud -> if (isSpeaking) Icons.Filled.Stop else Icons.Filled.PlayArrow
+    ReaderMenuAction.Share -> Icons.Filled.Share
     ReaderMenuAction.Bookmarks -> Icons.Filled.BookmarkBorder
 }

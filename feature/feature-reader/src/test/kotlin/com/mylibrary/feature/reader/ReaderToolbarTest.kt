@@ -36,6 +36,7 @@ class ReaderToolbarTest {
                 ReaderMenuAction.TableOfContents,
                 ReaderMenuAction.Search,
                 ReaderMenuAction.ReadAloud,
+                ReaderMenuAction.Share,
                 ReaderMenuAction.Bookmarks,
             ),
             actions,
@@ -50,7 +51,12 @@ class ReaderToolbarTest {
         )
 
         assertEquals(
-            listOf(ReaderMenuAction.Search, ReaderMenuAction.ReadAloud, ReaderMenuAction.Bookmarks),
+            listOf(
+                ReaderMenuAction.Search,
+                ReaderMenuAction.ReadAloud,
+                ReaderMenuAction.Share,
+                ReaderMenuAction.Bookmarks,
+            ),
             actions,
         )
     }
@@ -67,6 +73,7 @@ class ReaderToolbarTest {
                 ReaderMenuAction.TableOfContents,
                 ReaderMenuAction.Search,
                 ReaderMenuAction.ReadAloud,
+                ReaderMenuAction.Share,
                 ReaderMenuAction.Bookmarks,
             ),
             actions,
@@ -81,7 +88,12 @@ class ReaderToolbarTest {
         )
 
         assertEquals(
-            listOf(ReaderMenuAction.Search, ReaderMenuAction.ReadAloud, ReaderMenuAction.Bookmarks),
+            listOf(
+                ReaderMenuAction.Search,
+                ReaderMenuAction.ReadAloud,
+                ReaderMenuAction.Share,
+                ReaderMenuAction.Bookmarks,
+            ),
             actions,
         )
     }
@@ -119,7 +131,12 @@ class ReaderToolbarTest {
         )
 
         assertEquals(
-            listOf(ReaderMenuAction.Search, ReaderMenuAction.ReadAloud, ReaderMenuAction.Bookmarks),
+            listOf(
+                ReaderMenuAction.Search,
+                ReaderMenuAction.ReadAloud,
+                ReaderMenuAction.Share,
+                ReaderMenuAction.Bookmarks,
+            ),
             actions,
         )
     }
@@ -133,6 +150,7 @@ class ReaderToolbarTest {
         assertEquals(ReaderPanel.TABLE_OF_CONTENTS, ReaderMenuAction.TableOfContents.panel)
         assertEquals(ReaderPanel.SEARCH, ReaderMenuAction.Search.panel)
         assertNull(ReaderMenuAction.ReadAloud.panel)
+        assertNull(ReaderMenuAction.Share.panel)
         assertEquals(ReaderPanel.BOOKMARKS, ReaderMenuAction.Bookmarks.panel)
     }
 

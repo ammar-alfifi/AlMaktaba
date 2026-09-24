@@ -1,6 +1,7 @@
 package com.mylibrary.feature.reader
 
 import android.content.Intent
+import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -82,6 +83,8 @@ fun ReaderRoute(
 
             is ReaderEffect.Speak -> speaker.speak(effect.text)
             ReaderEffect.StopSpeaking -> speaker.stop()
+
+            is ReaderEffect.ShareText -> context.shareText(effect.text)
 
             is ReaderEffect.OpenExternalUrl -> {
                 // Opening a URL needs a platform context, which is exactly why the ViewModel emits
@@ -385,6 +388,22 @@ private fun KeepScreenOn(enabled: Boolean) {
     DisposableEffect(enabled) {
         view.keepScreenOn = enabled
         onDispose { view.keepScreenOn = false }
+    }
+}
+
+/**
+ * Hands a quote to the platform's share sheet.
+ *
+ * Wrapped in `runCatching` for the same reason a followed link is: a device with no activity to
+ * receive the intent must not take the reader down with it.
+ */
+private fun Context.shareText(text: String) {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    runCatching {
+        startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }
 

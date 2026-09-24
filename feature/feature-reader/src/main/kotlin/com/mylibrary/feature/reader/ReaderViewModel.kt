@@ -575,6 +575,7 @@ class ReaderViewModel @Inject constructor(
 
             ReaderIntent.ReadAloud -> launch { readAloud() }
             ReaderIntent.StopReadingAloud -> launch { sendEffect(ReaderEffect.StopSpeaking) }
+            ReaderIntent.ShareQuote -> launch { shareQuote() }
 
             is ReaderIntent.SetThemeMode -> launch { updateSettings.setThemeMode(intent.mode) }
             is ReaderIntent.SetFont -> launch { updateSettings.setReaderFont(intent.font) }
@@ -1207,6 +1208,34 @@ class ReaderViewModel @Inject constructor(
     }
 
     /**
+     * Shares a short quote from where the reader is.
+     *
+     * The quote is the text from the reader's own position, capped so a share never carries a whole
+     * chapter — a share sheet is for a sentence or two — and prefixed with the book and the position,
+     * because a quote with neither means nothing to whoever receives it.
+     */
+    private suspend fun shareQuote() {
+        val book = currentState.book ?: return
+        val open = document
+
+        val excerpt = when (open) {
+            is ReflowableDocument -> open.chapterText(currentState.currentUnit)
+                .drop(currentState.reflowOffset)
+
+            is PagedDocument -> open.pageText(currentState.currentUnit).orEmpty()
+            else -> ""
+        }.replace(SHARE_WHITESPACE, " ").trim().take(SHARE_EXCERPT_LIMIT)
+
+        val text = buildString {
+            append(book.title)
+            book.author?.takeIf { it.isNotBlank() }?.let { append(" — ").append(it) }
+            currentState.positionLabel?.takeIf { it.isNotBlank() }?.let { append('\n').append(it) }
+            if (excerpt.isNotBlank()) append("\n\n«").append(excerpt).append("»")
+        }
+        sendEffect(ReaderEffect.ShareText(text))
+    }
+
+    /**
      * Releases every open document and everything cached from them.
      *
      * This runs when the reader leaves the back stack. Without it a pdfium document and its native
@@ -1271,5 +1300,11 @@ class ReaderViewModel @Inject constructor(
 
         private const val PROGRESS_SAVE_DEBOUNCE_MS = 600L
         private const val EXCERPT_LENGTH = 160
+
+        /** How long a shared quote may be, in characters. A share sheet is for a sentence or two. */
+        private const val SHARE_EXCERPT_LIMIT = 280
     }
 }
+
+/** Collapses runs of whitespace so a shared quote reads as prose rather than as laid-out text. */
+private val SHARE_WHITESPACE = Regex("\\s+")

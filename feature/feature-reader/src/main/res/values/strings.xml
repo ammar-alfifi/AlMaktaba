@@ -23,6 +23,7 @@
     <string name="reader_read_aloud">القراءة الصوتية</string>
     <string name="reader_stop_reading">إيقاف القراءة</string>
     <string name="reader_read_aloud_unavailable">لا يوجد نص لقراءته في هذا الملف.</string>
+    <string name="reader_share_quote">مشاركة اقتباس</string>
 
     <!-- Table of contents -->
     <string name="reader_no_toc_title">لا يوجد جدول محتويات</string>
