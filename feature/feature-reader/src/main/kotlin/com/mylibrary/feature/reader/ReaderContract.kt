@@ -410,6 +410,9 @@ sealed interface ReaderIntent {
     data class SetHapticsEnabled(val enabled: Boolean) : ReaderIntent
     data class SetBubbleZoom(val enabled: Boolean) : ReaderIntent
 
+    /** Saves an edit to a bookmark's note or highlight colour, made from the bookmarks panel. */
+    data class SaveBookmark(val bookmark: Bookmark) : ReaderIntent
+
     /** Put the reading settings back to their defaults, after the reader has confirmed it. */
     data object RequestResetSettings : ReaderIntent
 
@@ -449,6 +452,9 @@ sealed interface ReaderMessage {
      * undo — re-adding needs the whole object, not just the id it was deleted by.
      */
     data class BookmarkDeleted(val bookmark: Bookmark) : ReaderMessage
+
+    /** An edit to a bookmark's note or colour was saved. */
+    data object BookmarkSaved : ReaderMessage
 
     data object NoSearchResults : ReaderMessage
     data object SearchUnavailable : ReaderMessage

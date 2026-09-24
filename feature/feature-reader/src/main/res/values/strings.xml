@@ -11,6 +11,15 @@
     <string name="reader_bookmark_added">أُضيفت إشارة مرجعية</string>
     <string name="reader_bookmark_removed">أُزيلت الإشارة المرجعية</string>
     <string name="reader_bookmark_deleted">حُذفت الإشارة المرجعية</string>
+    <string name="reader_bookmark_saved">تم حفظ الإشارة المرجعية</string>
+    <string name="reader_bookmark_edit">تحرير</string>
+    <string name="reader_bookmark_edit_title">تعديل الإشارة المرجعية</string>
+    <string name="reader_bookmark_note_label">ملاحظة</string>
+    <string name="reader_bookmark_colour_label">لون التظليل</string>
+    <string name="reader_bookmark_colour_yellow">أصفر</string>
+    <string name="reader_bookmark_colour_green">أخضر</string>
+    <string name="reader_bookmark_colour_blue">أزرق</string>
+    <string name="reader_bookmark_colour_pink">وردي</string>
 
     <!-- Table of contents -->
     <string name="reader_no_toc_title">لا يوجد جدول محتويات</string>

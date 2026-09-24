@@ -10,6 +10,15 @@
     <string name="reader_bookmark_added">Bookmark added</string>
     <string name="reader_bookmark_removed">Bookmark removed</string>
     <string name="reader_bookmark_deleted">Bookmark deleted</string>
+    <string name="reader_bookmark_saved">Bookmark saved</string>
+    <string name="reader_bookmark_edit">Edit</string>
+    <string name="reader_bookmark_edit_title">Edit bookmark</string>
+    <string name="reader_bookmark_note_label">Note</string>
+    <string name="reader_bookmark_colour_label">Highlight colour</string>
+    <string name="reader_bookmark_colour_yellow">Yellow</string>
+    <string name="reader_bookmark_colour_green">Green</string>
+    <string name="reader_bookmark_colour_blue">Blue</string>
+    <string name="reader_bookmark_colour_pink">Pink</string>
 
     <!-- Table of contents -->
     <string name="reader_no_toc_title">No table of contents</string>

@@ -15,7 +15,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -56,6 +59,7 @@ import com.mylibrary.core.domain.model.ReaderPaper
 import com.mylibrary.core.domain.model.ProgressScope
 import com.mylibrary.core.domain.model.ReadingDirection
 import com.mylibrary.core.domain.model.SearchHit
+import com.mylibrary.core.domain.model.Bookmark
 import com.mylibrary.core.domain.model.TextAlignment
 import com.mylibrary.core.domain.model.ThemeMode
 import com.mylibrary.core.domain.model.TocEntry
@@ -96,6 +100,7 @@ fun ReaderPanelSheet(
                 bookmarks = state.bookmarks,
                 onBookmarkClick = { onIntent(ReaderIntent.JumpTo(it.locator)) },
                 onDelete = { onIntent(ReaderIntent.DeleteBookmark(it)) },
+                onSave = { onIntent(ReaderIntent.SaveBookmark(it)) },
             )
 
             ReaderPanel.SETTINGS -> ReaderSettingsPanel(
@@ -164,9 +169,10 @@ private fun List<TocEntry>.flatten(): List<TocEntry> = flatMap { entry ->
 
 @Composable
 private fun BookmarksPanel(
-    bookmarks: List<com.mylibrary.core.domain.model.Bookmark>,
-    onBookmarkClick: (com.mylibrary.core.domain.model.Bookmark) -> Unit,
+    bookmarks: List<Bookmark>,
+    onBookmarkClick: (Bookmark) -> Unit,
     onDelete: (Long) -> Unit,
+    onSave: (Bookmark) -> Unit,
 ) {
     if (bookmarks.isEmpty()) {
         EmptyState(
@@ -178,9 +184,23 @@ private fun BookmarksPanel(
         return
     }
 
+    // Whose note or colour is being edited. Local to the panel rather than in the reader's state: an
+    // editor dismissed by a back gesture must not leave a half-finished edit behind it.
+    var editing by remember { mutableStateOf<Bookmark?>(null) }
+
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
         items(items = bookmarks, key = { it.id }) { bookmark ->
+            val highlight = BookmarkColor.of(bookmark.colorArgb)
             ListItem(
+                leadingContent = highlight?.let { colour ->
+                    {
+                        Icon(
+                            imageVector = Icons.Filled.Bookmark,
+                            contentDescription = null,
+                            tint = Color(colour.argb),
+                        )
+                    }
+                },
                 headlineContent = {
                     Text(bookmark.label ?: stringResource(R.string.reader_bookmark))
                 },
@@ -191,11 +211,19 @@ private fun BookmarksPanel(
                     }
                 },
                 trailingContent = {
-                    IconButton(onClick = { onDelete(bookmark.id) }) {
-                        Icon(
-                            imageVector = Icons.Filled.Delete,
-                            contentDescription = stringResource(com.mylibrary.core.ui.R.string.ui_delete),
-                        )
+                    Row {
+                        IconButton(onClick = { editing = bookmark }) {
+                            Icon(
+                                imageVector = Icons.Filled.Edit,
+                                contentDescription = stringResource(R.string.reader_bookmark_edit),
+                            )
+                        }
+                        IconButton(onClick = { onDelete(bookmark.id) }) {
+                            Icon(
+                                imageVector = Icons.Filled.Delete,
+                                contentDescription = stringResource(com.mylibrary.core.ui.R.string.ui_delete),
+                            )
+                        }
                     }
                 },
                 modifier = Modifier
@@ -204,7 +232,103 @@ private fun BookmarksPanel(
             )
         }
     }
+
+    editing?.let { bookmark ->
+        BookmarkEditDialog(
+            bookmark = bookmark,
+            onSave = { updated ->
+                onSave(updated)
+                editing = null
+            },
+            onDismiss = { editing = null },
+        )
+    }
 }
+
+/**
+ * The editor for a bookmark's note and highlight colour.
+ *
+ * A highlight is a bookmark with a colour, so this edits one thing rather than creating a second
+ * kind of annotation beside it: the note is what the reader wrote, the colour is how they want it to
+ * stand out, and a bookmark with neither is the plain bookmark the toolbar button places. Choosing
+ * the selected colour again clears it.
+ */
+@Composable
+private fun BookmarkEditDialog(
+    bookmark: Bookmark,
+    onSave: (Bookmark) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var note by remember(bookmark.id) { mutableStateOf(bookmark.note.orEmpty()) }
+    var colour by remember(bookmark.id) { mutableStateOf(BookmarkColor.of(bookmark.colorArgb)) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.reader_bookmark_edit_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { note = it },
+                    label = { Text(stringResource(R.string.reader_bookmark_note_label)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                )
+                Text(
+                    text = stringResource(R.string.reader_bookmark_colour_label),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Small)) {
+                    BookmarkColor.entries.forEach { option ->
+                        FilterChip(
+                            selected = colour == option,
+                            onClick = { colour = if (colour == option) null else option },
+                            label = { Text(bookmarkColorLabel(option)) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Filled.Circle,
+                                    contentDescription = null,
+                                    tint = Color(option.argb),
+                                )
+                            },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onSave(
+                        bookmark.copy(
+                            // A note of only spaces is no note; storing it would put a blank line on
+                            // the card and make "has a note" lie.
+                            note = note.trim().ifEmpty { null },
+                            colorArgb = colour?.argb,
+                        ),
+                    )
+                },
+            ) {
+                Text(stringResource(com.mylibrary.core.ui.R.string.ui_ok))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(com.mylibrary.core.ui.R.string.ui_cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun bookmarkColorLabel(colour: BookmarkColor): String = stringResource(
+    when (colour) {
+        BookmarkColor.YELLOW -> R.string.reader_bookmark_colour_yellow
+        BookmarkColor.GREEN -> R.string.reader_bookmark_colour_green
+        BookmarkColor.BLUE -> R.string.reader_bookmark_colour_blue
+        BookmarkColor.PINK -> R.string.reader_bookmark_colour_pink
+    },
+)
 
 /**
  * Which blocks of reading settings the current presentation actually honours.

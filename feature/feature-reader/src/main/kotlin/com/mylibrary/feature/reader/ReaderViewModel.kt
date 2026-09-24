@@ -561,6 +561,11 @@ class ReaderViewModel @Inject constructor(
                 bookmarkRepository.addBookmark(intent.bookmark)
             }
 
+            is ReaderIntent.SaveBookmark -> launch {
+                bookmarkRepository.updateBookmark(intent.bookmark)
+                sendEffect(ReaderEffect.ShowMessage(ReaderMessage.BookmarkSaved))
+            }
+
             is ReaderIntent.FollowLink -> followLink(intent.href)
             ReaderIntent.ReturnFromLink -> returnFromLink()
             ReaderIntent.AnchorReached -> setState { copy(pendingAnchor = null) }

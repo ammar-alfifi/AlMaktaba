@@ -130,6 +130,10 @@
 | إعدادات القراءة | `reader_settings` | بند القائمة: فتح إعدادات القراءة | إعدادات القراءة | |
 | أُضيفت إشارة مرجعية / أُزيلت الإشارة المرجعية | `reader_bookmark_added` / `reader_bookmark_removed` | تأكيد تبديل زر الإشارة (إضافة/إزالة) | (نفسه) | |
 | حُذفت الإشارة المرجعية | `reader_bookmark_deleted` | تأكيد حذف إشارة من قائمتها | (نفسه) | |
+| تم حفظ الإشارة المرجعية | `reader_bookmark_saved` | تأكيد حفظ تعديل إشارة (ملاحظة/لون) | (نفسه) | |
+| تحرير / تعديل الإشارة المرجعية | `reader_bookmark_edit` / `reader_bookmark_edit_title` | زر تحرير إشارة وعنوان نافذة تعديلها | (نفسه) | |
+| ملاحظة / لون التظليل | `reader_bookmark_note_label` / `reader_bookmark_colour_label` | حقلا نافذة تعديل الإشارة | (نفسه) | |
+| أصفر / أخضر / أزرق / وردي | `reader_bookmark_colour_yellow` … `reader_bookmark_colour_pink` | ألوان التظليل الأربعة | (نفسه) | |
 
 ## 8. القارئ — جدول المحتويات والإشارات
 

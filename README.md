@@ -387,7 +387,7 @@ the book in words a line above it.
 
 ## 6. Testing
 
-**627 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
+**629 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
 
 | Module | Tests | Covers |
 |---|---:|---|
@@ -398,7 +398,7 @@ the book in words a line above it.
 | `core-common` | 30 | natural sort key, file-name parsing, byte formatting, result combinators |
 | `format-archive` | 29 | natural page ordering, junk-entry filtering, container sniffing, sample-size maths |
 | `feature-search` | 20 | snippet offsets, result grouping, query history |
-| `core-data` | 46 | **real SQLite**: every sort order, `LIKE … ESCAPE`, cascade deletes, upserts, folders, and **the version 1 → 3 migration against a real version 1 database** (including that the new search index cascades away with its book). Also **the settings store's history**: that an upgrade is not sent through the first-run screen, that a reader who had turned dynamic colour *off* is not repainted with their wallpaper, that an unknown colour name — or page paper — degrades rather than throws, and that **the persisted search history** comes back in order and is not cut in half by a query containing the characters a naive delimiter would use. And **the full-text index**: literal `%`/`_` matching, per-book limits, and that a snippet's highlight offsets point at the match inside the collapsed whitespace it is shown in |
+| `core-data` | 48 | **real SQLite**: every sort order, `LIKE … ESCAPE`, cascade deletes, upserts, folders, and **the version 1 → 3 migration against a real version 1 database** (including that the new search index cascades away with its book). Also **bookmarks' notes and highlight colours** surviving a write, a read and a clear. Also **the settings store's history**: that an upgrade is not sent through the first-run screen, that a reader who had turned dynamic colour *off* is not repainted with their wallpaper, that an unknown colour name — or page paper — degrades rather than throws, and that **the persisted search history** comes back in order and is not cut in half by a query containing the characters a naive delimiter would use. And **the full-text index**: literal `%`/`_` matching, per-book limits, and that a snippet's highlight offsets point at the match inside the collapsed whitespace it is shown in |
 | `format-pdf` | 15 | aspect fitting, outline nesting, malformed bookmark trees |
 | `app` | 8 | **cold start**: real Hilt graph + `MainActivity` lifecycle, and the language override |
 | `feature-settings` | 12 | intent → settings mapping on both paths, and **the line between the two resets** — that the screen's puts back the theme, the colour and the language and touches nothing else, compared as a whole object so a field added later cannot slip through, and that the reader's is the exact complement |
@@ -640,8 +640,10 @@ Stated rather than hidden:
   library is searched — there is no cap. It is still off by default because that first search has to
   open every book to index it. A book whose text changes (a re-import) keeps its old index until the
   next pass; there is no invalidation-on-change yet.
-- **Highlights are modelled and stored** (`Bookmark` carries `colorArgb`) but the reader exposes
-  bookmarking only, not text selection.
+- **Bookmarks can carry a note and a highlight colour**, edited from the bookmarks panel; a highlight
+  is a *coloured bookmark*, not a range of selected text. Free-text selection over reflowed text —
+  selecting a run and highlighting that run — is not implemented: the model stores a position, not a
+  range, and adding one is a schema change of its own.
 - **The bubble detector is a heuristic, not image analysis.** It floods the light region under the
   double-tap and accepts it only if it is enclosed, small enough to be worth framing, and dense
   enough to be a shape. Every way that can fail returns "no region" and falls back to a plain zoom

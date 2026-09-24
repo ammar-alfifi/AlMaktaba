@@ -388,6 +388,7 @@ private fun readerMessageText(message: ReaderMessage): String = stringResource(
         ReaderMessage.BookmarkAdded -> R.string.reader_bookmark_added
         ReaderMessage.BookmarkRemoved -> R.string.reader_bookmark_removed
         is ReaderMessage.BookmarkDeleted -> R.string.reader_bookmark_deleted
+        ReaderMessage.BookmarkSaved -> R.string.reader_bookmark_saved
         ReaderMessage.NoSearchResults -> R.string.reader_no_results
         ReaderMessage.SearchUnavailable -> R.string.reader_search_unavailable
         ReaderMessage.SettingsReset -> R.string.reader_settings_reset_done
