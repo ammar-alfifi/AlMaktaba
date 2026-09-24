@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Toolbar -->
-    <string name="lib_title">My Library</string>
+    <string name="lib_title">AlMaktaba</string>
     <string name="lib_cd_sort">Sort library</string>
     <string name="lib_view_mode_cd">Switch view mode</string>
 

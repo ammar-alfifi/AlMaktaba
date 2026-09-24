@@ -59,6 +59,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -270,23 +271,41 @@ fun LibraryScreen(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(items = state.items, key = { it.book.id }) { item ->
+                        // The tap handlers are remembered on the book's identity and read the
+                        // *latest* selection mode and book through `rememberUpdatedState`. Without
+                        // that, each handler is a fresh lambda on every state change, which makes
+                        // every visible card recompose — so ticking one book in a large shelf
+                        // redraws the whole screenful. Ticking still updates only the cards whose
+                        // `selected` actually changed.
+                        val book = item.book
+                        val currentBook by rememberUpdatedState(book)
+                        val currentSelecting by rememberUpdatedState(state.isSelecting)
+                        val currentOnIntent by rememberUpdatedState(onIntent)
                         BookGridCard(
                             item = item,
-                            onClick = {
-                                if (state.isSelecting) {
-                                    onIntent(LibraryIntent.ToggleSelection(item.book.id))
-                                } else {
-                                    onIntent(LibraryIntent.BookOpened(item.book.id))
+                            onClick = remember(book.id) {
+                                {
+                                    currentOnIntent(
+                                        if (currentSelecting) {
+                                            LibraryIntent.ToggleSelection(currentBook.id)
+                                        } else {
+                                            LibraryIntent.BookOpened(currentBook.id)
+                                        },
+                                    )
                                 }
                             },
-                            onLongClick = {
-                                if (state.isSelecting) {
-                                    onIntent(LibraryIntent.ToggleSelection(item.book.id))
-                                } else {
-                                    onIntent(LibraryIntent.BookLongPressed(item.book))
+                            onLongClick = remember(book.id) {
+                                {
+                                    currentOnIntent(
+                                        if (currentSelecting) {
+                                            LibraryIntent.ToggleSelection(currentBook.id)
+                                        } else {
+                                            LibraryIntent.BookLongPressed(currentBook)
+                                        },
+                                    )
                                 }
                             },
-                            selected = item.book.id in state.selectedBookIds,
+                            selected = book.id in state.selectedBookIds,
                         )
                     }
                 }
@@ -298,23 +317,37 @@ fun LibraryScreen(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(items = state.items, key = { it.book.id }) { item ->
+                        // Remembered for the same reason as the grid's handlers above: a fresh
+                        // lambda per recomposition would recompose every visible row.
+                        val book = item.book
+                        val currentBook by rememberUpdatedState(book)
+                        val currentSelecting by rememberUpdatedState(state.isSelecting)
+                        val currentOnIntent by rememberUpdatedState(onIntent)
                         BookListRow(
                             item = item,
-                            onClick = {
-                                if (state.isSelecting) {
-                                    onIntent(LibraryIntent.ToggleSelection(item.book.id))
-                                } else {
-                                    onIntent(LibraryIntent.BookOpened(item.book.id))
+                            onClick = remember(book.id) {
+                                {
+                                    currentOnIntent(
+                                        if (currentSelecting) {
+                                            LibraryIntent.ToggleSelection(currentBook.id)
+                                        } else {
+                                            LibraryIntent.BookOpened(currentBook.id)
+                                        },
+                                    )
                                 }
                             },
-                            onLongClick = {
-                                if (state.isSelecting) {
-                                    onIntent(LibraryIntent.ToggleSelection(item.book.id))
-                                } else {
-                                    onIntent(LibraryIntent.BookLongPressed(item.book))
+                            onLongClick = remember(book.id) {
+                                {
+                                    currentOnIntent(
+                                        if (currentSelecting) {
+                                            LibraryIntent.ToggleSelection(currentBook.id)
+                                        } else {
+                                            LibraryIntent.BookLongPressed(currentBook)
+                                        },
+                                    )
                                 }
                             },
-                            selected = item.book.id in state.selectedBookIds,
+                            selected = book.id in state.selectedBookIds,
                         )
                     }
                 }

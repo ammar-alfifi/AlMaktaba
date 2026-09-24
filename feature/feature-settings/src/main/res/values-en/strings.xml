@@ -38,7 +38,7 @@
 
     <!-- Appearance setup. Shown on a first launch and reopened from Appearance. -->
     <string name="settings_color_title">Appearance settings</string>
-    <string name="settings_color_message">Choose how MyLibrary looks. You can change this at any time in Settings.</string>
+    <string name="settings_color_message">Choose how AlMaktaba looks. You can change this at any time in Settings.</string>
     <string name="settings_color_theme">Theme</string>
     <string name="settings_color_colour">Colour</string>
     <string name="settings_color_done">Done</string>

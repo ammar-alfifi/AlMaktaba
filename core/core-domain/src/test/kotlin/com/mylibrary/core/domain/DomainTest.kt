@@ -301,7 +301,7 @@ class ObserveFolderSequenceUseCaseTest {
 
     private val library = FakeLibraryRepository()
     private val folders = FakeFolderRepository(library)
-    private val useCase = ObserveFolderSequenceUseCase(library, folders)
+    private val useCase = ObserveFolderSequenceUseCase(library, folders, DefaultDispatcherProvider())
 
     private fun book(
         id: Long,

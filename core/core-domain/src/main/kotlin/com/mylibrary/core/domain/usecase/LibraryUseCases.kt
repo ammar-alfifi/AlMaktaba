@@ -276,12 +276,19 @@ data class FolderSequence(
 class ObserveFolderSequenceUseCase @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val folderRepository: FolderRepository,
+    private val dispatchers: DispatcherProvider,
 ) {
     operator fun invoke(bookId: Long): Flow<FolderSequence?> = combine(
         libraryRepository.observeBook(bookId),
         libraryRepository.observeBooks(),
         folderRepository.observeFolders(),
     ) { current, books, folders -> sequenceOf(current, books, folders) }
+        // Building the order is a filter and a natural-sort over the whole library, and the reader
+        // collects this on the main thread for as long as a book is open. A library large enough to
+        // matter would otherwise hitch a frame every time a book's row changed — a favourite
+        // toggled, a volume imported — so it runs on the same dispatcher the library's own join
+        // does, and only the result crosses back.
+        .flowOn(dispatchers.io)
 
     private fun sequenceOf(
         current: Book?,

@@ -35,8 +35,8 @@ class AppLanguageTest {
         val arabic = baseContext.withAppLanguage(AppLanguage.ARABIC)
         val english = baseContext.withAppLanguage(AppLanguage.ENGLISH)
 
-        assertEquals("مكتبتي", arabic.getString(R.string.app_name))
-        assertEquals("MyLibrary", english.getString(R.string.app_name))
+        assertEquals("المكتبة", arabic.getString(R.string.app_name))
+        assertEquals("AlMaktaba", english.getString(R.string.app_name))
     }
 
     @Test

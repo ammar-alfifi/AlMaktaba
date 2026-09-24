@@ -23,6 +23,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -38,6 +39,7 @@ import com.mylibrary.core.ui.util.showsNavigationRail
  * Material 3 signals selection by *changing the icon*, not only by tinting it — which matters for
  * users who cannot distinguish the selected and unselected container colours.
  */
+@Immutable
 data class TopLevelDestination(
     /** The navigation route; must match the route registered in the app's navigation graph. */
     val route: String,

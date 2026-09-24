@@ -10,7 +10,7 @@
   tap-zone accessibility labels, which live in `:feature:feature-reader`.
 -->
 <resources>
-    <string name="app_name">مكتبتي</string>
+    <string name="app_name">المكتبة</string>
 
     <!-- Bottom navigation / navigation rail destinations -->
     <string name="nav_library">المكتبة</string>

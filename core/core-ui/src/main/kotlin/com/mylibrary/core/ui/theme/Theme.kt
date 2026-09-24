@@ -44,9 +44,21 @@ fun MyLibraryTheme(
     val context = LocalContext.current
     val supportsDynamicColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
-    val colorScheme: ColorScheme = wallpaperScheme(context, colorSource, darkTheme, supportsDynamicColor)
-        ?: generatedColorScheme(colorSource, darkTheme)
-        ?: if (darkTheme) TealDarkColors else TealLightColors
+    // Resolved once per (source, brightness, device) rather than on every composition. The theme
+    // recomposes whenever *any* setting changes — a font size dragged in the reader, say — and the
+    // wallpaper palette is not free to build: `dynamicLightColorScheme` reads the system's colours
+    // and allocates a full `ColorScheme`. None of that changes until the source, the brightness or
+    // the Activity does, so it is remembered on exactly those.
+    val colorScheme: ColorScheme = remember(
+        colorSource,
+        darkTheme,
+        supportsDynamicColor,
+        context,
+    ) {
+        wallpaperScheme(context, colorSource, darkTheme, supportsDynamicColor)
+            ?: generatedColorScheme(colorSource, darkTheme)
+            ?: if (darkTheme) TealDarkColors else TealLightColors
+    }
 
     val layoutDirection = LocalLayoutDirection.current
     val typography = remember(layoutDirection) {

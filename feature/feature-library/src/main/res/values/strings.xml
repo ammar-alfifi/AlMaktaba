@@ -2,7 +2,7 @@
 <!-- Library feature strings. Arabic is the default locale; see values-en/ for English. -->
 <resources>
     <!-- Toolbar -->
-    <string name="lib_title">مكتبتي</string>
+    <string name="lib_title">المكتبة</string>
     <string name="lib_cd_sort">ترتيب المكتبة</string>
     <string name="lib_view_mode_cd">تبديل طريقة العرض</string>
 

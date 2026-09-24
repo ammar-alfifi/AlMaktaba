@@ -1,5 +1,7 @@
 package com.mylibrary.ui
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -37,6 +39,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -215,6 +218,45 @@ private fun MyLibraryNavHost(
             navController = navController,
             startDestination = Routes.LIBRARY,
             modifier = contentModifier,
+            // **Navigation is a cross-fade, and switching tabs is not a navigation.**
+            //
+            // The library's default is a 700 ms fade, which is slow enough to read as the app
+            // thinking rather than moving — and it animates two whole screens at once. A short fade
+            // keeps a screen change legible without the wait.
+            //
+            // A top-level tab is a different case: the bar is already on screen and the content is
+            // swapped *in place*, so animating it is what makes a tab feel sluggish rather than
+            // instant. Switching between two of them therefore does not animate at all, which is
+            // what Material 3 asks for and what every platform app does. The reader keeps its own
+            // transitions — it overrides these — so a book still rises into place.
+            enterTransition = {
+                if (isTopLevelSwap(initialState, targetState)) {
+                    EnterTransition.None
+                } else {
+                    fadeIn(tween(NAV_TRANSITION_MS))
+                }
+            },
+            exitTransition = {
+                if (isTopLevelSwap(initialState, targetState)) {
+                    ExitTransition.None
+                } else {
+                    fadeOut(tween(NAV_TRANSITION_MS))
+                }
+            },
+            popEnterTransition = {
+                if (isTopLevelSwap(initialState, targetState)) {
+                    EnterTransition.None
+                } else {
+                    fadeIn(tween(NAV_TRANSITION_MS))
+                }
+            },
+            popExitTransition = {
+                if (isTopLevelSwap(initialState, targetState)) {
+                    ExitTransition.None
+                } else {
+                    fadeOut(tween(NAV_TRANSITION_MS))
+                }
+            },
         ) {
             composable(Routes.LIBRARY) {
                 LibraryRoute(
@@ -325,12 +367,30 @@ private fun NavHostController.navigateTopLevel(route: String) {
 private const val OPENING_MS = 260
 private const val CLOSING_MS = 200
 
+/**
+ * How long an ordinary screen change cross-fades for, in milliseconds.
+ *
+ * Short on purpose: the default is 700 ms, which reads as hesitation, and it holds two full screens
+ * composed for the whole of it. A tab switch does not use it at all — see [isTopLevelSwap].
+ */
+private const val NAV_TRANSITION_MS = 200
+
 /** How much smaller the page is at the start of the opening transition. */
 private const val BOOK_OPENING_SCALE = 0.92f
 
+/**
+ * True when this navigation is a move between two top-level destinations — a tab tap.
+ *
+ * Those are not screen changes to animate: the navigation bar stays put and only the content beside
+ * or above it is swapped, so a cross-fade there is the animation of a thing that did not move. The
+ * reader and the book details page are not top-level, and the reader overrides these transitions
+ * anyway.
+ */
+private fun isTopLevelSwap(initial: NavBackStackEntry, target: NavBackStackEntry): Boolean =
+    Routes.isTopLevel(initial.destination.route) && Routes.isTopLevel(target.destination.route)
+
 /** The three destinations in the navigation bar and rail. */
-private val TopLevelDestinations: List<TopLevelDestination>
-    get() = listOf(
+private val TopLevelDestinations: List<TopLevelDestination> = listOf(
         TopLevelDestination(
             route = Routes.LIBRARY,
             labelResId = R.string.nav_library,
