@@ -33,6 +33,9 @@
 
     <!-- Context menu -->
     <string name="lib_menu_details">Details</string>
+    <string name="lib_menu_select">Select</string>
+    <string name="lib_select_all">Select all</string>
+    <string name="lib_selected_count">%1$d selected</string>
     <string name="lib_menu_add_favorite">Add to favourites</string>
     <string name="lib_menu_remove_favorite">Remove from favourites</string>
     <string name="lib_menu_delete">Remove from library</string>
@@ -40,6 +43,9 @@
     <!-- Deletion -->
     <string name="lib_delete_title">Delete this book?</string>
     <string name="lib_delete_message">“%1$s” will be removed from your library along with its reading position and bookmarks. The original file is not touched.</string>
+    <string name="lib_delete_selected_title">Delete the selected books?</string>
+    <string name="lib_delete_selected_message">The %1$d selected books will be removed from your library, with their reading positions and bookmarks. The original files are not touched.</string>
+    <string name="lib_books_favorited">The selected books were added to your favourites</string>
     <string name="lib_delete_confirm">Delete</string>
     <string name="lib_book_deleted">Book deleted</string>
 

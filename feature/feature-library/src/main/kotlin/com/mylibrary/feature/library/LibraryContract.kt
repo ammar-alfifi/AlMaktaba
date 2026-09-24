@@ -67,6 +67,20 @@ data class LibraryUiState(
     val menuTarget: Book? = null,
     /** The book being moved between folders, if any. */
     val moveTarget: Book? = null,
+
+    /**
+     * True while the shelf is in selection mode.
+     *
+     * Kept separate from [selectedBookIds] being non-empty rather than derived from it, so that
+     * entering selection mode with nothing selected is a real state: the mode is what makes a tap
+     * select instead of open, and a mode that could not be entered without a first selection would
+     * need a second gesture to explain itself.
+     */
+    val isSelecting: Boolean = false,
+
+    /** The books ticked in selection mode. */
+    val selectedBookIds: Set<Long> = emptySet(),
+
     val error: AppError? = null,
 ) {
     /** True while any import — files or a folder — is running. */
@@ -105,6 +119,26 @@ sealed interface LibraryIntent {
     data class DeleteBooks(val bookIds: List<Long>) : LibraryIntent
     data object DismissError : LibraryIntent
 
+    // --- Selection mode ---
+
+    /** Enter selection mode with [bookId] ticked, from a book's context menu. */
+    data class StartSelection(val bookId: Long) : LibraryIntent
+
+    /** Tick or untick a book while selecting. */
+    data class ToggleSelection(val bookId: Long) : LibraryIntent
+
+    /** Tick every book the current filter shows. */
+    data object SelectAll : LibraryIntent
+
+    /** Leave selection mode and forget the ticks. */
+    data object ClearSelection : LibraryIntent
+
+    /** Delete every ticked book, after the reader has confirmed it. */
+    data object DeleteSelected : LibraryIntent
+
+    /** Add every ticked book to the favourites. */
+    data object FavoriteSelected : LibraryIntent
+
     // --- Folders ---
 
     /** Filter the library to a folder, or to everything when [folderId] is `null`. */
@@ -137,6 +171,9 @@ sealed interface LibraryMessage {
     data object ImportFailed : LibraryMessage
     data object BookDeleted : LibraryMessage
     data object BooksDeleted : LibraryMessage
+
+    /** Every ticked book was added to the favourites. */
+    data object BooksFavorited : LibraryMessage
 
     data class FolderImported(val summary: FolderImportSummary) : LibraryMessage
     data class FolderRescanned(val summary: FolderImportSummary) : LibraryMessage

@@ -34,6 +34,9 @@
 
     <!-- Context menu -->
     <string name="lib_menu_details">التفاصيل</string>
+    <string name="lib_menu_select">تحديد</string>
+    <string name="lib_select_all">تحديد الكل</string>
+    <string name="lib_selected_count">%1$d محدد</string>
     <string name="lib_menu_add_favorite">إضافة إلى المفضلة</string>
     <string name="lib_menu_remove_favorite">إزالة من المفضلة</string>
     <string name="lib_menu_delete">حذف من المكتبة</string>
@@ -41,6 +44,9 @@
     <!-- Deletion -->
     <string name="lib_delete_title">حذف الكتاب؟</string>
     <string name="lib_delete_message">سيُحذف «%1$s» من مكتبتك مع موضع القراءة والإشارات المرجعية. الملف الأصلي لن يُمس.</string>
+    <string name="lib_delete_selected_title">حذف الكتب المحددة؟</string>
+    <string name="lib_delete_selected_message">سيُحذف %1$d كتاباً من مكتبتك مع مواضع القراءة والإشارات المرجعية. الملفات الأصلية لن تُمس.</string>
+    <string name="lib_books_favorited">أُضيفت الكتب المحددة إلى المفضلة</string>
     <string name="lib_delete_confirm">حذف</string>
     <string name="lib_book_deleted">تم حذف الكتاب</string>
 

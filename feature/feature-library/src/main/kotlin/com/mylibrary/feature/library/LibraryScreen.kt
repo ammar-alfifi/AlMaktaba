@@ -25,10 +25,14 @@ import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
@@ -147,19 +151,32 @@ fun LibraryScreen(
     var renamingFolder by remember { mutableStateOf<Folder?>(null) }
     var deletingFolder by remember { mutableStateOf<Folder?>(null) }
     var managingFolders by remember { mutableStateOf(false) }
+    var confirmingBatchDelete by remember { mutableStateOf(false) }
 
     FeatureScaffold(
         modifier = modifier,
         topBar = {
-            LibraryTopBar(
-                sort = state.sort,
-                viewMode = state.viewMode,
-                onIntent = onIntent,
-            )
+            if (state.isSelecting) {
+                LibrarySelectionTopBar(
+                    selectedCount = state.selectedBookIds.size,
+                    onRequestDelete = { confirmingBatchDelete = true },
+                    onIntent = onIntent,
+                )
+            } else {
+                LibraryTopBar(
+                    sort = state.sort,
+                    viewMode = state.viewMode,
+                    onIntent = onIntent,
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            ImportFab(onPickFiles = onPickFiles, onPickFolder = onPickFolder)
+            // Hidden while selecting: the one action left on screen is the selection's, and an add
+            // button over a shelf being pruned is a button in the way.
+            if (!state.isSelecting) {
+                ImportFab(onPickFiles = onPickFiles, onPickFolder = onPickFolder)
+            }
         },
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
@@ -255,8 +272,21 @@ fun LibraryScreen(
                     items(items = state.items, key = { it.book.id }) { item ->
                         BookGridCard(
                             item = item,
-                            onClick = { onIntent(LibraryIntent.BookOpened(item.book.id)) },
-                            onLongClick = { onIntent(LibraryIntent.BookLongPressed(item.book)) },
+                            onClick = {
+                                if (state.isSelecting) {
+                                    onIntent(LibraryIntent.ToggleSelection(item.book.id))
+                                } else {
+                                    onIntent(LibraryIntent.BookOpened(item.book.id))
+                                }
+                            },
+                            onLongClick = {
+                                if (state.isSelecting) {
+                                    onIntent(LibraryIntent.ToggleSelection(item.book.id))
+                                } else {
+                                    onIntent(LibraryIntent.BookLongPressed(item.book))
+                                }
+                            },
+                            selected = item.book.id in state.selectedBookIds,
                         )
                     }
                 }
@@ -270,8 +300,21 @@ fun LibraryScreen(
                     items(items = state.items, key = { it.book.id }) { item ->
                         BookListRow(
                             item = item,
-                            onClick = { onIntent(LibraryIntent.BookOpened(item.book.id)) },
-                            onLongClick = { onIntent(LibraryIntent.BookLongPressed(item.book)) },
+                            onClick = {
+                                if (state.isSelecting) {
+                                    onIntent(LibraryIntent.ToggleSelection(item.book.id))
+                                } else {
+                                    onIntent(LibraryIntent.BookOpened(item.book.id))
+                                }
+                            },
+                            onLongClick = {
+                                if (state.isSelecting) {
+                                    onIntent(LibraryIntent.ToggleSelection(item.book.id))
+                                } else {
+                                    onIntent(LibraryIntent.BookLongPressed(item.book))
+                                }
+                            },
+                            selected = item.book.id in state.selectedBookIds,
                         )
                     }
                 }
@@ -355,6 +398,36 @@ fun LibraryScreen(
             },
         )
     }
+
+    if (confirmingBatchDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmingBatchDelete = false },
+            title = { Text(stringResource(R.string.lib_delete_selected_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.lib_delete_selected_message,
+                        state.selectedBookIds.size,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onIntent(LibraryIntent.DeleteSelected)
+                        confirmingBatchDelete = false
+                    },
+                ) {
+                    Text(stringResource(R.string.lib_delete_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingBatchDelete = false }) {
+                    Text(stringResource(com.mylibrary.core.ui.R.string.ui_cancel))
+                }
+            },
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -404,6 +477,58 @@ private fun LibraryTopBar(
                         Icons.Filled.GridView
                     },
                     contentDescription = stringResource(R.string.lib_view_mode_cd),
+                )
+            }
+        },
+    )
+}
+
+/**
+ * The toolbar while books are being selected.
+ *
+ * It replaces the shelf's own toolbar rather than stacking under it: in selection mode there is one
+ * job, and the sort and view controls are not part of it. The count in the title is the feedback that
+ * says the taps are landing, and the three actions are the ones a shelf asks for in bulk — select
+ * all, favourite and delete. Moving several books stays on the single-book menu, where the
+ * destination picker already lives.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LibrarySelectionTopBar(
+    selectedCount: Int,
+    onRequestDelete: () -> Unit,
+    onIntent: (LibraryIntent) -> Unit,
+) {
+    TopAppBar(
+        title = { Text(stringResource(R.string.lib_selected_count, selectedCount)) },
+        navigationIcon = {
+            IconButton(onClick = { onIntent(LibraryIntent.ClearSelection) }) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = stringResource(com.mylibrary.core.ui.R.string.ui_close),
+                )
+            }
+        },
+        actions = {
+            IconButton(onClick = { onIntent(LibraryIntent.SelectAll) }) {
+                Icon(
+                    imageVector = Icons.Filled.SelectAll,
+                    contentDescription = stringResource(R.string.lib_select_all),
+                )
+            }
+            IconButton(
+                onClick = { onIntent(LibraryIntent.FavoriteSelected) },
+                enabled = selectedCount > 0,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.FavoriteBorder,
+                    contentDescription = stringResource(R.string.lib_menu_add_favorite),
+                )
+            }
+            IconButton(onClick = onRequestDelete, enabled = selectedCount > 0) {
+                Icon(
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = stringResource(com.mylibrary.core.ui.R.string.ui_delete),
                 )
             }
         },
@@ -574,6 +699,13 @@ private fun BookContextSheet(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
             ) {
                 Text(stringResource(R.string.lib_folder_move), modifier = Modifier.fillMaxWidth())
+            }
+
+            TextButton(
+                onClick = { onIntent(LibraryIntent.StartSelection(book.id)) },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            ) {
+                Text(stringResource(R.string.lib_menu_select), modifier = Modifier.fillMaxWidth())
             }
 
             TextButton(
@@ -768,6 +900,7 @@ private fun libraryMessageText(message: LibraryMessage): String = when (message)
     LibraryMessage.ImportFailed -> stringResource(com.mylibrary.core.ui.R.string.ui_error_unexpected)
     LibraryMessage.BookDeleted -> stringResource(R.string.lib_book_deleted)
     LibraryMessage.BooksDeleted -> stringResource(R.string.lib_book_deleted)
+    LibraryMessage.BooksFavorited -> stringResource(R.string.lib_books_favorited)
 
     is LibraryMessage.FolderImported -> folderSummaryText(message.summary, rescan = false)
     is LibraryMessage.FolderRescanned -> folderSummaryText(message.summary, rescan = true)

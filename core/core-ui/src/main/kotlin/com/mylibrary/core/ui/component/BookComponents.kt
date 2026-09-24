@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material3.Icon
@@ -195,15 +196,34 @@ fun BookGridCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
+    selected: Boolean = false,
 ) {
     val book = item.book
     Column(
         modifier = modifier
             .clip(MaterialTheme.shapes.medium)
+            .background(
+                if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+            )
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(bottom = 8.dp),
     ) {
-        BookCover(book = book)
+        Box {
+            BookCover(book = book)
+            if (selected) {
+                // A check over the cover, in the corner the format chip does not use, because the
+                // card has no other room for a control and the cover is what the eye is already on.
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .size(20.dp),
+                )
+            }
+        }
         Text(
             text = book.title,
             style = MaterialTheme.typography.titleSmall,
@@ -238,12 +258,16 @@ fun BookListRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
+    selected: Boolean = false,
 ) {
     val book = item.book
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
+            .background(
+                if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+            )
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -273,6 +297,13 @@ fun BookListRow(
                 )
             }
             ProgressRow(item = item, modifier = Modifier.padding(top = 6.dp))
+        }
+        if (selected) {
+            Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
         }
     }
 }

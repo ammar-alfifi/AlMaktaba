@@ -213,6 +213,27 @@ class LibraryViewModel @Inject constructor(
             }
             is LibraryIntent.MoveBookToFolder -> move(intent.bookId, intent.folderId)
             LibraryIntent.DismissMoveSheet -> setState { copy(moveTarget = null) }
+
+            is LibraryIntent.StartSelection -> setState {
+                copy(menuTarget = null, isSelecting = true, selectedBookIds = setOf(intent.bookId))
+            }
+            is LibraryIntent.ToggleSelection -> setState {
+                copy(
+                    selectedBookIds = if (intent.bookId in selectedBookIds) {
+                        selectedBookIds - intent.bookId
+                    } else {
+                        selectedBookIds + intent.bookId
+                    },
+                )
+            }
+            LibraryIntent.SelectAll -> setState {
+                copy(selectedBookIds = items.map { it.book.id }.toSet())
+            }
+            LibraryIntent.ClearSelection -> setState {
+                copy(isSelecting = false, selectedBookIds = emptySet())
+            }
+            LibraryIntent.DeleteSelected -> delete(currentState.selectedBookIds.toList())
+            LibraryIntent.FavoriteSelected -> favoriteSelected()
         }
     }
 
@@ -369,11 +390,31 @@ class LibraryViewModel @Inject constructor(
     }
 
     private fun delete(bookIds: List<Long>) {
-        setState { copy(menuTarget = null) }
+        if (bookIds.isEmpty()) return
+        // Leaving selection mode as the delete starts: the books it ticked are about to disappear,
+        // and a mode still holding their ids would be selecting books that no longer exist.
+        setState { copy(menuTarget = null, isSelecting = false, selectedBookIds = emptySet()) }
         launch {
             deleteBooks(bookIds)
             val message = if (bookIds.size == 1) LibraryMessage.BookDeleted else LibraryMessage.BooksDeleted
             emit(LibraryEffect.ShowMessage(message))
+        }
+    }
+
+    /**
+     * Adds every ticked book to the favourites, then leaves selection mode.
+     *
+     * One write per book rather than a bulk query: the favourite flag lives on the book row, and the
+     * repository's `setFavorite` is the single place that keeps the library's live flow in step with
+     * it. A handful of selected books is not a performance question.
+     */
+    private fun favoriteSelected() {
+        val ids = currentState.selectedBookIds.toList()
+        if (ids.isEmpty()) return
+        setState { copy(isSelecting = false, selectedBookIds = emptySet()) }
+        launch {
+            ids.forEach { id -> toggleFavorite(id, true) }
+            emit(LibraryEffect.ShowMessage(LibraryMessage.BooksFavorited))
         }
     }
 
