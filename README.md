@@ -388,7 +388,7 @@ the book in words a line above it.
 
 ## 6. Testing
 
-**629 unit tests, 0 failures, across 11 modules.** `./gradlew test` runs them all.
+**632 unit tests, 0 failures, across 13 modules.** `./gradlew test` runs them all.
 
 | Module | Tests | Covers |
 |---|---:|---|
@@ -397,8 +397,10 @@ the book in words a line above it.
 | `format-text` | 52 | Windows-1256/UTF-16/BOM decoding, chapter splitting, escaping, search offsets |
 | `core-domain` | 66 | format resolution, progress arithmetic, library join, import rules, **folder import and re-scan** (adoption, missing files, revoked grants, deleting with or without contents), **what "continue reading" offers** (the open folder rather than the whole library, a book nobody has opened, a folder with nothing unfinished left), **the sequence around a volume** (natural order in both directions, the two ends of a folder, a book with no folder, a folder whose row is gone), and **the range of every slider** (both ends clamped, the middle untouched, and a floor of zero that is genuinely reachable) |
 | `core-common` | 30 | natural sort key, file-name parsing, byte formatting, result combinators |
+| `core-ui` | 5 | the segmented row's corner rule: the rounding stays on the outer edge in both an English and an Arabic row |
 | `format-archive` | 29 | natural page ordering, junk-entry filtering, container sniffing, sample-size maths |
 | `feature-search` | 20 | snippet offsets, result grouping, query history |
+| `feature-library` | 3 | **the set of folders marked unavailable**: only the ones whose permission has lapsed, never a folder with a live grant |
 | `core-data` | 48 | **real SQLite**: every sort order, `LIKE … ESCAPE`, cascade deletes, upserts, folders, and **the version 1 → 3 migration against a real version 1 database** (including that the new search index cascades away with its book). Also **bookmarks' notes and highlight colours** surviving a write, a read and a clear. Also **the settings store's history**: that an upgrade is not sent through the first-run screen, that a reader who had turned dynamic colour *off* is not repainted with their wallpaper, that an unknown colour name — or page paper — degrades rather than throws, and that **the persisted search history** comes back in order and is not cut in half by a query containing the characters a naive delimiter would use. And **the full-text index**: literal `%`/`_` matching, per-book limits, and that a snippet's highlight offsets point at the match inside the collapsed whitespace it is shown in |
 | `format-pdf` | 15 | aspect fitting, outline nesting, malformed bookmark trees |
 | `app` | 8 | **cold start**: real Hilt graph + `MainActivity` lifecycle, and the language override |
