@@ -1,8 +1,11 @@
 package com.mylibrary.core.domain.usecase
 
 import com.mylibrary.core.common.DispatcherProvider
+import com.mylibrary.core.common.NameOrderKey
 import com.mylibrary.core.common.fileStem
 import com.mylibrary.core.common.getOrNull
+import com.mylibrary.core.common.nameCollator
+import com.mylibrary.core.common.nameOrderKey
 import com.mylibrary.core.common.naturalSortKey
 import com.mylibrary.core.domain.model.Book
 import com.mylibrary.core.domain.model.BookFormat
@@ -21,6 +24,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import java.text.Collator
 import javax.inject.Inject
 
 /**
@@ -53,8 +57,9 @@ class ObserveLibraryUseCase @Inject constructor(
                 // Filtered here rather than in SQL, exactly like the two filters above: a change to
                 // either stream re-emits immediately, and the query above already carries the column.
                 .filter { folderId == null || it.folderId == folderId }
-                .map { book -> LibraryItem(book, progressByBook[book.id]) }
                 .toList()
+                .orderedForDisplay(sort)
+                .map { book -> LibraryItem(book, progressByBook[book.id]) }
         }
             // The join runs off the main thread, for the same reason the repository's row-to-model
             // mapping does: it walks the whole library on every emission, and every emission is
@@ -79,6 +84,44 @@ class ObserveLibraryUseCase @Inject constructor(
         invoke(sort = LibrarySort.RECENTLY_READ, folderId = folderId).map { items ->
             items.firstOrNull { it.position != null && !it.isFinished }
         }
+}
+
+/**
+ * The shelf's own order for the two name sorts.
+ *
+ * The database orders by title with `COLLATE NOCASE`, which is a byte comparison — and a byte
+ * comparison both puts `المجلد 10` between `المجلد 1` and `المجلد 2` and orders the Arabic alef
+ * variants by code point, so the shelf disagreed with the file manager the reader had just come
+ * from, on the very folder they were looking at. Ordering through [nameOrderKey] here compares
+ * numbers as numbers and text with the locale's own collation, which is what a phone's file manager
+ * does. The two date sorts are not names and are left to SQL.
+ *
+ * The key is computed once per book and then used as the sort key rather than as a comparator
+ * selector, which would re-evaluate it on every comparison.
+ */
+private fun List<Book>.orderedForDisplay(sort: LibrarySort): List<Book> {
+    // One collator for the whole sort: `Collator` is not thread-safe, and two keys are only
+    // comparable when they came from the same one.
+    val collator = nameCollator()
+    return when (sort) {
+        LibrarySort.TITLE_ASC -> naturalOrder(collator, ascending = true) { it.title }
+        LibrarySort.TITLE_DESC -> naturalOrder(collator, ascending = false) { it.title }
+        LibrarySort.AUTHOR -> naturalOrder(collator, ascending = true) { it.author ?: it.title }
+        LibrarySort.RECENTLY_ADDED, LibrarySort.RECENTLY_READ -> this
+    }
+}
+
+private fun List<Book>.naturalOrder(
+    collator: Collator,
+    ascending: Boolean,
+    name: (Book) -> String,
+): List<Book> {
+    // The id breaks a tie between two books whose names sort identically, so the order is stable
+    // rather than dependent on the order the rows came back in.
+    val comparator = compareBy<Pair<NameOrderKey, Book>> { it.first }.thenBy { it.second.id }
+    return map { nameOrderKey(name(it), collator) to it }
+        .sortedWith(if (ascending) comparator else comparator.reversed())
+        .map { it.second }
 }
 
 /** Everything the book details screen shows about one book. */

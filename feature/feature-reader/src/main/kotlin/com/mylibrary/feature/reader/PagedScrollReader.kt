@@ -672,7 +672,14 @@ private fun PageInspection(
                         val nextOffset =
                             if (overflows(geometry.drawn, geometry.container, nextLayerScale)) {
                                 clampPan(
-                                    layerTransform.offset + panChange,
+                                    // `inspection.transform.offset`, not the plain `layerTransform`
+                                    // `val`: this gesture block is created once per page and never
+                                    // restarted, so a plain read is frozen at the identity and each
+                                    // frame's drag would start again from the centre rather than
+                                    // accumulate — a page that cannot be moved. `inspection` is the
+                                    // remembered holder and its `transform` is a `MutableState`, so
+                                    // reading it always sees the live pan.
+                                    inspection.transform.offset + panChange,
                                     geometry.drawn,
                                     geometry.container,
                                     nextLayerScale,

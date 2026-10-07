@@ -15,7 +15,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
@@ -61,6 +63,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -84,6 +87,7 @@ import com.mylibrary.core.ui.component.FeatureScaffold
 import com.mylibrary.core.ui.format.progressLabel
 import com.mylibrary.core.ui.mvi.ObserveEffects
 import com.mylibrary.core.ui.theme.Spacing
+import kotlinx.coroutines.flow.first
 
 /**
  * The library destination.
@@ -153,6 +157,32 @@ fun LibraryScreen(
     var deletingFolder by remember { mutableStateOf<Folder?>(null) }
     var managingFolders by remember { mutableStateOf(false) }
     var confirmingBatchDelete by remember { mutableStateOf(false) }
+
+    val gridState = rememberLazyGridState()
+    val listState = rememberLazyListState()
+
+    // A change of sort starts the shelf again at the top.
+    //
+    // The lists are keyed by book id, and a lazy list keeps the item that was first visible pinned
+    // in place when its contents are reordered — so changing the order while at the top jumped to
+    // wherever that book had moved to, which is the *end* of the new order. The new order arrives
+    // from the database a frame or more after the sort changes, so this waits for the rows
+    // themselves to be replaced rather than scrolling on the sort alone: scrolling to the top first
+    // would be undone by the very re-anchoring it exists to prevent.
+    val currentItems by rememberUpdatedState(state.items)
+    val currentViewMode by rememberUpdatedState(state.viewMode)
+    LaunchedEffect(state.sort) {
+        val before = currentItems
+        snapshotFlow { currentItems }.first { it !== before }
+        // Only the shelf that is on screen is asked to move. `scrollToItem` waits for its list's
+        // first layout, and the other list is never composed in this view mode, so it would never
+        // lay out — asking both would leave this coroutine waiting on the one that cannot answer and
+        // never reach the one that can, which is the list mode quietly keeping its old position.
+        when (currentViewMode) {
+            ViewMode.GRID -> gridState.scrollToItem(0)
+            ViewMode.LIST -> listState.scrollToItem(0)
+        }
+    }
 
     FeatureScaffold(
         modifier = modifier,
@@ -258,6 +288,7 @@ fun LibraryScreen(
                     // Adaptive rather than a fixed count: one declaration covers a phone, a
                     // foldable and a tablet without a size-class branch in this file.
                     columns = GridCells.Adaptive(minSize = 148.dp),
+                    state = gridState,
                     // The same clearance the list uses: the floating button sits over the last row
                     // of a grid, and a grid padded by 16dp has its bottom-right cell underneath it.
                     contentPadding = PaddingValues(
@@ -314,6 +345,7 @@ fun LibraryScreen(
                     // A list has no horizontal padding of its own — its rows carry their own — so the
                     // clearance here is only about the button.
                     contentPadding = PaddingValues(bottom = Spacing.FabClearance),
+                    state = listState,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(items = state.items, key = { it.book.id }) { item ->

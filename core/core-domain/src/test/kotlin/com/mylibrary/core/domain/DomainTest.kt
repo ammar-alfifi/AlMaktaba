@@ -286,6 +286,48 @@ class ObserveLibraryUseCaseTest {
         )
         assertTrue(nearlyDone.isFinished)
     }
+
+    @Test
+    fun `title ascending orders numbers naturally, like a file manager`() = runTest {
+        // The database's `COLLATE NOCASE` is a byte comparison and would put "المجلد 10" between
+        // "المجلد 1" and "المجلد 2"; a file manager's own listing does not.
+        library.books.value = listOf(
+            book(1, "المجلد 10"),
+            book(2, "المجلد 2"),
+            book(3, "المجلد 1"),
+        )
+
+        val titles = useCase(sort = LibrarySort.TITLE_ASC).first().map { it.book.title }
+
+        assertEquals(listOf("المجلد 1", "المجلد 2", "المجلد 10"), titles)
+    }
+
+    @Test
+    fun `title descending is the same order reversed`() = runTest {
+        library.books.value = listOf(
+            book(1, "المجلد 10"),
+            book(2, "المجلد 2"),
+            book(3, "المجلد 1"),
+        )
+
+        val titles = useCase(sort = LibrarySort.TITLE_DESC).first().map { it.book.title }
+
+        assertEquals(listOf("المجلد 10", "المجلد 2", "المجلد 1"), titles)
+    }
+
+    @Test
+    fun `author order is natural and falls back to the title`() = runTest {
+        library.books.value = listOf(
+            book(1, "ب").copy(author = "مؤلف 10"),
+            book(2, "أ"),
+            book(3, "ج").copy(author = "مؤلف 2"),
+        )
+
+        val titles = useCase(sort = LibrarySort.AUTHOR).first().map { it.book.title }
+
+        // The authorless book sorts by its own title ("أ"), then the two authors in natural order.
+        assertEquals(listOf("أ", "ج", "ب"), titles)
+    }
 }
 
 /**

@@ -464,7 +464,14 @@ fun PagedReaderContent(
                         val nextOffset =
                             if (overflows(geometry.drawn, geometry.container, nextLayerScale)) {
                                 clampPan(
-                                    layerTransform.offset + panChange,
+                                    // `transform.offset`, not `layerTransform.offset`: this
+                                    // gesture block is created once and never restarted, so a
+                                    // plain `val` read here is whatever it was on the first
+                                    // composition — the identity — and every frame's drag would
+                                    // start again from the centre instead of accumulating, which
+                                    // is a page that cannot be moved at all. `transform` is a
+                                    // `MutableState`, so reading it always sees the live pan.
+                                    transform.offset + panChange,
                                     geometry.drawn,
                                     geometry.container,
                                     nextLayerScale,
@@ -557,6 +564,12 @@ fun PagedReaderContent(
             modifier = Modifier.fillMaxSize(),
             pageSpacing = PAGE_SPACING,
             beyondViewportPageCount = 1,
+            // **A zoomed page is being inspected, not read, so the pager stops taking drags.** The
+            // pager is a child of the gesture surface above, and pointer events reach a child before
+            // its parent: left enabled, its own scroll would claim a horizontal drag first and turn
+            // the page out from under a reader who was only trying to move around the zoom. Disabled
+            // while magnified, the drag is the parent's alone, and a page that fits keeps paging.
+            userScrollEnabled = transform.scale <= ZOOMED_THRESHOLD,
             // Every entry is filed under a key naming the book it belongs to, which is what keeps the
             // reader's place when the order is renumbered: crossing a seam rewrites which book is
             // open and every index around the reader moves, while the page they are looking at does

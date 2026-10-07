@@ -28,7 +28,7 @@ single reader that adapts to what the open file can do.
 
 | Item | Value |
 |---|---|
-| **Version** | `1.0.0` |
+| **Version** | `1.0.1` |
 | **Minimum Android** | 8.0 (API 26) |
 | **Permissions** | None whatsoever — no storage, no network |
 | **Languages** | Arabic (default) and English, switchable in-app without a restart |
@@ -65,12 +65,27 @@ single reader that adapts to what the open file can do.
 
 ### Download
 
-A signed, installable build is attached to the latest release:
+**Not a developer? This is all you need.** A signed, installable build is attached to the latest
+release:
 
-**→ [AlMaktaba-v1.0.0.apk](https://github.com/ammar-alfifi/AlMaktaba/releases/download/v1.0.0/AlMaktaba-v1.0.0.apk)**
+> **↓ [Click here to download the app: AlMaktaba-v1.0.1.apk](https://github.com/ammar-alfifi/AlMaktaba/releases/download/v1.0.1/AlMaktaba-v1.0.1.apk)**
 
-Signed with APK Signature Scheme v2 + v3. The app requests no permissions at all; books are added
-through the system file picker, which grants access to the files you choose and nothing else.
+Installing it on your phone:
+
+1. **Download the file** by clicking the link above and let it finish (your phone may warn that the
+   file could be harmful — that is normal for any app that does not come from the Play Store).
+2. **Open the file** from the download notification, or from the Files app →
+   Downloads → `AlMaktaba-v1.0.1.apk`.
+3. If you are asked to **allow installing unknown apps**, tap Settings, enable it for your browser or
+   file manager, then go back and try again.
+4. Tap **Install**, then **open the app** and add your books with the import button in the library.
+
+Prefer to browse releases yourself? Here is the
+[latest release page](https://github.com/ammar-alfifi/AlMaktaba/releases/latest).
+
+The APK is signed with APK Signature Scheme v2 + v3. The app requests no permissions at all; books
+are added through the system file picker, which grants access to the files you choose and nothing
+else.
 
 ### Requirements
 
@@ -155,7 +170,7 @@ implements it over a `content://` URI using `ContentResolver`. Adding a format i
 
 ## Testing
 
-**632 unit tests, 0 failures, across 13 modules.** `./gradlew test` runs them all.
+**643 unit tests, 0 failures, across 13 modules.** `./gradlew test` runs them all.
 
 | Module | Tests | Covers |
 |---|---:|---|
@@ -163,8 +178,8 @@ implements it over a `content://` URI using `ContentResolver`. Adding a format i
 | `format-epub` | 89 | container/OPF parsing, nav + NCX, the sanitiser, declared covers |
 | `format-text` | 52 | Windows-1256 / UTF-16 decoding, chapter splitting, search offsets |
 | `core-data` | 48 | real SQLite: every sort order, search, the 1 → 3 migration, bookmarks and notes |
-| `core-domain` | 66 | format resolution, progress arithmetic, import rules, folder sequences |
-| `core-common` | 30 | natural sort key, file-name parsing, byte formatting |
+| `core-domain` | 69 | format resolution, progress arithmetic, import rules, folder sequences |
+| `core-common` | 38 | file-manager name ordering, natural sort key, file-name parsing, byte formatting |
 | `format-archive` | 29 | natural page ordering, junk-entry filtering, container sniffing |
 | `feature-search` | 20 | snippet offsets, result grouping, query history |
 | `format-pdf` | 15 | aspect fitting, outline nesting |
